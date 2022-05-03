@@ -1,0 +1,909 @@
+#+TITLE: SLS walking model 2
+
+* Goal
+This notebook builds upon the first SLS walking model notebook:
+[[file:Walking model SLS.org]]
+
+The goal is to extend that previous notebook in order to:
+- model turning left/right
+- have a trajectory model for each of the 6 legs
+- integrate the 6 leg models together with a phase coordinator
+
+* Setup
+#+BEGIN_SRC jupyter-python
+import pandas as pd
+import numpy as np
+
+from tqdm import tqdm, trange
+from scipy import stats, signal
+import os
+from collections import Counter
+import pickle
+import time
+import sys
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+
+plt.style.use('default')
+plt.rcParams['figure.figsize'] = (7.5, 2)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+import tensorflow as tf
+
+from model_functions import get_props_by_bouts, get_sw_xy, get_period, get_speed
+from model_functions import prop_params
+from model_functions import MLPScaledXY, num_vars
+from model_functions import wrap_array, summarize
+
+print("TensorFlow version: {}".format(tf.__version__))
+#+END_SRC
+
+#+RESULTS:
+: TensorFlow version: 2.3.1
+
+I need these lines so that the GPU doesn't take up the whole memory in tensorflow
+#+BEGIN_SRC jupyter-python
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+  try:
+    # Currently, memory growth needs to be the same across GPUs
+    for gpu in gpus:
+      tf.config.experimental.set_memory_growth(gpu, True)
+    logical_gpus = tf.config.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+  except RuntimeError as e:
+    # Memory growth must be set before GPUs have been initialized
+    print(e)
+#+END_SRC
+
+#+RESULTS:
+: 1 Physical GPUs, 1 Logical GPUs
+
+
+* Load the data
+
+** Constants
+Some constants
+#+BEGIN_SRC jupyter-python
+FPS = 300.0
+
+legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']
+items = {
+    'A_flex': 'coxa abduction',
+    'A_abduct': 'body-coxa flexion',
+    'A_rot': 'coxa rotation',
+    'B_flex': 'coxa-femur flexion',
+    'B_rot': 'femur rotation',
+    'C_flex': 'femur-tibia flexion',
+    'C_rot': 'tibia rotation',
+    'D_flex': 'tibia-tarsus flexion'
+}
+
+small_main = ['C_flex']
+subset_main = ['C_flex', 'A_rot', 'A_abduct', 'B_flex', 'B_rot']
+# full_main = ['A_flex', 'A_abduct', 'A_rot', 'B_flex', 'B_rot', 'C_flex', 'C_rot', 'D_flex']
+# full_main = ['A_flex', 'A_abduct', 'A_rot', 'B_flex', 'B_rot', 'C_flex', 'C_rot']
+full_main = ['A_abduct', 'A_flex', 'B_flex', 'C_flex', 'D_flex', 'A_rot', 'B_rot', 'C_rot']
+
+#+END_SRC
+
+#+RESULTS:
+
+
+** Functions
+
+#+BEGIN_SRC jupyter-python
+def get_context_var(name, c):
+    if name == 'fictrac_speed':
+        return fictrac_vals[c, 1] # delta_rot_lab_y_mms
+    elif name == 'fictrac_rot':
+        return fictrac_vals[c, 2] # delta_rot_lab_z_mms
+    elif name == 'period':
+        ix = angle_names.index('L1C_flex')
+        return get_period(angles_raw[c, ix])
+    elif name == 'frequency':
+        ix = angle_names.index('L1C_flex')
+        return get_speed(angles_raw[c, ix])
+    else:
+        raise ValueError("invalid context name: {}".format(name))
+
+def get_context(context_list, c):
+    if len(context_list) == 0:
+        return np.zeros((np.sum(c), 0))
+    L = []
+    for name in context_list:
+        L.append(get_context_var(name, c))
+    context = np.vstack(L).T
+    return context
+
+def get_data(good_bouts, params, angles_main,
+             phase_ang='L1C_flex', phase_offset=0):
+    ix = [angle_names.index(name) for name in angles_main]
+    c = np.isin(bout_numbers, good_bouts)
+    inp = np.hstack([angles_raw[:,ix][c], angles_deriv[:,ix][c]])
+    accel = angles_accel[:,ix][c]
+
+    ix_p = angle_names.index(phase_ang)
+    praw = wrap_array(phases[c, ix_p] + phase_offset)
+    pderiv = wrap_array(phases_deriv[c, ix_p])
+    context = get_context(params['context'], c)
+    fnum = framenums[c]
+    fname = fullfiles[c]
+    check = (fname[1:] == fname[:-1]) & (fnum[1:]-1 == fnum[:-1])
+    bnums = bout_numbers[c][1:][check]
+
+    x_walk = np.hstack([inp, context, np.cos(praw), np.sin(praw)])[:-1]
+    y_walk = np.hstack([accel, pderiv])[1:]
+
+    x_walk = x_walk[check].astype('float32')
+    y_walk = y_walk[check].astype('float32')
+    msx_w = summarize(x_walk)
+    msy_w = summarize(y_walk)
+
+    return (x_walk, y_walk, msx_w, msy_w), bnums
+
+def filter_bouts(bnums):
+  ix = angle_names.index('L1C_flex')
+  good_bouts = []
+  for bnum in tqdm(np.unique(bnums), ncols=70):
+      # if bnum == 0 or np.isnan(bnum): continue
+      # cc = np.isclose(bout_numbers, bnum)
+      cc = bout_numbers == bnum
+      raw = np.abs(angles_raw[cc, ix])
+      # deriv = angles_deriv[cc, ix] / FPS
+      low, high = np.percentile(raw, [5, 95])
+      # high_deriv = np.percentile(deriv, 95)
+      vals = fictrac_vals[cc]
+      if not np.all(np.isfinite(vals)):
+          continue
+      some_walking = np.mean(vals[:,1]) > 1.0
+      # no_turning = np.abs(np.mean(vals[:,0])) < 2.0
+      if some_walking and  high - low > 30 and len(raw) >= 150:
+          good_bouts.append(bnum)
+  good_bouts = np.array(good_bouts)
+  return good_bouts
+
+#+END_SRC
+
+#+RESULTS:
+
+
+
+
+** Data files
+#+BEGIN_SRC jupyter-python
+prefix = '/home/pierre/data/tuthill/summaries/v3-b4/lines'
+fnames = [
+  "evyn--Berlin-WT.pq",  "sarah--rv1-Berlin-WT.pq",
+  # "sarah--rv4-Berlin-WT.pq",
+  # "sarah--rv3-Berlin-WT.pq",  "sarah--rv10-Berlin-WT.pq"
+]
+ds = []
+for fname in fnames:
+  print(fname)
+  d = pd.read_parquet(os.path.join(prefix, fname))
+  ds.append(d)
+data = pd.concat(ds)
+#+END_SRC
+
+#+RESULTS:
+: evyn--Berlin-WT.pq
+: sarah--rv1-Berlin-WT.pq
+
+#+RESULTS:
+
+** Compute more values
+
+#+BEGIN_SRC jupyter-python
+check = data['walking_bout_number'].notna().values
+
+angle_names = [leg + name for leg in legs for name in subset_main]
+angle_deriv_names = [leg + name +"_d1" for leg in legs for name in subset_main]
+angle_accel_names = [leg + name +"_d2" for leg in legs for name in subset_main]
+
+all_angles_main = [[leg + a for a in subset_main] for leg in legs]
+angles_main = all_angles_main[0]
+
+phase_angles = ['L1C_flex', 'L2B_rot', 'L3C_flex', 'R1C_flex', 'R2B_rot', 'R3C_flex']
+phase_offsets = [np.pi, 0, 0, np.pi, 0, 0] # to make the phases consistent
+
+all_names = angle_names + angle_deriv_names
+# all_names = joint_names + joint_deriv_names
+
+angles_raw = np.abs(data.loc[check, angle_names].values)
+# angles_deriv = data.loc[check, angle_deriv_names].values
+# angles_accel = data.loc[check, angle_accel_names].values
+# phases = np.mod(phases_d.loc[check].values, 2*np.pi)
+
+fullfiles = data.loc[check, 'fullfile'].to_numpy()
+framenums = data.loc[check, 'fnum'].to_numpy()
+flyids = data.loc[check, 'flyid'].to_numpy()
+
+bout_numbers_raw = data.loc[check, 'walking_bout_number'].values.astype('int64')
+bout_numbers = flyids + " b" + bout_numbers_raw.astype('str')
+
+
+# fictrac_vals = data.loc[check, ['fictrac_speed', 'fictrac_rot']].values
+fictrac_vals = data.loc[check, [
+  # 'fictrac_speed_mms',
+  'fictrac_delta_rot_lab_x_mms',
+  'fictrac_delta_rot_lab_y_mms',
+  'fictrac_delta_rot_lab_z_mms']].values
+
+fictrac_vals[:, 1] = -1 * fictrac_vals[:, 1]
+
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+angles_deriv = np.zeros(angles_raw.shape)
+angles_accel = np.zeros(angles_raw.shape)
+phases = np.zeros(angles_raw.shape)
+phases_deriv = np.zeros(phases.shape)
+
+sos = signal.butter(1, (0.02, 0.4), 'bandpass', output='sos')
+
+for f in tqdm(np.unique(fullfiles), ncols=70):
+  cc = fullfiles == f
+  ang = angles_raw[cc]
+  angles_deriv[cc] = signal.savgol_filter(ang, 5, 2, deriv=1, axis=0)
+  angles_accel[cc] = signal.savgol_filter(ang, 5, 2, deriv=2, axis=0)
+  ang_f = signal.sosfiltfilt(sos, ang, axis=0)
+  phases[cc] = np.mod(np.angle(signal.hilbert(ang_f, axis=0)), 2*np.pi)
+  phases_deriv[cc] = signal.savgol_filter(np.unwrap(phases[cc], axis=0),
+                                          5, 2, deriv=1, axis=0, mode='nearest')
+
+#+END_SRC
+
+#+RESULTS:
+: 100%|█████████████████████████████| 2298/2298 [00:42<00:00, 54.66it/s]
+
+
+** Format the data
+
+#+BEGIN_SRC jupyter-python
+for i in range(3):
+    plt.figure()
+    _ = plt.hist(fictrac_vals[:,i], bins=100)
+    plt.xlim(-30, 30)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/2d4e05f28ffbed936debea0dbf51fe8632980118.png]]
+[[file:./.ob-jupyter/8bc728c981cb7d910372d97b954faa197fba93da.png]]
+[[file:./.ob-jupyter/35ca5e1306dbee30ac329ec7dfa832300b6d5853.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+# fly = "6.15.20 Fly 4_0"
+# fly = "all"
+# bnums = np.unique(bout_numbers[flyids == fly])
+bnums = np.unique(bout_numbers)
+ix = angle_names.index('L1C_flex')
+
+good_bouts = filter_bouts(bnums)
+
+np.random.seed(123)
+np.random.shuffle(good_bouts)
+#+END_SRC
+
+#+RESULTS:
+: 100%|█████████████████████████████| 3748/3748 [00:42<00:00, 87.58it/s]
+
+#+BEGIN_SRC jupyter-python
+params = {'context': ['fictrac_speed', 'fictrac_rot'], 'use_phase': True}
+# params = {'context': ['fictrac_speed'], 'use_phase': True}
+
+xy_ws = []
+xy_ws_test = []
+
+for i in range(len(all_angles_main)):
+    xy_w, bnums = get_data(good_bouts[:-20], params, all_angles_main[i],
+                           phase_angles[i], phase_offsets[i])
+    xy_w_test, bnums_test = get_data(good_bouts[-20:], params, all_angles_main[i],
+                                     phase_angles[i], phase_offsets[i])
+    xy_ws.append(xy_w)
+    xy_ws_test.append(xy_w_test)
+
+print("Data points in training set:", len(xy_w[0]))
+print("Data points in test set:", len(xy_w_test[0]))
+#+END_SRC
+
+#+RESULTS:
+: Data points in training set: 569196
+: Data points in test set: 6648
+
+* Simple MLP (multileg)
+** Train the model
+*** Constants
+
+#+BEGIN_SRC jupyter-python
+# batch_size = 2500
+# n_epochs = 6000
+batch_size = 8000
+n_epochs = 400
+# n_epochs = 1000
+#+END_SRC
+
+#+RESULTS:
+
+*** Model setup
+
+#+BEGIN_SRC jupyter-python
+ms_walk = []
+for xy_w in xy_ws:
+    model_walk = MLPScaledXY(output_dim=xy_w[1].shape[1],
+                             hidden_dim=32, dropout_rate=0.05,
+                             msx=xy_w[2], msy=xy_w[3])
+    ms_walk.append(model_walk)
+    model_walk(xy_w[0][:2])
+    print('Walk', num_vars(model_walk))
+#+END_SRC
+
+#+RESULTS:
+: Walk 1734
+: Walk 1734
+: Walk 1734
+: Walk 1734
+: Walk 1734
+: Walk 1734
+
+*** Training function
+
+#+BEGIN_SRC jupyter-python
+lr = tf.Variable(1e-3)
+opt = tf.keras.optimizers.Adam(learning_rate=lr)
+
+def make_step():
+    @tf.function
+    def step_mlp_norm(model_walk, in_walk, out_walk):
+      """Performs one optimizer step on a single mini-batch."""
+      with tf.GradientTape() as tape:
+          pred_walk = model_walk(in_walk, is_training=True)
+          error_walk = tf.square(out_walk - pred_walk) / tf.square(model_walk.msy[1])
+          loss = tf.reduce_mean(error_walk)
+
+      variables = model_walk.trainable_variables
+      grads = tape.gradient(loss, variables)
+      opt.apply_gradients(zip(grads, variables))
+      return loss
+    return step_mlp_norm
+#+END_SRC
+
+#+RESULTS:
+
+*** Running the training
+
+#+BEGIN_SRC jupyter-python
+for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
+    step_mlp_norm = make_step()
+    print(leg)
+    in_walk = xy_w[0]
+    in_walk_state = in_walk[:, :-3]
+    extra_walk = in_walk[:, -3:]
+    out_walk = xy_w[1]
+
+    t0 = time.time()
+
+    for epoch_num in range(n_epochs+1):
+        ixs = np.arange(len(in_walk))
+        np.random.shuffle(ixs)
+        total = 0
+        num = 0
+        for s in range(0, len(ixs), batch_size):
+            c = ixs[s:s+batch_size]
+            in_walk_c = tf.cast(np.copy(in_walk[c]), 'float32')
+            out_walk_c = tf.cast(np.copy(out_walk[c]), 'float32')
+            total += step_mlp_norm(model_walk, in_walk_c, out_walk_c).numpy()
+            num += 1
+        if epoch_num % 50 == 0:
+            t1 = time.time() - t0
+            print("Time: {:.2f} Epoch {}: {:.5f}".format(t1, epoch_num, total / num))
+
+    print("Done!")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+L1
+Time: 0.43 Epoch 0: 0.80839
+Time: 9.15 Epoch 50: 0.37409
+Time: 18.01 Epoch 100: 0.35799
+Time: 26.93 Epoch 150: 0.35306
+Time: 35.79 Epoch 200: 0.35158
+Time: 44.58 Epoch 250: 0.34884
+Time: 53.48 Epoch 300: 0.34828
+Time: 62.27 Epoch 350: 0.34745
+Time: 71.11 Epoch 400: 0.34585
+Done!
+L2
+Time: 0.40 Epoch 0: 0.71996
+Time: 9.68 Epoch 50: 0.47402
+Time: 18.93 Epoch 100: 0.46480
+Time: 28.08 Epoch 150: 0.45849
+Time: 37.35 Epoch 200: 0.45565
+Time: 46.60 Epoch 250: 0.45539
+Time: 55.89 Epoch 300: 0.45419
+Time: 65.04 Epoch 350: 0.45198
+Time: 74.34 Epoch 400: 0.45144
+Done!
+L3
+Time: 0.40 Epoch 0: 0.69463
+Time: 9.41 Epoch 50: 0.47491
+Time: 18.43 Epoch 100: 0.46452
+Time: 27.34 Epoch 150: 0.46207
+Time: 36.27 Epoch 200: 0.46202
+Time: 45.21 Epoch 250: 0.45754
+Time: 54.06 Epoch 300: 0.45679
+Time: 62.92 Epoch 350: 0.45534
+Time: 71.90 Epoch 400: 0.45431
+Done!
+R1
+Time: 0.41 Epoch 0: 0.62935
+Time: 9.70 Epoch 50: 0.42882
+Time: 18.94 Epoch 100: 0.41900
+Time: 28.20 Epoch 150: 0.41420
+Time: 37.42 Epoch 200: 0.41168
+Time: 46.71 Epoch 250: 0.41116
+Time: 55.99 Epoch 300: 0.41014
+Time: 65.22 Epoch 350: 0.40986
+Time: 74.51 Epoch 400: 0.40942
+Done!
+R2
+Time: 0.40 Epoch 0: 0.74086
+Time: 9.55 Epoch 50: 0.52391
+Time: 18.75 Epoch 100: 0.51087
+Time: 27.83 Epoch 150: 0.50801
+Time: 36.99 Epoch 200: 0.50532
+Time: 46.04 Epoch 250: 0.50269
+Time: 55.16 Epoch 300: 0.50248
+Time: 64.30 Epoch 350: 0.50127
+Time: 73.48 Epoch 400: 0.50177
+Done!
+R3
+Time: 0.42 Epoch 0: 0.69701
+Time: 9.89 Epoch 50: 0.49118
+Time: 19.14 Epoch 100: 0.48134
+Time: 28.40 Epoch 150: 0.47585
+Time: 37.56 Epoch 200: 0.47345
+Time: 46.84 Epoch 250: 0.47131
+Time: 56.18 Epoch 300: 0.47052
+Time: 65.42 Epoch 350: 0.46991
+Time: 74.64 Epoch 400: 0.46852
+Done!
+#+end_example
+
+** Saving the models
+
+#+BEGIN_SRC jupyter-python
+all_models = dict()
+for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
+    all_models[leg] = {
+        'model_walk': model_walk.get_full(),
+        'train': (xy_w, bnums),
+        'test': (xy_w_test, bnums_test),
+    }
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+outname = 'models/walk_sls_legs_1.pickle'
+with open(outname, 'wb') as f:
+    pickle.dump(all_models, f)
+#+END_SRC
+
+#+RESULTS:
+
+
+** Evaluating the model
+
+#+BEGIN_SRC jupyter-python
+def update_state(ang, drv, phase, out, ratio=1.0):
+    accel = out[:len(ang)]
+    drv1 = drv + accel * ratio
+    ang1 = ang + drv * ratio
+    phase1 = phase + out[-1]*ratio
+    return ang1, drv1, phase1
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+n_ang = len(angles_main)
+common = Counter(bnums).most_common(100)
+b, _ = common[50]
+
+n_pred = 200
+
+cc = np.where(b == bnums)[0][:n_pred]
+
+preds = []
+
+for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
+    print(leg)
+    real_ang = xy_w[0][cc, :n_ang]
+    real_drv = xy_w[0][cc, n_ang:n_ang*2]
+    rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+    real_phase = np.arctan2(rsin, rcos)
+    real_context = xy_w[0][cc, -4:-2]
+
+    ang = real_ang[0]
+    drv = real_drv[0]
+    context = real_context
+    pcos, psin = rcos[0], rsin[0]
+    phase = np.arctan2(psin, pcos)
+
+    pred_ang = np.zeros((n_pred, n_ang))
+    pred_drv = np.zeros((n_pred, n_ang))
+    pred_phase = np.zeros(n_pred)
+
+    for i in range(n_pred):
+      inp = np.hstack([ang, drv, context[i], np.cos(phase), np.sin(phase)])
+      out = model_walk(inp[None].astype('float32'))[0].numpy()
+      ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+      new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+      out = model_walk(new_inp[None].astype('float32'))[0].numpy()
+      ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+      # phase = np.mod(phase, 2*np.pi)
+      phase = np.mod(real_phase[i], 2*np.pi)
+      pred_ang[i] = ang
+      pred_drv[i] = drv
+      pred_phase[i] = phase
+    preds.append( (pred_ang, pred_drv, pred_phase, real_ang, real_drv, real_phase) )
+#+END_SRC
+
+#+RESULTS:
+: L1
+: L2
+: L3
+: R1
+: R2
+: R3
+
+
+
+#+BEGIN_SRC jupyter-python
+pred_ang, pred_drv, pred_phase, real_ang, real_drv, real_phase = preds[1]
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_ang)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_ang)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| 20.0 | 180.0 |
+[[file:./.ob-jupyter/ff3f77dc2f46cf35cc2593de37993576e18e5a24.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_drv)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_drv)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: Text(0, 0.5, 'Angle (deg)')
+[[file:./.ob-jupyter/8900d56e77e9a9b8011180134ab827aa6019c299.png]]
+:END:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(7, 4))
+plt.subplot(211)
+# plt.plot(np.cos(pred_phase))
+# plt.plot(np.sin(pred_phase))
+plt.plot(np.mod(pred_phase, 2*np.pi))
+plt.subplot(212)
+plt.plot(np.mod(real_phase, 2*np.pi))
+# plt.plot(np.cos(real_phase))
+# plt.plot(np.sin(real_phase))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f8e65e2e670> |
+[[file:./.ob-jupyter/d50eaf75b48817d9c2bd724d29d4da5dfc3c80fd.png]]
+:END:
+* Simulating a kuramato oscillator model
+
+#+BEGIN_SRC jupyter-python
+offsets = np.array([
+    [ 0.        , -3.05560396,  0.96192901,  3.05202358,  0.19249792, -2.1399429 ],
+    [ 3.05560396,  0.        , -2.16420782, -0.16512586, -3.03648488, 0.84354644],
+    [-0.96192901,  2.16420782,  0.        ,  2.0077949 , -0.76840748, 3.10273806],
+    [-3.05202358,  0.16512586, -2.0077949 ,  0.        , -2.87256372, 1.01551641],
+    [-0.19249792,  3.03648488,  0.76840748,  2.87256372,  0.        , -2.29358311],
+    [ 2.1399429 , -0.84354644, -3.10273806, -1.01551641,  2.29358311, 0.        ]
+])
+
+w_slope = 2.4327365550252393
+w_intercept = 22.57654446861406
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+p0 = np.zeros(6)
+# p0[:] = offsets[0] + np.random.randn(6)*1.0
+p0[:] = np.random.randn(6)*2*np.pi
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+speedy = 10
+w = w_slope * speedy + w_intercept
+ws = np.ones(6) * w
+alphas = np.ones((6,6))*1.0
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+def kuramato_deriv(px, alphas, offsets, ws):
+    return ws + np.array([
+        np.sum(alphas[i] * np.sin(px - px[i] - offsets[i]))
+        for i in range(len(px))
+    ])
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+dt = 1.0 / FPS
+
+px = p0.copy()
+full_px = [px]
+
+for _ in range(600):
+    # midpoint method update
+    px_half = px + 0.5*dt * kuramato_deriv(px, alphas, offsets, ws)
+    px_new = px + dt * kuramato_deriv(px_half, alphas, offsets, ws)
+    # euler update
+    # px_new = px + dt * kuramato_deriv(px, alphas, offsets, ws)
+    px = px_new
+    px = px + np.random.normal(size=px.shape)*dt*1.0
+    full_px.append(px)
+
+full_px = np.array(full_px)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(np.mod(full_px - full_px[:,0:1] - offsets[0]+np.pi, 2*np.pi)-np.pi)
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/6236b2a773fefb4fd947b112ffdf3e8ac36adca7.png]]
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(np.sin(full_px)[:200])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/44508f6abc341b73d94a85ff0816ce87586af875.png]]
+
+* Combining kuramato and legs models
+
+** Run the model
+#+BEGIN_SRC jupyter-python
+p0 = np.zeros(6)
+p0[:] = offsets[0] + np.random.randn(6)*1.0
+
+speedy = 10
+w = w_slope * speedy + w_intercept
+ws = np.ones(6) * w
+alphas = np.ones((6,6))*10.0
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+dt = 1.0 / FPS
+
+px = p0.copy()
+full_px = [px]
+
+for _ in range(600):
+    # midpoint method update
+    px_half = px + 0.5*dt * kuramato_deriv(px, alphas, offsets, ws)
+    px = px + dt * kuramato_deriv(px_half, alphas, offsets, ws)
+    # noise
+    px = px + np.random.normal(size=px.shape)*dt*1.0
+    full_px.append(px)
+
+full_px = np.array(full_px)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+n_ang = len(angles_main)
+common = Counter(bnums).most_common(100)
+b, _ = common[0]
+
+n_legs = len(legs)
+n_pred = 600
+
+cc = np.where(b == bnums)[0][:n_pred]
+
+p0 = np.zeros(6)
+p0[:] = offsets[0] + np.random.randn(6)*1.0
+
+alphas = np.ones((6,6))*1.0
+
+preds = []
+
+real_angs = []
+real_drvs = []
+real_phases = []
+
+
+for xy_w in xy_ws:
+    real_angs.append(xy_w[0][cc, :n_ang])
+    real_drvs.append(xy_w[0][cc, n_ang:n_ang*2])
+    rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+    real_phases.append(np.arctan2(rsin, rcos))
+    real_context = xy_w[0][cc, -4:-2]
+
+
+angs = np.array([r[0] for r in real_angs])
+drvs = np.array([r[0] for r in real_drvs])
+phases = np.array([r[0] for r in real_phases])
+context = real_context
+
+pred_ang = np.zeros((n_pred, n_legs, n_ang))
+pred_drv = np.zeros((n_pred, n_legs, n_ang))
+pred_phase = np.zeros((n_pred, n_legs))
+pred_px = np.zeros((n_pred, n_legs))
+
+for i in range(n_pred):
+    w = w_slope * context[i, 0] + w_intercept
+    ws = np.ones(6) * w
+
+    # midpoint method update
+    px_half = px + 0.5*dt * kuramato_deriv(px, alphas, offsets, ws)
+    px = px + dt * kuramato_deriv(px_half, alphas, offsets, ws)
+    # noise
+    px = px + np.random.normal(size=px.shape)*dt*2.0
+    pred_px[i] = px
+
+    for ix_leg in range(n_legs):
+        model_walk = ms_walk[ix_leg]
+        ang, drv, phase = angs[ix_leg], drvs[ix_leg], phases[ix_leg]
+
+        phase = px[ix_leg]
+
+        # midpoint method for leg model
+        inp = np.hstack([ang, drv, context[i], np.cos(phase), np.sin(phase)])
+        out = model_walk(inp[None].astype('float32'))[0].numpy()
+        ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+        new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+        out = model_walk(new_inp[None].astype('float32'))[0].numpy()
+        ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+
+        phase = np.mod(px[ix_leg], 2*np.pi)
+        # phase = np.mod(phase, 2*np.pi)
+        # phase = np.mod(real_phase[i], 2*np.pi)
+        angs[ix_leg] = pred_ang[i, ix_leg] = ang
+        drvs[ix_leg] = pred_drv[i, ix_leg] = drv
+        phases[ix_leg] = pred_phase[i, ix_leg] = phase
+
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(pred_ang[:, :, 0])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/acb74fd21afd23d0f7271ae233c4d5ca53419358.png]]
+
+#+BEGIN_SRC jupyter-python
+plt.plot(context)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7fe8200c9760> | <matplotlib.lines.Line2D | at | 0x7fe8200c9880> |
+[[file:./.ob-jupyter/c87d01545bf48bddd80bd52722fcffd26463fa75.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(np.mod(pred_phase - pred_phase[:, 0:1]+np.pi - offsets[0], 2*np.pi) - np.pi)
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/0aded39959742f255b3bc19ff21e9e0fcb287eb0.png]]
+
+** Plot the model
+
+#+BEGIN_SRC jupyter-python
+import importlib
+import angle_functions
+importlib.reload(angle_functions)
+#+END_SRC
+
+#+RESULTS:
+: <module 'angle_functions' from '/jellyfish/research/tuthill/walking-stats-3d/org/angle_functions.py'>
+
+
+#+BEGIN_SRC jupyter-python
+pred_ang.reshape(pred_ang.shape[0], -1)
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+array([[ 72.17245483, 144.92608643, 136.66358948, ..., 152.27850342,
+         69.5355835 , 160.54142761],
+       [ 70.80342102, 146.50022888, 135.01307678, ..., 154.23484802,
+         65.30812073, 161.60475159],
+       [ 69.72782135, 148.1789856 , 133.81364441, ..., 155.62278748,
+         62.96826553, 162.55569458],
+       ...,
+       [ 65.43470764, 141.28939819, 137.39631653, ..., 152.45465088,
+        100.41669464, 155.06472778],
+       [ 62.54249573, 141.61738586, 136.77819824, ..., 152.21543884,
+        100.45056152, 155.29547119],
+       [ 59.61504364, 141.96748352, 136.1852417 , ..., 151.97590637,
+        100.54598999, 155.50643921]])
+#+end_example
+
+#+BEGIN_SRC jupyter-python
+angnames = np.hstack(all_angles_main)
+angs = pred_ang.reshape(pred_ang.shape[0], -1)
+
+    np.tile(angle_functions.median_angles, (angs.shape[0], 1))
+#+END_SRC
+
+#+RESULTS:
+: array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+:        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+:        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
