@@ -97,16 +97,21 @@ def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legdef, leg):
 
 
 def loadLinearizedSystem():
-    ''' Loads files containing ALin, BLin, uEqm from getLinearizedSystem and returns contents '''
+    ''' 
+    Loads files containing ALin, BLin, xEqm, uEqm generated from 
+    getLinearizedSystem() and returns contents 
+    '''
     Afn = './data/ALin.dat'
     Bfn = './data/BLin.dat'
+    xfn = './data/xEqm.dat'
     ufn = './data/uEqm.dat'
     
     ALin = np.load(Afn, allow_pickle=True)
     BLin = np.load(Bfn, allow_pickle=True)
+    xEqm  = np.load(xfn, allow_pickle=True)
     uEqm  = np.load(ufn, allow_pickle=True)
     
-    return (ALin, BLin, uEqm)
+    return (ALin, BLin, xEqm, uEqm)
 
 
 
@@ -119,8 +124,8 @@ def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True
     xEqm        : state operating point
     saveToFiles : whether to save the outputs to files
     
-    output      : (A, B, uEqm) system matrices and actuator operating point (equilibrium)
-                  each is a numpy matrix
+    output      : (A, B, uEqm, xEqm) system matrices and o
+                  operating point (equilibrium) each is a numpy matrix
     '''
     xEqm = sympy.Matrix(xEqm) # Convert to sympy    
     
@@ -172,15 +177,18 @@ def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True
     # Convert to numpy
     ALin = np.array(ALin).astype(np.float64)
     BLin = np.array(BLin).astype(np.float64)
+    xEqm = np.array(xEqm).astype(np.float64)
     uEqm = np.array(uEqm).astype(np.float64)
     
     # Store to files (since A2 calculation takes a while)
     Afn = './data/ALin.dat'
     Bfn = './data/BLin.dat'
+    xfn = './data/xEqm.dat'
     ufn = './data/uEqm.dat'
     
     ALin.dump(Afn)
     BLin.dump(Bfn)
+    xEqm.dump(xfn)
     uEqm.dump(ufn)
     
-    return (ALin, BLin, uEqm)
+    return (ALin, BLin, xEqm, uEqm)
