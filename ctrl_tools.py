@@ -101,10 +101,10 @@ def loadLinearizedSystem():
     Loads files containing ALin, BLin, xEqm, uEqm generated from 
     getLinearizedSystem() and returns contents 
     '''
-    Afn = './data/ALin.dat'
-    Bfn = './data/BLin.dat'
-    xfn = './data/xEqm.dat'
-    ufn = './data/uEqm.dat'
+    Afn = './linearized_model/ALin.dat'
+    Bfn = './linearized_model/BLin.dat'
+    xfn = './linearized_model/xEqm.dat'
+    ufn = './linearized_model/uEqm.dat'
     
     ALin = np.load(Afn, allow_pickle=True)
     BLin = np.load(Bfn, allow_pickle=True)
@@ -181,10 +181,10 @@ def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True
     uEqm = np.array(uEqm).astype(np.float64)
     
     # Store to files (since A2 calculation takes a while)
-    Afn = './data/ALin.dat'
-    Bfn = './data/BLin.dat'
-    xfn = './data/xEqm.dat'
-    ufn = './data/uEqm.dat'
+    Afn = './linearized_model/ALin.dat'
+    Bfn = './linearized_model/BLin.dat'
+    xfn = './linearized_model/xEqm.dat'
+    ufn = './linearized_model/uEqm.dat'
     
     ALin.dump(Afn)
     BLin.dump(Bfn)
