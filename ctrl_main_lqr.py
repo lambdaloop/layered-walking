@@ -75,10 +75,12 @@ def main2ctrl(angles):
     ctrlAngles = np.array([angles[2], angles[3], angles[1], angles[0]])
     return np.radians(ctrlAngles)
 
-def ctrl2main(angles):
-    L1B_rot     = np.radians(median_angles['L1B_rot'])
-    mainAngles = np.array([angles[3], angles[2], angles[0], angles[1], L1B_rot])
-    return np.degrees(mainAngles)
+def ctrl2main(angles, L1BVal):
+    # L1BVal is either angle or angular velocity for L1B_rot, which
+    # is currently not in the model
+        
+    mainAngles = np.array([angles[3], angles[2], angles[0], angles[1]])
+    return np.append(np.degrees(mainAngles), L1BVal)
 
 model_walk = MLPScaledXY.from_full(allmodels['L1']['model_walk'])
 xy_w, bnums = allmodels['L1']['train'] # xy_w is a real trajectory
