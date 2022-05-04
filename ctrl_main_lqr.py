@@ -134,15 +134,18 @@ for t in range(n_pred):
     trajs[0:dof,t] = main2ctrl(pred_ang.T[:,t])
 
 xEqmFlat = xEqm.flatten()
-for t in range(n_pred-2):
+for t in range(n_pred-1):
     wtraj        = A @ (trajs[:,t] - xEqmFlat) + xEqmFlat - trajs[:,t+1]
     
-    # TODO: give one extra lookahead of wtraj (because we know everything)
-    ys[:,t+1]    = ACL @ ys[:,t] + wtraj
-    us[:,t]      = K @ ys[:,t]
-
+    # Give some look-ahead to wtraj
+    us[:,t]      = -K @ (ys[:,t] + wtraj)    
+    ys[:,t+1]    = A @ ys[:,t] + B @ us[:,t] + wtraj
+    
 qs = ys + trajs
 
+errSize = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
+
+print(f'Frobenius norm of angle error: {errSize}')
 for pltState in range(dof):
     plt.subplot(2,2,pltState+1)
     plt.plot(time, np.degrees(qs[pltState,:]), '--', label=f'q{pltState}')
