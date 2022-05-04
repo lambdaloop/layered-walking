@@ -4,6 +4,7 @@ import control
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.linalg import block_diag
+from angle_functions import *
 from ctrl_tools import *
 
 # Sampling time
@@ -17,9 +18,12 @@ dof = int(len(ALin)/2)
 Nx  = 2*dof
 Nu  = dof
 
-# Discretize
+# Discretize using e^(A*T) ~= I + A*T
 A = np.eye(Nx) + ALin*Ts
-B = BLin*Ts
+B = Ts*BLin + 0.5*Ts*Ts*ALin @ BLin
+
+eigsOL    = np.linalg.eig(A)[0]
+specRadOL = max(np.abs(eigsOL))
 
 # Sanity check: controllability
 Qc = control.ctrb(A,B)
@@ -37,8 +41,8 @@ Q2 = velocityPenalty*np.eye(dof)
 Q  = block_diag(Q1, Q2)
 R  = inputPenalty*np.eye(Nu)
 
-K         = control.dlqr(A, B, Q, R)[0]
-ACL       = A - B @ K
+K   = control.dlqr(A, B, Q, R)[0]
+ACL = A - B @ K
 
 # Sanity check: stability
 eigsCL    = np.linalg.eig(ACL)[0]
@@ -46,46 +50,94 @@ specRadCL = max(np.abs(eigsCL))
 if specRadCL >= 1:
     print('Error: Controller did not stabilize!')
 
-tHorizon = 100
-time = np.array(range(tHorizon))
-ys   = np.zeros([Nx, tHorizon])
-us   = np.zeros([Nu, tHorizon])
+n_pred = 200
+time = np.array(range(n_pred))
+ys   = np.zeros([Nx, n_pred])
+us   = np.zeros([Nu, n_pred])
 
-'''
-import tensorflow as tf
 import pickle
 
-fn = '/home/lisa/Downloads/walk_sls_legs_1.pickle'
+fn = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
 with open(fn, 'rb') as f:
     allmodels = pickle.load(f)
 
+# No warnings
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# ML Code
 from model_functions import MLPScaledXY
 
-model_walk = MLPScaledXY.from_full(allmodels['L1']['model_walk'])
-xy_w, bnums = allmodels['L1']['train']
+angles_main = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
+angles_ctrl = ['L1A_abduct', 'L1B_flex', 'L1A_rot', 'L1C_flex']
 
+def main2ctrl(angles):
+    ctrlAngles = np.array([angles[2], angles[3], angles[1], angles[0]])
+    return np.radians(ctrlAngles)
+
+def ctrl2main(angles):
+    L1B_rot     = np.radians(median_angles['L1B_rot'])
+    mainAngles = np.array([angles[3], angles[2], angles[0], angles[1], L1B_rot])
+    return np.degrees(mainAngles)
+
+model_walk = MLPScaledXY.from_full(allmodels['L1']['model_walk'])
+xy_w, bnums = allmodels['L1']['train'] # xy_w is a real trajectory
+
+from collections import Counter
 n_ang = len(angles_main)
 common = Counter(bnums).most_common(100)
 b, _ = common[50]
 
-n_pred = 200 # time horizon
 cc = np.where(b == bnums)[0][:n_pred]
-preds = []
 
-# Around line 528 (single leg)
-# "Real" is the actual trajectory, "pred" is that
-# Want: TG vs TG+Dyn
-# 800 (6 legs) onward from the .org file is stuff we want
-angles_main = ['L1C_flex', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
-'''
+# Take code from ~line 528 in .org file (TG)
+# ~line 800 contains CC+TG
 
-# Trajectory is a sine wave
-trajs      = np.zeros([Nx, tHorizon])
-for joint in range(dof):
-    trajs[joint,:] = 0.5 * np.sin(time * 0.25) + xEqm[joint]
+# Generate trajectory using TG
+real_ang = xy_w[0][cc, :n_ang]
+real_drv = xy_w[0][cc, n_ang:n_ang*2]
+rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+real_phase = np.arctan2(rsin, rcos)
+real_context = xy_w[0][cc, -4:-2]
 
-for t in range(tHorizon-1):
-    wtraj        = A @ (trajs[:,t] - xEqm) + xEqm - trajs[:,t+1]    
+ang = real_ang[0]
+drv = real_drv[0]
+context = real_context
+pcos, psin = rcos[0], rsin[0]
+phase = np.arctan2(psin, pcos)
+
+pred_ang = np.zeros((n_pred, n_ang))
+pred_drv = np.zeros((n_pred, n_ang))
+pred_phase = np.zeros(n_pred)
+
+def update_state(ang, drv, phase, out, ratio=1.0):
+    accel = out[:len(ang)]
+    drv1 = drv + accel * ratio
+    ang1 = ang + drv * ratio
+    phase1 = phase + out[-1]*ratio
+    return ang1, drv1, phase1
+
+for i in range(n_pred):
+    inp = np.hstack([ang, drv, context[i], np.cos(phase), np.sin(phase)])
+    out = model_walk(inp[None].astype('float32'))[0].numpy()
+    ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+    new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+    out = model_walk(new_inp[None].astype('float32'))[0].numpy()
+    ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+    phase = np.mod(real_phase[i], 2*np.pi)
+    pred_ang[i] = ang
+    pred_drv[i] = drv
+    pred_phase[i] = phase
+
+trajs = np.zeros([Nx, n_pred])
+for t in range(n_pred):
+    trajs[0:dof,t] = main2ctrl(pred_ang.T[:,t])
+
+xEqmFlat = xEqm.flatten()
+for t in range(n_pred-2):
+    wtraj        = A @ (trajs[:,t] - xEqmFlat) + xEqmFlat - trajs[:,t+1]
+    
+    # TODO: give one extra lookahead of wtraj (because we know everything)
     ys[:,t+1]    = ACL @ ys[:,t] + wtraj
     us[:,t]      = K @ ys[:,t]
 
@@ -94,9 +146,8 @@ qs = ys + trajs
 for pltState in range(dof):
     plt.subplot(2,2,pltState+1)
     plt.plot(time, np.degrees(qs[pltState,:]), '--', label=f'q{pltState}')
-    plt.plot(time+2, np.degrees(trajs[pltState,:]), label=f'traj{pltState}')
-
-plt.legend()
+    plt.plot(time, np.degrees(trajs[pltState,:]), label=f'traj{pltState}')
+    plt.legend()
 plt.show()
 
 
