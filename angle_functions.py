@@ -53,10 +53,15 @@ def angles_to_pose(row, lengths, offsets):
         out.append(xyz)
     return out
 
-legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']
-angnames = ['A_abduct',
-            'A_flex', 'B_flex', 'C_flex', 'D_flex',
-            'A_rot', 'B_rot', 'C_rot']
+legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'] # L1 is front left leg
+angnames = ['A_abduct', # Body-coxa flexion
+            'A_flex',   # Body-coxa abduction
+            'B_flex',   # Coxa-femur flexion
+            'C_flex',   # Femur-tibia flexion
+            'D_flex',   # Tibia-tarsus flexion
+            'A_rot',    # Coxa rotation
+            'B_rot',    # Femur rotation
+            'C_rot']    # Tibia rotation
 full_names = [l + a for l in legs for a in angnames]
 
 
@@ -69,9 +74,9 @@ all_offsets = np.array(
      [ 0.2153209 , -0.44930736,  0.01699216]])
 
 all_lengths = np.array(
-    [[0.30644581, 0.45009787, 0.34360362, 0.37485521],
-     [0.25102419, 0.5403891 , 0.44383802, 0.47973724],
-     [0.22397335, 0.53467438, 0.4755834 , 0.45778341],
+    [[0.30644581, 0.45009787, 0.34360362, 0.37485521], # L1
+     [0.25102419, 0.5403891 , 0.44383802, 0.47973724], # L2
+     [0.22397335, 0.53467438, 0.4755834 , 0.45778341], # L3
      [0.26778266, 0.42753417, 0.32381825, 0.38622043],
      [0.2173799 , 0.55001682, 0.43837038, 0.45235905],
      [0.21181969, 0.54009662, 0.4996887 , 0.55621912]])
