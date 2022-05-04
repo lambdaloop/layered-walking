@@ -1,24 +1,36 @@
 #!/usr/bin/env python
 
 from ctrl_tools import *
+from angle_functions import *
 
 #############################################################
 # User defined parameters
 #############################################################
-# TODO: need to get realistic valuse of these
-lCoxa  = 1
-lFemur = 1
-lTT    = 1 
+# Lengths are in milimeters
+lCoxa  = all_lengths[0][0]
+lFemur = all_lengths[0][1]
+lTT    = all_lengths[0][2] + all_lengths[0][3]
 
-mCoxa  = 1
-mFemur = 1
-mTT    = 1
+# 0.7 mg body mass female, assume leg mass is 1/3 of total body mass
+massPerLeg = 0.7 / 1000 / 3 / 6 
+mCoxa      = massPerLeg / 4
+mFemur     = massPerLeg / 4
+mTT        = massPerLeg / 2
 
 # Note: sympy trig functions take radians
-bcFlexAvg = np.radians(150) # body-coxa flexion
-cfFlexAvg = np.radians(60)  # coxa-femur flexion
-cfRotAvg  = np.radians(165) # coxa-femur rotation
-ftFlexAvg = np.radians(95)  # femur-tibia flexion
+angles_ctrl = ['L1A_abduct', 'L1B_flex', 'L1A_rot', 'L1C_flex']
+
+# body-coxa flexion, A_abduct
+bcFlexAvg = np.radians(median_angles[angles_ctrl[0]]) 
+
+# coxa-femur flexion, B_flex
+cfFlexAvg = np.radians(median_angles[angles_ctrl[1]])  
+
+# coxa rotation, A_rot
+cfRotAvg  = np.radians(median_angles[angles_ctrl[2]]) 
+
+# femur-tibia flexion, C_flex
+ftFlexAvg = np.radians(median_angles[angles_ctrl[3]]) 
 
 # Order: alpha, a, d, theta
 DHTable = [(      0, lCoxa,      0, 'q1'),
