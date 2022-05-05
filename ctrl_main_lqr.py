@@ -10,8 +10,9 @@ from scipy.linalg import block_diag
 
 from ctrl_tools import *
 from trajgen_tools import *
+from angle_functions import angles_to_pose_names, make_fly_video
 
-numSimSteps = 200 # How many timesteps to run model for
+numSimSteps = 600 # How many timesteps to run model for
 time        = np.array(range(numSimSteps))
 
 #################################################
@@ -60,7 +61,7 @@ print(f'Closed-loop spectral radius: {specRadCL}')
 # Solo TG
 #################################################
 filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_2.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_2.pickle'
 leg      = 'L1'
 numAng   = 5
 
@@ -129,6 +130,12 @@ for i in range(dof):
     plt.plot(time, np.degrees(angle2[i,:]), 'm--', label=f'2Layer')        
 
 plt.legend()
-plt.show()
+plt.show(block=False)
 
+import matplotlib
+matplotlib.use('Agg')
 
+angs = np.degrees(angle2).T
+pose_3d = angles_to_pose_names(angs, anglesCtrl)
+pose_3d[:, 1:] = np.nan
+make_fly_video(pose_3d, "vids/test_control.mp4")

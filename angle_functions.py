@@ -2,7 +2,7 @@
 
 from scipy.spatial.transform import Rotation
 import numpy as np
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 
 def forward_chain(angles, lengths):
@@ -127,6 +127,40 @@ def angles_to_pose_multirow(rows, lengths=None, offsets=None, progress=False):
         out.append(pose)
     return np.array(out)
 
+
+def angles_to_pose_names(angs, angnames,
+                         lengths=None, offsets=None, progress=False):
+    new_angs = np.tile(median_angles, (angs.shape[0], 1))
+    for ix_source, name in enumerate(angnames):
+        ix_dest = name_to_index[name]
+        new_angs[:, ix_dest] = angs[:, ix_source]
+    return angles_to_pose_multirow(new_angs, lengths, offsets, progress)
+
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import skvideo.io
+
+def make_fly_video(pose_3d, outname):
+    writer = skvideo.io.FFmpegWriter(outname, inputdict={
+        '-framerate': str(30.0),
+    }, outputdict={
+        '-vcodec': 'h264'
+    })
+
+    fig = plt.figure(figsize=(4, 4), dpi=200)
+    ax = fig.add_subplot(1, 1, 1, projection='3d')
+    for i in trange(pose_3d.shape[0]):
+        ax.cla()
+        X_p = pose_3d[i]
+        for xyz in X_p:
+            ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o', markersize=4)
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_zlim(-1, 1)
+        plt.draw()
+        img = np.array(fig.canvas.renderer._renderer).copy()
+        writer.writeFrame(img)
+    writer.close()
 
 # project v onto u
 def proj(u, v):

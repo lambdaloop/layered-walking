@@ -37,7 +37,6 @@ def update_state(ang, drv, phase, out, ratio=1.0):
     return ang1, drv1, phase1
 
 
-
 class TrajectoryGenerator:
     def __init__(self, filename, leg, numAng, numSimSteps):
         self._filename  = filename
@@ -76,5 +75,3 @@ class TrajectoryGenerator:
         out = self._model(new_inp[None].astype('float32'))[0].numpy()
         ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
         return ang, drv, phase
-        
-
