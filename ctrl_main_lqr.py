@@ -73,7 +73,7 @@ angleTG[:,0], drvTG[:,0], phaseTG[0] = TG.get_initial_vals()
 
 for t in range(numSimSteps-1):
     angleTG[:,t+1], drvTG[:,t+1], phaseTG[t+1] = \
-        TG.step_forward(angleTG[:,t], drvTG[:,t], phaseTG[t], t)
+        TG.step_forward(angleTG[:,t], drvTG[:,t], phaseTG[t], TG._context[t])
 
 #################################################
 # 2-Layer: TG + Controller + Dynamics
@@ -93,7 +93,7 @@ phaseTG2[0]     = phase
 
 for t in range(numSimSteps-1):
     angleTG2[:,t+1], drvTG2[:,t+1], phaseTG2[t+1] = \
-        TG.step_forward(ang, drv, phaseTG2[t], t)
+        TG.step_forward(ang, drv, phaseTG2[t], TG._context[t])
     
     trajNow  = np.append(tg_to_ctrl(angleTG2[:,t]), tg_to_ctrl(drvTG2[:,t]/Ts))
     trajNext = np.append(tg_to_ctrl(angleTG2[:,t+1]), tg_to_ctrl(drvTG2[:,t+1]/Ts))
