@@ -50,14 +50,15 @@ specRadCL = max(np.abs(eigsCL))
 if specRadCL >= 1:
     print('Error: Controller did not stabilize!')
 
-n_pred = 200
+n_pred = 400
 time = np.array(range(n_pred))
 ys   = np.zeros([Nx, n_pred])
 us   = np.zeros([Nu, n_pred])
 
 import pickle
 
-fn = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
+# fn = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
+fn = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_2.pickle'
 with open(fn, 'rb') as f:
     allmodels = pickle.load(f)
 
@@ -126,7 +127,7 @@ for i in range(n_pred):
     new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
     out = model_walk(new_inp[None].astype('float32'))[0].numpy()
     ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
-    phase = np.mod(real_phase[i], 2*np.pi)
+    # phase = np.mod(real_phase[i], 2*np.pi)
     pred_ang[i] = ang
     pred_drv[i] = drv
     pred_phase[i] = phase
@@ -151,11 +152,12 @@ for t in range(n_pred-1):
     new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
     out = model_walk(new_inp[None].astype('float32'))[0].numpy()
     ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
-    phase = np.mod(real_phase[i], 2*np.pi)
-    pred_ang[i] = ang
-    pred_drv[i] = drv
-    pred_phase[i] = phase
-    
+
+    # phase = np.mod(real_phase[i], 2*np.pi)
+    pred_ang[t] = ang
+    pred_drv[t] = drv
+    pred_phase[t] = phase
+
     trajs[0:dof,t+1] = main2ctrl(ang)
     trajs[dof:,t+1]  = main2ctrl(drv)
     
@@ -166,7 +168,7 @@ for t in range(n_pred-1):
     ys[:,t+1]    = A @ ys[:,t] + B @ us[:,t] + wtraj
     
     ang = ctrl2main(trajs[0:dof,t+1] + ys[0:dof,t+1], ang[-1])
-    #drv = ctrl2main(trajs[dof:,t+1] + ys[dof:,t+1]*Ts, drv[-1])
+    # drv = ctrl2main(trajs[dof:,t+1] + ys[dof:,t+1]*Ts, drv[-1])
 
 qs = ys + trajs
 
@@ -176,8 +178,14 @@ velocityErr = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
 print(f'Frobenius norm of angle error: {angleErr} deg')
 print(f'Frobenius norm of anglular velocity error: {velocityErr} deg/s')
 
+mapping = [2, 3, 1, 0]
+
+plt.figure(1)
+plt.clf()
 for pltState in range(dof):
     plt.subplot(2,2,pltState+1)
+    plt.title(angles_ctrl[pltState])
+    plt.plot(time, pred_ang[:, mapping[pltState]])
     plt.plot(time, np.degrees(qs[pltState,:]), 'r', label=f'2LayerTG')
     plt.plot(time, np.degrees(trajs[pltState,:]), 'm--', label=f'2Layer')
     
@@ -187,6 +195,4 @@ for pltState in range(dof):
     #plt.plot(time, np.degrees(trajs[pltState+dof,:]), 'b--', label=f'velTraj')
 
 plt.legend()
-plt.show()
-
-
+plt.show(block=False)
