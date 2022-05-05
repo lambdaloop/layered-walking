@@ -50,7 +50,7 @@ specRadCL = max(np.abs(eigsCL))
 if specRadCL >= 1:
     print('Error: Controller did not stabilize!')
 
-n_pred = 400
+n_pred = 500
 time = np.array(range(n_pred))
 ys   = np.zeros([Nx, n_pred])
 us   = np.zeros([Nu, n_pred])
@@ -108,6 +108,7 @@ drv = real_drv[0]
 context = real_context
 pcos, psin = rcos[0], rsin[0]
 phase = np.arctan2(psin, pcos)
+phase_0 = phase
 
 pred_ang = np.zeros((n_pred, n_ang))
 pred_drv = np.zeros((n_pred, n_ang))
@@ -140,16 +141,17 @@ for t in range(n_pred):
 trajs = np.zeros([Nx, n_pred])
 ang = real_ang[0]
 drv = real_drv[0]
+phase = phase_0
 
 trajs[0:dof,0] = main2ctrl(ang)
 trajs[dof:,0]  = main2ctrl(drv)
 
 xEqmFlat = xEqm.flatten()
 for t in range(n_pred-1):
-    inp = np.hstack([ang, drv, context[i], np.cos(phase), np.sin(phase)])
+    inp = np.hstack([ang, drv, context[t], np.cos(phase), np.sin(phase)])
     out = model_walk(inp[None].astype('float32'))[0].numpy()
     ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
-    new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+    new_inp = np.hstack([ang1, drv1, context[t], np.cos(phase1), np.sin(phase1)])
     out = model_walk(new_inp[None].astype('float32'))[0].numpy()
     ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
 
