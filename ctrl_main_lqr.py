@@ -131,28 +131,62 @@ for i in range(n_pred):
     pred_drv[i] = drv
     pred_phase[i] = phase
 
-trajs = np.zeros([Nx, n_pred])
+trajsTGOnly = np.zeros([Nx, n_pred])
 for t in range(n_pred):
-    trajs[0:dof,t] = main2ctrl(pred_ang.T[:,t])
+    trajsTGOnly[0:dof,t] = main2ctrl(pred_ang.T[:,t])
+    trajsTGOnly[dof:,t]  = main2ctrl(pred_drv.T[:,t])
+
+trajs = np.zeros([Nx, n_pred])
+ang = real_ang[0]
+drv = real_drv[0]
+
+trajs[0:dof,0] = main2ctrl(ang)
+trajs[dof:,0]  = main2ctrl(drv)
 
 xEqmFlat = xEqm.flatten()
 for t in range(n_pred-1):
+    inp = np.hstack([ang, drv, context[i], np.cos(phase), np.sin(phase)])
+    out = model_walk(inp[None].astype('float32'))[0].numpy()
+    ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+    new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+    out = model_walk(new_inp[None].astype('float32'))[0].numpy()
+    ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+    phase = np.mod(real_phase[i], 2*np.pi)
+    pred_ang[i] = ang
+    pred_drv[i] = drv
+    pred_phase[i] = phase
+    
+    trajs[0:dof,t+1] = main2ctrl(ang)
+    trajs[dof:,t+1]  = main2ctrl(drv)
+    
     wtraj        = A @ (trajs[:,t] - xEqmFlat) + xEqmFlat - trajs[:,t+1]
     
     # Give some look-ahead to wtraj
     us[:,t]      = -K @ (ys[:,t] + wtraj)    
     ys[:,t+1]    = A @ ys[:,t] + B @ us[:,t] + wtraj
     
+    ang = ctrl2main(trajs[0:dof,t+1] + ys[0:dof,t+1], ang[-1])
+    #drv = ctrl2main(trajs[dof:,t+1] + ys[dof:,t+1]*Ts, drv[-1])
+
 qs = ys + trajs
 
-errSize = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
+angleErr    = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
+velocityErr = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
 
-print(f'Frobenius norm of angle error: {errSize}')
+print(f'Frobenius norm of angle error: {angleErr} deg')
+print(f'Frobenius norm of anglular velocity error: {velocityErr} deg/s')
+
 for pltState in range(dof):
     plt.subplot(2,2,pltState+1)
-    plt.plot(time, np.degrees(qs[pltState,:]), '--', label=f'q{pltState}')
-    plt.plot(time, np.degrees(trajs[pltState,:]), label=f'traj{pltState}')
-    plt.legend()
+    plt.plot(time, np.degrees(qs[pltState,:]), 'r', label=f'2LayerTG')
+    plt.plot(time, np.degrees(trajs[pltState,:]), 'm--', label=f'2Layer')
+    
+    plt.plot(time, np.degrees(trajsTGOnly[pltState,:]), 'b--', label=f'SoloTG')
+    
+    #plt.plot(time, np.degrees(qs[pltState+dof,:]*Ts), 'g', label=f'vel')
+    #plt.plot(time, np.degrees(trajs[pltState+dof,:]), 'b--', label=f'velTraj')
+
+plt.legend()
 plt.show()
 
 
