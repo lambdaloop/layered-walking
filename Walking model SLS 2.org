@@ -109,6 +109,8 @@ def get_context_var(name, c):
         return fictrac_vals[c, 1] # delta_rot_lab_y_mms
     elif name == 'fictrac_rot':
         return fictrac_vals[c, 2] # delta_rot_lab_z_mms
+    elif name == 'fictrac_side':
+        return fictrac_vals[c, 0] # delta_rot_lab_x_mms
     elif name == 'period':
         ix = angle_names.index('L1C_flex')
         return get_period(angles_raw[c, ix])
@@ -216,15 +218,18 @@ all_angles_main = [[leg + a for a in subset_main] for leg in legs]
 angles_main = all_angles_main[0]
 
 phase_angles = ['L1C_flex', 'L2B_rot', 'L3C_flex', 'R1C_flex', 'R2B_rot', 'R3C_flex']
-phase_offsets = [np.pi, 0, 0, np.pi, 0, 0] # to make the phases consistent
+phase_offsets = [np.pi, 0, 0, np.pi, np.pi, 0] # to make the phases consistent
 
 all_names = angle_names + angle_deriv_names
 # all_names = joint_names + joint_deriv_names
 
-angles_raw = np.abs(data.loc[check, angle_names].values)
+angles_raw = data.loc[check, angle_names].values
 # angles_deriv = data.loc[check, angle_deriv_names].values
 # angles_accel = data.loc[check, angle_accel_names].values
 # phases = np.mod(phases_d.loc[check].values, 2*np.pi)
+
+cc = [x[-6:] == 'C_flex' for x in angle_names]
+angles_raw[:,cc] = np.abs(angles_raw[:,cc])
 
 fullfiles = data.loc[check, 'fullfile'].to_numpy()
 framenums = data.loc[check, 'fnum'].to_numpy()
@@ -248,6 +253,28 @@ fictrac_vals[:, 1] = -1 * fictrac_vals[:, 1]
 #+RESULTS:
 
 
+
+#+begin_src jupyter-python
+def fix_angle(vals):
+    s = np.zeros(vals.shape)
+    if len(vals.shape) == 1:
+        d = np.append(0, np.diff(vals, axis=0))
+    elif len(vals.shape) == 2:
+        d = np.pad(np.diff(vals, axis=0), pad_width=((1, 0), (0,0)))
+    else:
+        raise ValueError("Unsupported input shape for fix_angle: {}".format(vals.shape))
+    s[d > 160] = -360
+    s[d < -160] = 360
+    out = np.cumsum(s, axis=0) + vals
+    return out
+#+end_src
+
+#+RESULTS:
+
+:END:
+#+RESULTS:
+
+
 #+BEGIN_SRC jupyter-python
 angles_deriv = np.zeros(angles_raw.shape)
 angles_accel = np.zeros(angles_raw.shape)
@@ -257,10 +284,12 @@ phases_deriv = np.zeros(phases.shape)
 sos = signal.butter(1, (0.02, 0.4), 'bandpass', output='sos')
 
 for f in tqdm(np.unique(fullfiles), ncols=70):
-  cc = fullfiles == f
-  ang = angles_raw[cc]
+  cc = np.where(fullfiles == f)[0]
+  ang = fix_angle(angles_raw[cc])
+  angles_raw[cc] = ang
   angles_deriv[cc] = signal.savgol_filter(ang, 5, 2, deriv=1, axis=0)
   angles_accel[cc] = signal.savgol_filter(ang, 5, 2, deriv=2, axis=0)
+
   ang_f = signal.sosfiltfilt(sos, ang, axis=0)
   phases[cc] = np.mod(np.angle(signal.hilbert(ang_f, axis=0)), 2*np.pi)
   phases_deriv[cc] = signal.savgol_filter(np.unwrap(phases[cc], axis=0),
@@ -269,10 +298,51 @@ for f in tqdm(np.unique(fullfiles), ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████| 2298/2298 [00:42<00:00, 54.66it/s]
+: 100%|████████████████████████████| 2298/2298 [00:21<00:00, 107.90it/s]
+:RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.plot(fix_angle(angles_raw[cc, 9]))
+# _ = plt.hist(angles_accel[cc, 3], bins=100)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7fd54403b760> |
+[[file:./.ob-jupyter/b1dd1fdadd1bc46ce794cea15179b1780cb3cce2.png]]
+:END:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7fd84a05bb50> |
+[[file:./.ob-jupyter/b1dd1fdadd1bc46ce794cea15179b1780cb3cce2.png]]
+:END:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7fd8414383d0> |
+[[file:./.ob-jupyter/b1dd1fdadd1bc46ce794cea15179b1780cb3cce2.png]]
+:END:
+:RESULTS:
+# [goto error]
+: ---------------------------------------------------------------------------
+: NameError                                 Traceback (most recent call last)
+: <ipython-input-11-ce540207d78f> in <module>
+: ----> 1 plt.plot(fix_angle(angles_raw[cc, 9]))
+:       2 # _ = plt.hist(angles_accel[cc, 3], bins=100)
+:
+: NameError: name 'angles_raw' is not defined
+:END:
 
 
 ** Format the data
+
+#+BEGIN_SRC jupyter-python
+ix = angle_names.index('L3B_rot')
+_ = plt.hist(angles_raw[:,ix], bins=100)
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/96f762ef34e0f3ebec8a62a2d99c1fb16e27acde.png]]
+
 
 #+BEGIN_SRC jupyter-python
 for i in range(3):
@@ -303,10 +373,10 @@ np.random.shuffle(good_bouts)
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████| 3748/3748 [00:42<00:00, 87.58it/s]
+: 100%|█████████████████████████████| 3748/3748 [00:43<00:00, 85.33it/s]
 
 #+BEGIN_SRC jupyter-python
-params = {'context': ['fictrac_speed', 'fictrac_rot'], 'use_phase': True}
+params = {'context': ['fictrac_speed', 'fictrac_rot', 'fictrac_side'], 'use_phase': True}
 # params = {'context': ['fictrac_speed'], 'use_phase': True}
 
 xy_ws = []
@@ -348,7 +418,7 @@ n_epochs = 400
 ms_walk = []
 for xy_w in xy_ws:
     model_walk = MLPScaledXY(output_dim=xy_w[1].shape[1],
-                             hidden_dim=32, dropout_rate=0.05,
+                             hidden_dim=256, dropout_rate=0.05,
                              msx=xy_w[2], msy=xy_w[3])
     ms_walk.append(model_walk)
     model_walk(xy_w[0][:2])
@@ -356,12 +426,12 @@ for xy_w in xy_ws:
 #+END_SRC
 
 #+RESULTS:
-: Walk 1734
-: Walk 1734
-: Walk 1734
-: Walk 1734
-: Walk 1734
-: Walk 1734
+: Walk 71430
+: Walk 71430
+: Walk 71430
+: Walk 71430
+: Walk 71430
+: Walk 71430
 
 *** Training function
 
@@ -394,8 +464,6 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
     step_mlp_norm = make_step()
     print(leg)
     in_walk = xy_w[0]
-    in_walk_state = in_walk[:, :-3]
-    extra_walk = in_walk[:, -3:]
     out_walk = xy_w[1]
 
     t0 = time.time()
@@ -421,70 +489,70 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
 #+RESULTS:
 #+begin_example
 L1
-Time: 0.43 Epoch 0: 0.80839
-Time: 9.15 Epoch 50: 0.37409
-Time: 18.01 Epoch 100: 0.35799
-Time: 26.93 Epoch 150: 0.35306
-Time: 35.79 Epoch 200: 0.35158
-Time: 44.58 Epoch 250: 0.34884
-Time: 53.48 Epoch 300: 0.34828
-Time: 62.27 Epoch 350: 0.34745
-Time: 71.11 Epoch 400: 0.34585
+Time: 0.56 Epoch 0: 0.55028
+Time: 14.65 Epoch 50: 0.32765
+Time: 28.82 Epoch 100: 0.31289
+Time: 42.96 Epoch 150: 0.30138
+Time: 56.99 Epoch 200: 0.29653
+Time: 71.20 Epoch 250: 0.29018
+Time: 85.32 Epoch 300: 0.28652
+Time: 99.47 Epoch 350: 0.28512
+Time: 113.63 Epoch 400: 0.28257
 Done!
 L2
-Time: 0.40 Epoch 0: 0.71996
-Time: 9.68 Epoch 50: 0.47402
-Time: 18.93 Epoch 100: 0.46480
-Time: 28.08 Epoch 150: 0.45849
-Time: 37.35 Epoch 200: 0.45565
-Time: 46.60 Epoch 250: 0.45539
-Time: 55.89 Epoch 300: 0.45419
-Time: 65.04 Epoch 350: 0.45198
-Time: 74.34 Epoch 400: 0.45144
+Time: 0.50 Epoch 0: 0.59178
+Time: 14.67 Epoch 50: 0.42582
+Time: 28.90 Epoch 100: 0.40969
+Time: 43.12 Epoch 150: 0.40081
+Time: 57.32 Epoch 200: 0.39469
+Time: 71.36 Epoch 250: 0.38965
+Time: 85.50 Epoch 300: 0.38575
+Time: 99.71 Epoch 350: 0.38361
+Time: 113.79 Epoch 400: 0.38017
 Done!
 L3
-Time: 0.40 Epoch 0: 0.69463
-Time: 9.41 Epoch 50: 0.47491
-Time: 18.43 Epoch 100: 0.46452
-Time: 27.34 Epoch 150: 0.46207
-Time: 36.27 Epoch 200: 0.46202
-Time: 45.21 Epoch 250: 0.45754
-Time: 54.06 Epoch 300: 0.45679
-Time: 62.92 Epoch 350: 0.45534
-Time: 71.90 Epoch 400: 0.45431
+Time: 0.49 Epoch 0: 0.59255
+Time: 14.25 Epoch 50: 0.45798
+Time: 27.99 Epoch 100: 0.44214
+Time: 41.74 Epoch 150: 0.43245
+Time: 55.47 Epoch 200: 0.42671
+Time: 69.20 Epoch 250: 0.42153
+Time: 82.94 Epoch 300: 0.41498
+Time: 96.73 Epoch 350: 0.41170
+Time: 110.44 Epoch 400: 0.40693
 Done!
 R1
-Time: 0.41 Epoch 0: 0.62935
-Time: 9.70 Epoch 50: 0.42882
-Time: 18.94 Epoch 100: 0.41900
-Time: 28.20 Epoch 150: 0.41420
-Time: 37.42 Epoch 200: 0.41168
-Time: 46.71 Epoch 250: 0.41116
-Time: 55.99 Epoch 300: 0.41014
-Time: 65.22 Epoch 350: 0.40986
-Time: 74.51 Epoch 400: 0.40942
+Time: 0.50 Epoch 0: 0.55748
+Time: 14.04 Epoch 50: 0.38201
+Time: 27.56 Epoch 100: 0.36783
+Time: 41.08 Epoch 150: 0.35839
+Time: 54.60 Epoch 200: 0.35012
+Time: 68.18 Epoch 250: 0.34523
+Time: 81.71 Epoch 300: 0.34107
+Time: 95.18 Epoch 350: 0.33831
+Time: 108.61 Epoch 400: 0.33562
 Done!
 R2
-Time: 0.40 Epoch 0: 0.74086
-Time: 9.55 Epoch 50: 0.52391
-Time: 18.75 Epoch 100: 0.51087
-Time: 27.83 Epoch 150: 0.50801
-Time: 36.99 Epoch 200: 0.50532
-Time: 46.04 Epoch 250: 0.50269
-Time: 55.16 Epoch 300: 0.50248
-Time: 64.30 Epoch 350: 0.50127
-Time: 73.48 Epoch 400: 0.50177
+Time: 0.49 Epoch 0: 0.63669
+Time: 14.21 Epoch 50: 0.47415
+Time: 28.01 Epoch 100: 0.45342
+Time: 41.77 Epoch 150: 0.44024
+Time: 55.45 Epoch 200: 0.43203
+Time: 69.16 Epoch 250: 0.42613
+Time: 82.91 Epoch 300: 0.42207
+Time: 96.55 Epoch 350: 0.41998
+Time: 110.29 Epoch 400: 0.41674
 Done!
 R3
-Time: 0.42 Epoch 0: 0.69701
-Time: 9.89 Epoch 50: 0.49118
-Time: 19.14 Epoch 100: 0.48134
-Time: 28.40 Epoch 150: 0.47585
-Time: 37.56 Epoch 200: 0.47345
-Time: 46.84 Epoch 250: 0.47131
-Time: 56.18 Epoch 300: 0.47052
-Time: 65.42 Epoch 350: 0.46991
-Time: 74.64 Epoch 400: 0.46852
+Time: 0.49 Epoch 0: 0.61333
+Time: 14.24 Epoch 50: 0.44969
+Time: 27.97 Epoch 100: 0.43206
+Time: 41.69 Epoch 150: 0.42058
+Time: 55.45 Epoch 200: 0.41480
+Time: 69.19 Epoch 250: 0.40960
+Time: 82.89 Epoch 300: 0.40572
+Time: 96.64 Epoch 350: 0.40194
+Time: 110.35 Epoch 400: 0.40083
 Done!
 #+end_example
 
@@ -503,9 +571,35 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
 #+RESULTS:
 
 #+BEGIN_SRC jupyter-python
-outname = 'models/walk_sls_legs_1.pickle'
+outname = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_6.pickle'
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
 with open(outname, 'wb') as f:
     pickle.dump(all_models, f)
+#+END_SRC
+
+#+RESULTS:
+
+
+** Loading the models
+
+#+BEGIN_SRC jupyter-python
+outname = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_5.pickle'
+with open(outname, 'rb') as f:
+    all_models = pickle.load(f)
+
+ms_walk = []
+xy_ws = []
+for leg in legs:
+    d = all_models[leg]
+    model_walk = MLPScaledXY.from_full(d['model_walk'])
+    ms_walk.append(model_walk)
+    xy_w, bnums = d['train']
+    xy_ws.append(xy_w)
 #+END_SRC
 
 #+RESULTS:
@@ -527,7 +621,7 @@ def update_state(ang, drv, phase, out, ratio=1.0):
 #+BEGIN_SRC jupyter-python
 n_ang = len(angles_main)
 common = Counter(bnums).most_common(100)
-b, _ = common[50]
+b, _ = common[0]
 
 n_pred = 200
 
@@ -541,7 +635,7 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
     real_drv = xy_w[0][cc, n_ang:n_ang*2]
     rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
     real_phase = np.arctan2(rsin, rcos)
-    real_context = xy_w[0][cc, -4:-2]
+    real_context = xy_w[0][cc, -5:-2]
 
     ang = real_ang[0]
     drv = real_drv[0]
@@ -560,8 +654,8 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
       new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
       out = model_walk(new_inp[None].astype('float32'))[0].numpy()
       ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
-      # phase = np.mod(phase, 2*np.pi)
-      phase = np.mod(real_phase[i], 2*np.pi)
+      phase = np.mod(phase, 2*np.pi)
+      # phase = np.mod(real_phase[i], 2*np.pi)
       pred_ang[i] = ang
       pred_drv[i] = drv
       pred_phase[i] = phase
@@ -579,27 +673,28 @@ for leg, model_walk, xy_w in zip(legs, ms_walk, xy_ws):
 
 
 #+BEGIN_SRC jupyter-python
-pred_ang, pred_drv, pred_phase, real_ang, real_drv, real_phase = preds[1]
+pred_ang, pred_drv, pred_phase, real_ang, real_drv, real_phase = preds[0]
 plt.figure(figsize=(6, 9))
 plt.subplot(211)
 plt.plot(pred_ang)
 plt.title('Simulated')
 plt.ylabel('Angle (deg)')
-plt.ylim(20, 180)
+# plt.ylim(20, 180)
 plt.subplot(212)
 plt.plot(real_ang)
-plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.legend(labels=["femur-tibia flexion", "coxa rotation", "body-coxa flexion",
+                   "coxa-femur flexion", "femur rotation"])
 plt.title('Real')
 plt.xlabel('Frame number')
 plt.ylabel('Angle (deg)')
-plt.ylim(20, 180)
+# plt.ylim(20, 180)
 
 #+END_SRC
 
 #+RESULTS:
 :RESULTS:
-| 20.0 | 180.0 |
-[[file:./.ob-jupyter/ff3f77dc2f46cf35cc2593de37993576e18e5a24.png]]
+: Text(0, 0.5, 'Angle (deg)')
+[[file:./.ob-jupyter/e8059631b5b7a22484451862f19e7e3451a3277f.png]]
 :END:
 
 #+BEGIN_SRC jupyter-python
@@ -621,7 +716,7 @@ plt.ylabel('Angle (deg)')
 #+RESULTS:
 :RESULTS:
 : Text(0, 0.5, 'Angle (deg)')
-[[file:./.ob-jupyter/8900d56e77e9a9b8011180134ab827aa6019c299.png]]
+[[file:./.ob-jupyter/5061a476474b98c8f52d63e0d3d1dd4494b81929.png]]
 :END:
 
 
@@ -640,20 +735,21 @@ plt.plot(np.mod(real_phase, 2*np.pi))
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7f8e65e2e670> |
-[[file:./.ob-jupyter/d50eaf75b48817d9c2bd724d29d4da5dfc3c80fd.png]]
+| <matplotlib.lines.Line2D | at | 0x7f3c576b8e50> |
+[[file:./.ob-jupyter/0000711c3508d22a79a261ab554cbdcbb7928f82.png]]
 :END:
 * Simulating a kuramato oscillator model
 
 #+BEGIN_SRC jupyter-python
 offsets = np.array([
-    [ 0.        , -3.05560396,  0.96192901,  3.05202358,  0.19249792, -2.1399429 ],
-    [ 3.05560396,  0.        , -2.16420782, -0.16512586, -3.03648488, 0.84354644],
-    [-0.96192901,  2.16420782,  0.        ,  2.0077949 , -0.76840748, 3.10273806],
-    [-3.05202358,  0.16512586, -2.0077949 ,  0.        , -2.87256372, 1.01551641],
-    [-0.19249792,  3.03648488,  0.76840748,  2.87256372,  0.        , -2.29358311],
-    [ 2.1399429 , -0.84354644, -3.10273806, -1.01551641,  2.29358311, 0.        ]
+   [ 0.        , -3.05622153,  0.96192901,  3.05202358,  0.1960119 , -2.1399429 ],
+   [ 3.05622153,  0.        , -2.16394489, -0.16563617, -3.03660191, 0.84328264],
+   [-0.96192901,  2.16394489,  0.        ,  2.0077949 , -0.76128234, 3.10273806],
+   [-3.05202358,  0.16563617, -2.0077949 ,  0.        , -2.86955919, 1.01551641],
+   [-0.1960119 ,  3.03660191,  0.76128234,  2.86955919,  0.        , -2.29461826],
+   [ 2.1399429 , -0.84328264, -3.10273806, -1.01551641,  2.29461826, 0.        ]
 ])
+
 
 w_slope = 2.4327365550252393
 w_intercept = 22.57654446861406
@@ -717,14 +813,14 @@ _ = plt.plot(np.mod(full_px - full_px[:,0:1] - offsets[0]+np.pi, 2*np.pi)-np.pi)
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/6236b2a773fefb4fd947b112ffdf3e8ac36adca7.png]]
+[[file:./.ob-jupyter/166b5ff1628fdc1bae95575e2b9ea2d2ff9220e2.png]]
 
 #+BEGIN_SRC jupyter-python
 _ = plt.plot(np.sin(full_px)[:200])
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/44508f6abc341b73d94a85ff0816ce87586af875.png]]
+[[file:./.ob-jupyter/c67f78101ba49087afcd200cbffc70df3e85dbc7.png]]
 
 * Combining kuramato and legs models
 
@@ -771,8 +867,8 @@ n_pred = 600
 
 cc = np.where(b == bnums)[0][:n_pred]
 
-p0 = np.zeros(6)
-p0[:] = offsets[0] + np.random.randn(6)*1.0
+# p0 = np.zeros(6)
+# p0[:] = offsets[0] + np.random.randn(6)*1.0
 
 alphas = np.ones((6,6))*1.0
 
@@ -788,13 +884,15 @@ for xy_w in xy_ws:
     real_drvs.append(xy_w[0][cc, n_ang:n_ang*2])
     rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
     real_phases.append(np.arctan2(rsin, rcos))
-    real_context = xy_w[0][cc, -4:-2]
+    real_context = xy_w[0][cc, -5:-2]
 
 
 angs = np.array([r[0] for r in real_angs])
 drvs = np.array([r[0] for r in real_drvs])
 phases = np.array([r[0] for r in real_phases])
 context = real_context
+
+px = phases
 
 pred_ang = np.zeros((n_pred, n_legs, n_ang))
 pred_drv = np.zeros((n_pred, n_legs, n_ang))
@@ -803,13 +901,14 @@ pred_px = np.zeros((n_pred, n_legs))
 
 for i in range(n_pred):
     w = w_slope * context[i, 0] + w_intercept
-    ws = np.ones(6) * w
+    # ws = np.ones(6) * w
+    ws = np.zeros(6)
 
     # midpoint method update
     px_half = px + 0.5*dt * kuramato_deriv(px, alphas, offsets, ws)
     px = px + dt * kuramato_deriv(px_half, alphas, offsets, ws)
     # noise
-    px = px + np.random.normal(size=px.shape)*dt*2.0
+    # px = px + np.random.normal(size=px.shape)*dt*1.0
     pred_px[i] = px
 
     for ix_leg in range(n_legs):
@@ -826,7 +925,9 @@ for i in range(n_pred):
         out = model_walk(new_inp[None].astype('float32'))[0].numpy()
         ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
 
-        phase = np.mod(px[ix_leg], 2*np.pi)
+        # phase = px[ix_leg]
+        px[ix_leg] = phase
+        # phase = np.mod(px[ix_leg], 2*np.pi)
         # phase = np.mod(phase, 2*np.pi)
         # phase = np.mod(real_phase[i], 2*np.pi)
         angs[ix_leg] = pred_ang[i, ix_leg] = ang
@@ -839,20 +940,20 @@ for i in range(n_pred):
 
 
 #+BEGIN_SRC jupyter-python
-_ = plt.plot(pred_ang[:, :, 0])
+_ = plt.plot(np.mod(pred_ang[:, [1, 4], 4], 180))
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/acb74fd21afd23d0f7271ae233c4d5ca53419358.png]]
+[[file:./.ob-jupyter/6bf9a4ac4038b0ff616b778a9082a4c7a89b8c39.png]]
 
 #+BEGIN_SRC jupyter-python
-plt.plot(context)
+plt.plot(np.cos(pred_phase[:, [0, 1,4,5]]))
 #+END_SRC
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7fe8200c9760> | <matplotlib.lines.Line2D | at | 0x7fe8200c9880> |
-[[file:./.ob-jupyter/c87d01545bf48bddd80bd52722fcffd26463fa75.png]]
+| <matplotlib.lines.Line2D | at | 0x7fd074e63040> | <matplotlib.lines.Line2D | at | 0x7fd074e63070> | <matplotlib.lines.Line2D | at | 0x7fd074e63190> | <matplotlib.lines.Line2D | at | 0x7fd074e632b0> |
+[[file:./.ob-jupyter/b709d2abf8056ed4439df2a5a37dace2969dc641.png]]
 :END:
 
 
@@ -861,7 +962,7 @@ _ = plt.plot(np.mod(pred_phase - pred_phase[:, 0:1]+np.pi - offsets[0], 2*np.pi)
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/0aded39959742f255b3bc19ff21e9e0fcb287eb0.png]]
+[[file:./.ob-jupyter/925f5df55da00ff6bacb4006bbf2efb1b4981140.png]]
 
 ** Plot the model
 
@@ -874,36 +975,71 @@ importlib.reload(angle_functions)
 #+RESULTS:
 : <module 'angle_functions' from '/jellyfish/research/tuthill/walking-stats-3d/org/angle_functions.py'>
 
-
 #+BEGIN_SRC jupyter-python
-pred_ang.reshape(pred_ang.shape[0], -1)
+# dd = data.loc[data['fictrac_delta_rot_lab_y_mms'] < -2]
+
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-array([[ 72.17245483, 144.92608643, 136.66358948, ..., 152.27850342,
-         69.5355835 , 160.54142761],
-       [ 70.80342102, 146.50022888, 135.01307678, ..., 154.23484802,
-         65.30812073, 161.60475159],
-       [ 69.72782135, 148.1789856 , 133.81364441, ..., 155.62278748,
-         62.96826553, 162.55569458],
-       ...,
-       [ 65.43470764, 141.28939819, 137.39631653, ..., 152.45465088,
-        100.41669464, 155.06472778],
-       [ 62.54249573, 141.61738586, 136.77819824, ..., 152.21543884,
-        100.45056152, 155.29547119],
-       [ 59.61504364, 141.96748352, 136.1852417 , ..., 151.97590637,
-        100.54598999, 155.50643921]])
-#+end_example
 
 #+BEGIN_SRC jupyter-python
+real_ang_shaped = np.array(real_angs).swapaxes(0, 1)
+
 angnames = np.hstack(all_angles_main)
 angs = pred_ang.reshape(pred_ang.shape[0], -1)
+# angs = real_ang_shaped.reshape(real_ang_shaped.shape[0], -1)
+new_angs = np.tile(angle_functions.median_angles, (angs.shape[0], 1))
 
-    np.tile(angle_functions.median_angles, (angs.shape[0], 1))
+for ix_source, name in enumerate(angnames):
+    ix_dest = angle_functions.name_to_index[name]
+    new_angs[:, ix_dest] = angs[:, ix_source]
+
+pose_3d = angle_functions.angles_to_pose_multirow(new_angs)
 #+END_SRC
 
 #+RESULTS:
-: array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-:        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
-:        0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+
+#+BEGIN_SRC jupyter-python
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import skvideo.io
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+# outname = 'vids/combined_model_real_2.mp4'
+outname = 'vids/combined_model_test_5.mp4'
+
+writer = skvideo.io.FFmpegWriter(outname, inputdict={
+        '-framerate': str(30.0),
+    }, outputdict={
+        '-vcodec': 'h264'
+    })
+
+
+fig = plt.figure(1, figsize=(4, 4), dpi=200)
+fig.clf()
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+
+for i in trange(pose_3d.shape[0]):
+    ax.cla()
+    X_p = pose_3d[i]
+    for xyz in X_p:
+        ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o', markersize=4)
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-1, 1)
+    ax.set_zlim(-1, 1)
+    plt.draw()
+    img = np.array(fig.canvas.renderer._renderer).copy()
+    writer.writeFrame(img)
+
+writer.close()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: 100%|██████████| 600/600 [00:27<00:00, 21.69it/s]
+[[file:./.ob-jupyter/d805c0cfb9ad10297af2c53601b92af2cb315c73.png]]
+:END:
