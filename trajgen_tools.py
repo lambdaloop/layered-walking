@@ -68,11 +68,11 @@ class TrajectoryGenerator:
         return self._angReal[0], self._drvReal[0], self._phaseReal[0]
     
     
-    def step_forward(self, ang, drv, phase, t):
-        inp = np.hstack([ang, drv, self._context[t], np.cos(phase), np.sin(phase)])
+    def step_forward(self, ang, drv, phase, context):        
+        inp = np.hstack([ang, drv, context, np.cos(phase), np.sin(phase)])
         out = self._model(inp[None].astype('float32'))[0].numpy()
         ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
-        new_inp = np.hstack([ang1, drv1, self._context[t], np.cos(phase1), np.sin(phase1)])
+        new_inp = np.hstack([ang1, drv1, context, np.cos(phase1), np.sin(phase1)])
         out = self._model(new_inp[None].astype('float32'))[0].numpy()
         ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
         return ang, drv, phase
