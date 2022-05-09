@@ -8,24 +8,24 @@ from model_functions import MLPScaledXY
 
 # Current angles and orders as defined by TG and controller
 anglesTG   = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
-anglesCtrl = ['L1A_abduct', 'L1B_flex', 'L1A_rot', 'L1C_flex']
-mapping    = [2, 3, 1, 0]
+anglesCtrl = ['L1A_abduct', 'L1B_flex', 'L1B_rot', 'L1C_flex']
+mapping    = [2, 3, 4, 0] # tg to ctrl
 
 
 def tg_to_ctrl(angles):
     ''' Convert angles for use by TG to angles for use by controller '''
-    ctrlAngles = np.array([angles[2], angles[3], angles[1], angles[0]])
+    ctrlAngles = np.array([angles[2], angles[3], angles[4], angles[0]])
     return np.radians(ctrlAngles)
 
 
 
-def ctrl_to_tg(angles, L1BVal):
+def ctrl_to_tg(angles, L1ArotVal):
     ''' 
     Convert angles for use by controller to angles for use by TG
-    L1BVal is the value for L1B_rot, which isn't currently in the ctrl model
+    L1ArotVal isn't currently in the ctrl model
     ''' 
-    tgAngles = np.array([angles[3], angles[2], angles[0], angles[1]])
-    return np.append(np.degrees(tgAngles), L1BVal)
+    tgAngles = np.degrees(np.array([angles[3], angles[0], angles[1], angles[2]]))
+    return np.append(np.append(tgAngles[0], L1ArotVal), tgAngles[1:])
 
 
 
@@ -35,6 +35,7 @@ def update_state(ang, drv, phase, out, ratio=1.0):
     ang1 = ang + drv * ratio
     phase1 = phase + out[-1]*ratio
     return ang1, drv1, phase1
+
 
 
 class TrajectoryGenerator:
