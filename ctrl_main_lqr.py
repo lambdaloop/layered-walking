@@ -42,8 +42,8 @@ if rankCtrb != Nx:
     print('Error: System uncontrollable!')
 
 # Controller objective
-anglePenalty    = 1
-velocityPenalty = 1e-8
+anglePenalty    = 1e0
+velocityPenalty = 1e-2 # Making this too small causes issues
 inputPenalty    = 1e-8
 
 Q1 = anglePenalty*np.eye(dof)
@@ -106,8 +106,7 @@ for t in range(numSimSteps-1):
     
     # For next step
     ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1], 0)
-    
-    drv = drvTG2[:,t+1] # TODO: need this + ctrl_to_tg(ys[dof:,t+1]*Ts, 0)    
+    drv = drvTG2[:,t+1] + ctrl_to_tg(ys[dof:,t+1]*Ts, 0)    
 
 angle2 = tg_to_ctrl(angleTG2) + ys[0:dof,:]
 drv2   = tg_to_ctrl(drvTG2) + np.degrees(ys[dof:,:]*Ts)
