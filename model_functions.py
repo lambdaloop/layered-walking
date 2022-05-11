@@ -1,5 +1,8 @@
 #!/usr/bin/env ipython
 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Suppress warnings from tensorflow
+
 from scipy import stats, signal
 import os
 from scipy.special import expit, logit
