@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import control
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.linalg import block_diag
@@ -9,7 +10,7 @@ from ctrl_tools import *
 from trajgen_tools import *
 from angle_functions import angles_to_pose_names, make_fly_video
 
-numSimSteps = 600 # How many timesteps to run model for
+numSimSteps = 200 # How many timesteps to run model for
 time        = np.array(range(numSimSteps))
 
 #################################################
@@ -60,11 +61,10 @@ print(f'Closed-loop spectral radius: {specRadCL}')
 filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_2.pickle'
 leg      = 'L1'
-numAng   = 5
 
-TG      = TrajectoryGenerator(filename, leg, numAng, numSimSteps)
-angleTG = np.zeros((numAng, numSimSteps))
-drvTG   = np.zeros((numAng, numSimSteps))
+TG      = TrajectoryGenerator(filename, leg, dof, numSimSteps)
+angleTG = np.zeros((dof, numSimSteps))
+drvTG   = np.zeros((dof, numSimSteps))
 phaseTG = np.zeros(numSimSteps)
 
 angleTG[:,0], drvTG[:,0], phaseTG[0] = TG.get_initial_vals() 
@@ -77,11 +77,12 @@ for t in range(numSimSteps-1):
 # 2-Layer: TG + Controller + Dynamics
 #################################################
 xEqmFlat = xEqm.flatten()
+
 ys       = np.zeros([Nx, numSimSteps])
 us       = np.zeros([Nu, numSimSteps])
 
-angleTG2 = np.zeros((numAng, numSimSteps))
-drvTG2   = np.zeros((numAng, numSimSteps))
+angleTG2 = np.zeros((dof, numSimSteps))
+drvTG2   = np.zeros((dof, numSimSteps))
 phaseTG2 = np.zeros(numSimSteps)
 
 ang, drv, phase = TG.get_initial_vals() 
@@ -102,11 +103,8 @@ for t in range(numSimSteps-1):
     ys[:,t+1] = A @ ys[:,t] + B @ us[:,t] + wtraj
     
     # For next step
-    ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1], 0)
-    drv = drvTG2[:,t+1] + ctrl_to_tg(ys[dof:,t+1]*Ts, 0)    
-
-angle2 = tg_to_ctrl(angleTG2) + ys[0:dof,:]
-drv2   = tg_to_ctrl(drvTG2) + np.degrees(ys[dof:,:]*Ts)
+    ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1])
+    drv = drvTG2[:,t+1] + ctrl_to_tg(ys[dof:,t+1]*Ts)
 
 angleErr    = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
 velocityErr = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
@@ -114,24 +112,24 @@ velocityErr = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
 print(f'Frobenius norm of angle error: {angleErr} deg')
 print(f'Frobenius norm of anglular velocity error: {velocityErr} deg/s')
 
+angle2 = tg_to_ctrl(angleTG2) + ys[0:dof,:]
+
 plt.figure(1)
 plt.clf()
 for i in range(dof):
-    plt.subplot(2,2,i+1)
+    plt.subplot(2,3,i+1)
     plt.title(anglesCtrl[i])
-    idx = mapping[i]
+    idx = mappingTG2Ctrl[i]
     
     plt.plot(time, angleTG[idx,:], 'b', label=f'SoloTG')
-    plt.plot(time, angleTG2[idx,:], 'r', label=f'2LayerTG')
+    plt.plot(time, angleTG2[idx,:], 'r--', label=f'2LayerTG')
     plt.plot(time, np.degrees(angle2[i,:]), 'm--', label=f'2Layer')        
 
 plt.legend()
-plt.show(block=False)
+plt.show()
 
-import matplotlib
 matplotlib.use('Agg')
-
-angs = np.degrees(angle2).T
-pose_3d = angles_to_pose_names(angs, anglesCtrl)
+angs           = np.degrees(angle2).T
+pose_3d        = angles_to_pose_names(angs, anglesCtrl)
 pose_3d[:, 1:] = np.nan
 make_fly_video(pose_3d, "vids/test_control.mp4")

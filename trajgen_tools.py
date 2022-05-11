@@ -10,25 +10,19 @@ from model_functions import MLPScaledXY
 # Note: L1A_abduct is actually flexion (misnamed)
 anglesTG   = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
 anglesCtrl = ['L1A_abduct', 'L1A_rot', 'L1B_flex', 'L1B_rot', 'L1C_flex']
-
-# TODO: this is no longer correct!
-mapping    = [2, 3, 4, 0] # tg to ctrl
+mappingTG2Ctrl = [2, 1, 3, 4, 0]
+mappingCtrl2TG = [4, 1, 0, 2, 3]
 
 
 def tg_to_ctrl(angles):
     ''' Convert angles for use by TG to angles for use by controller '''
-    ctrlAngles = np.array([angles[2], angles[3], angles[4], angles[0]])
-    return np.radians(ctrlAngles)
+    return np.radians(angles[mappingTG2Ctrl])
 
 
 
-def ctrl_to_tg(angles, L1ArotVal):
-    ''' 
-    Convert angles for use by controller to angles for use by TG
-    L1ArotVal isn't currently in the ctrl model
-    ''' 
-    tgAngles = np.degrees(np.array([angles[3], angles[0], angles[1], angles[2]]))
-    return np.append(np.append(tgAngles[0], L1ArotVal), tgAngles[1:])
+def ctrl_to_tg(angles):
+    ''' Convert angles for use by controller to angles for use by TG '''
+    return np.degrees(angles[mappingCtrl2TG])
 
 
 
