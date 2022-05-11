@@ -7,8 +7,11 @@ from model_functions import MLPScaledXY
 
 
 # Current angles and orders as defined by TG and controller
+# Note: L1A_abduct is actually flexion (misnamed)
 anglesTG   = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
-anglesCtrl = ['L1A_abduct', 'L1B_flex', 'L1B_rot', 'L1C_flex']
+anglesCtrl = ['L1A_abduct', 'L1A_rot', 'L1B_flex', 'L1B_rot', 'L1C_flex']
+
+# TODO: this is no longer correct!
 mapping    = [2, 3, 4, 0] # tg to ctrl
 
 

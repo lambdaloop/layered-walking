@@ -9,8 +9,14 @@ from scipy.misc import derivative
 import sympy
 
 # Install from https://github.com/cdsousa/SymPyBotics
-# Some customizations required
 import sympybotics
+
+# Where to store/load linearized models
+directory = './linearized_model/'
+Afn = directory + 'ALin.dat'
+Bfn = directory + 'BLin.dat'
+xfn = directory + 'xEqm.dat'
+ufn = directory + 'uEqm.dat'
 
 
 
@@ -100,12 +106,7 @@ def loadLinearizedSystem():
     ''' 
     Loads files containing ALin, BLin, xEqm, uEqm generated from 
     getLinearizedSystem() and returns contents 
-    '''
-    Afn = './linearized_model/ALin.dat'
-    Bfn = './linearized_model/BLin.dat'
-    xfn = './linearized_model/xEqm.dat'
-    ufn = './linearized_model/uEqm.dat'
-    
+    '''    
     ALin = np.load(Afn, allow_pickle=True)
     BLin = np.load(Bfn, allow_pickle=True)
     xEqm  = np.load(xfn, allow_pickle=True)
@@ -180,12 +181,7 @@ def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True
     xEqm = np.array(xEqm).astype(np.float64)
     uEqm = np.array(uEqm).astype(np.float64)
     
-    # Store to files (since A2 calculation takes a while)
-    Afn = './linearized_model/ALin.dat'
-    Bfn = './linearized_model/BLin.dat'
-    xfn = './linearized_model/xEqm.dat'
-    ufn = './linearized_model/uEqm.dat'
-    
+    # Store to files (since A2 calculation takes a while)    
     ALin.dump(Afn)
     BLin.dump(Bfn)
     xEqm.dump(xfn)

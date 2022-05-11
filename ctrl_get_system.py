@@ -2,6 +2,7 @@
 
 from ctrl_tools import *
 from angle_functions import *
+from trajgen_tools import anglesCtrl
 
 #############################################################
 # User defined parameters
@@ -17,33 +18,21 @@ mCoxa      = massPerLeg / 4
 mFemur     = massPerLeg / 4
 mTT        = massPerLeg / 2
 
-# Note: sympy trig functions take radians
-angles_ctrl = ['L1A_abduct', 'L1B_flex', 'L1A_rot', 'L1C_flex']
-
-# body-coxa flexion, A_abduct
-bcFlexAvg = np.radians(median_angles[angles_ctrl[0]]) 
-
-# coxa-femur flexion, B_flex
-cfFlexAvg = np.radians(median_angles[angles_ctrl[1]])  
-
-# coxa rotation, A_rot
-cfRotAvg  = np.radians(median_angles[angles_ctrl[2]]) 
-
-# femur-tibia flexion, C_flex
-ftFlexAvg = np.radians(median_angles[angles_ctrl[3]]) 
-
 # Order: alpha, a, d, theta
-DHTable = [(      0, lCoxa,      0, 'q1'),
-           ('-pi/2',     0,      0, 'q2'),
-           ( 'pi/2',     0, lFemur, 'q3'),
-           (      0,  lTT,       0, 'q4')]
+DHTable = [('-pi/2',    0,       0, 'q1'),
+           ( 'pi/2',    0,   lCoxa, 'q2'),
+           ('-pi/2',    0,       0, 'q3'),
+           ( 'pi/2',    0,  lFemur, 'q4'),
+           (      0,  lTT,       0, 'q5')]
 
 #############################################################
+linkLengths = [0, lCoxa, 0, lFemur, lTT]
+linkMasses  = [0, mCoxa, 0, mFemur, mTT]
 
-linkLengths = [lCoxa, 0, lFemur, lTT]
-linkMasses  = [mCoxa, 0, mFemur, mTT]
+xEqm = []
+for angle in anglesCtrl: # Equilibrium joint angles (average)
+    xEqm.append(np.radians(median_angles[name_to_index[angle]]))
 
-dof  = len(linkLengths)
-xEqm = [bcFlexAvg, cfFlexAvg, cfRotAvg, ftFlexAvg, 0, 0, 0, 0]
+xEqm += [0, 0, 0, 0, 0]  # Equilibrium joint angular velocity
 
 getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm)
