@@ -28,7 +28,7 @@ Nu  = dof
 
 # Discretize using e^(A*T) ~= I + A*T
 A = np.eye(Nx) + ALin*Ts
-B = Ts*BLin + 0.5*Ts*Ts*ALin @ BLin
+B = Ts*BLin
 eigsOL    = np.linalg.eig(A)[0]
 specRadOL = max(np.abs(eigsOL))
 print(f'Open-loop spectral radius: {specRadOL}')
@@ -41,7 +41,7 @@ if rankCtrb != Nx:
 
 # Controller objective
 anglePenalty    = 1e0
-velocityPenalty = 1e-2 # Making this too small causes issues
+velocityPenalty = 1e0
 inputPenalty    = 1e-8
 
 Q1 = anglePenalty*np.eye(dof)
@@ -122,8 +122,8 @@ for i in range(dof):
     idx = mappingTG2Ctrl[i]
     
     plt.plot(time, angleTG[idx,:], 'b', label=f'SoloTG')
-    plt.plot(time, angleTG2[idx,:], 'r--', label=f'2LayerTG')
-    plt.plot(time, np.degrees(angle2[i,:]), 'm--', label=f'2Layer')        
+    plt.plot(time, angleTG2[idx,:], 'r', label=f'2LayerTG')
+    plt.plot(time, np.degrees(angle2[i,:]), 'k--', label=f'2Layer')
 
 plt.legend()
 plt.show()
