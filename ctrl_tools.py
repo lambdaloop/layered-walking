@@ -116,12 +116,12 @@ def loadLinearizedSystem():
 
 
 
-def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True):
+def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, saveToFiles=True):
     ''' 
     Given physical properties and DH parameters of robot, return linearized system.
     DHTable     : DH table ordered (alpha, a, d, theta)
-    linkLengths : list of link lengths
     linkMasses  : list of link masses
+    inertias    : inertias (following Le convention of sympybotics)
     xEqm        : state operating point
     saveToFiles : whether to save the outputs to files
     
@@ -137,21 +137,13 @@ def getLinearizedSystem(DHTable, linkLengths, linkMasses, xEqm, saveToFiles=True
     
     # Generate equilibrium state dictionary (for subbing into sympy)
     stateEqmDict = x_to_dict(xEqm, legdef)
-
-    # Inertia    
-    Le = [None] * leg.dof
-    for i in range(leg.dof):
-        Le[i] = [0] * 6 # Convention: [L_xx, L_xy, L_xz, L_yy, L_yz, L_zz]
-    Le[0][5] = 1.0/3.0 * linkMasses[0] * linkLengths[0] * linkLengths[0] # L1_zz
-    Le[2][3] = 1.0/3.0 * linkMasses[2] * linkLengths[2] * linkLengths[2] # L3_yy
-    Le[3][5] = 1.0/3.0 * linkMasses[3] * linkLengths[3] * linkLengths[3] # L4_zz
     
     # Generate parameters dictionary (for subbing into sympy)
     paramsDict = {}
     for i in range(leg.dof):
         paramsDict[legdef.m[i]] = linkMasses[i]
         for j in range(len(legdef.Le[i])):
-            paramsDict[legdef.Le[i][j]] = Le[i][j]
+            paramsDict[legdef.Le[i][j]] = inertias[i][j]
         for j in range(len(legdef.l[i])):
             paramsDict[legdef.l[i][j]] = 0 # Ignore first moment of inertia
     

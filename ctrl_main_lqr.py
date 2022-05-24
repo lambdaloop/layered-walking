@@ -41,7 +41,7 @@ if rankCtrb != Nx:
 
 # Controller objective
 anglePenalty    = 1e0
-velocityPenalty = 1e0
+velocityPenalty = 5e1
 inputPenalty    = 1e-8
 
 Q1 = anglePenalty*np.eye(dof)
@@ -62,9 +62,10 @@ filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_2.pickle'
 leg      = 'L1'
 
-TG      = TrajectoryGenerator(filename, leg, dof, numSimSteps)
-angleTG = np.zeros((dof, numSimSteps))
-drvTG   = np.zeros((dof, numSimSteps))
+dofTG = 5
+TG      = TrajectoryGenerator(filename, leg, dofTG, numSimSteps)
+angleTG = np.zeros((dofTG, numSimSteps))
+drvTG   = np.zeros((dofTG, numSimSteps))
 phaseTG = np.zeros(numSimSteps)
 
 angleTG[:,0], drvTG[:,0], phaseTG[0] = TG.get_initial_vals() 
@@ -81,8 +82,8 @@ xEqmFlat = xEqm.flatten()
 ys       = np.zeros([Nx, numSimSteps])
 us       = np.zeros([Nu, numSimSteps])
 
-angleTG2 = np.zeros((dof, numSimSteps))
-drvTG2   = np.zeros((dof, numSimSteps))
+angleTG2 = np.zeros((dofTG, numSimSteps))
+drvTG2   = np.zeros((dofTG, numSimSteps))
 phaseTG2 = np.zeros(numSimSteps)
 
 ang, drv, phase = TG.get_initial_vals() 
@@ -103,9 +104,9 @@ for t in range(numSimSteps-1):
     ys[:,t+1] = A @ ys[:,t] + B @ us[:,t] + wtraj
     
     # For next step
-    ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1])
+    ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1])    
     drv = drvTG2[:,t+1] + ctrl_to_tg(ys[dof:,t+1]*Ts)
-
+    
 angleErr    = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
 velocityErr = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
 
@@ -113,23 +114,30 @@ print(f'Frobenius norm of angle error: {angleErr} deg')
 print(f'Frobenius norm of anglular velocity error: {velocityErr} deg/s')
 
 angle2 = tg_to_ctrl(angleTG2) + ys[0:dof,:]
+drv2   = tg_to_ctrl(drvTG2)   + ys[dof:,:]*Ts
 
 plt.figure(1)
 plt.clf()
 for i in range(dof):
-    plt.subplot(2,3,i+1)
-    plt.title(anglesCtrl[i])
+    plt.subplot(2,4,i+1)
+    plt.title(anglesCtrl1[i])
     idx = mappingTG2Ctrl[i]
     
     plt.plot(time, angleTG[idx,:], 'b', label=f'SoloTG')
     plt.plot(time, angleTG2[idx,:], 'r', label=f'2LayerTG')
     plt.plot(time, np.degrees(angle2[i,:]), 'k--', label=f'2Layer')
+    
+    plt.subplot(2,4,i+dof+1)
+    plt.title('Velocity')
+    plt.plot(time, drvTG[idx,:], 'b', label=f'SoloTG')
+    plt.plot(time, drvTG2[idx,:], 'r', label=f'2LayerTG')
+    plt.plot(time, np.degrees(drv2[i,:]), 'k--', label=f'2Layer')
 
 plt.legend()
 plt.show()
 
 matplotlib.use('Agg')
 angs           = np.degrees(angle2).T
-pose_3d        = angles_to_pose_names(angs, anglesCtrl)
+pose_3d        = angles_to_pose_names(angs, anglesCtrl1)
 pose_3d[:, 1:] = np.nan
-make_fly_video(pose_3d, "vids/test_control.mp4")
+#make_fly_video(pose_3d, "vids/test_control.mp4")

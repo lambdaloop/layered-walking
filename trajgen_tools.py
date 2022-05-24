@@ -8,11 +8,12 @@ from model_functions import MLPScaledXY
 
 # Current angles and orders as defined by TG and controller
 # Note: L1A_abduct is actually flexion (misnamed)
-anglesTG   = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
-anglesCtrl = ['L1A_abduct', 'L1A_rot', 'L1B_flex', 'L1B_rot', 'L1C_flex']
-mappingTG2Ctrl = [2, 1, 3, 4, 0]
-mappingCtrl2TG = [4, 1, 0, 2, 3]
+anglesTG    = ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
+anglesCtrl1 = ['L1A_abduct', 'L1A_rot', 'L1B_flex', 'L1C_flex']
+mappingTG2Ctrl = [2, 1, 3, 0]
 
+mappingCtrl2TG = [3, 1, 0, 2]
+mappingTGIdx   = [0, 1, 2, 3] # tgAngles[mappingTGIdx] = ctrlAngles[mappingCtrl2TG]
 
 def tg_to_ctrl(angles):
     ''' Convert angles for use by TG to angles for use by controller '''
@@ -21,8 +22,13 @@ def tg_to_ctrl(angles):
 
 
 def ctrl_to_tg(angles):
-    ''' Convert angles for use by controller to angles for use by TG '''
-    return np.degrees(angles[mappingCtrl2TG])
+    ''' 
+    Convert angles for use by controller to angles for use by TG
+    If angle is not used by controller, put 0
+    '''
+    tgAngles = np.zeros(len(anglesTG))
+    tgAngles[mappingTGIdx] = np.degrees(angles[mappingCtrl2TG])
+    return tgAngles            
 
 
 
