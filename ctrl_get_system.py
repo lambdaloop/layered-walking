@@ -13,7 +13,7 @@ mCoxa      = massPerLeg / 4
 mFemur     = massPerLeg / 4
 mTT        = massPerLeg / 2
 
-legs_to_compute = ['L1'] # Which legs to get a system for
+legs_to_compute = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'] # Which legs to get a system for
 
 def get_robot_params(leg):
     ''' 
