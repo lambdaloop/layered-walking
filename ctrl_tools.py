@@ -1,8 +1,13 @@
 #!/usr/bin/env python
 
+import control
 import copy
 import numpy as np
 from scipy.misc import derivative
+from scipy.linalg import block_diag
+from tqdm import trange
+
+from angle_functions import *
 
 # Use version 0.7.5
 # python3 -m pip install sympy==0.7.5
@@ -12,11 +17,14 @@ import sympy
 import sympybotics
 
 # Where to store/load linearized models
+# Note: need to make sure this directory exists
 directory = './linearized_model/'
-Afn = directory + 'ALin.dat'
-Bfn = directory + 'BLin.dat'
-xfn = directory + 'xEqm.dat'
-ufn = directory + 'uEqm.dat'
+
+# Partial names of linearized model files
+Aname = 'ALin.dat'
+Bname = 'BLin.dat'
+xname = 'xEqm.dat'
+uname = 'uEqm.dat'
 
 
 
@@ -49,44 +57,44 @@ def get_numerical_values(subDict, sbCode):
 
 
 
-def x_to_dict(x, legdef):
+def x_to_dict(x, legDef):
     ''' Convert vector or list of states x into dictionary form for sympy substitution '''
     stateDict = {}
-    for i in range(legdef.dof):
-        stateDict[legdef.q[i]]  = x[i] # Angle
-        stateDict[legdef.dq[i]] = x[i+legdef.dof] # Angular velocity
+    for i in range(legDef.dof):
+        stateDict[legDef.q[i]]  = x[i] # Angle
+        stateDict[legDef.dq[i]] = x[i+legDef.dof] # Angular velocity
     return stateDict
 
 
 
-def F2(x, uEqm, paramsDict, legdef, leg):
+def F2(x, uEqm, paramsDict, legDef, legObj):
     '''
     x          : robot state
     uEqm       : torques
     paramsDict : robotic parameters (mass, lengths)
-    legdef     : sympybotics definition of leg
-    leg        : sympybotics leg object with calculated dynamics
+    legDef     : sympybotics definition of leg
+    legObj     : sympybotics leg object with calculated dynamics
     
     output     : vector of angular acceleration ('F2' in notes)
     '''
-    stateDict = x_to_dict(x, legdef)
+    stateDict = x_to_dict(x, legDef)
     subDict   = {**paramsDict, **stateDict}
         
-    M = get_numerical_values(subDict, leg.M_code)
-    C = get_numerical_values(subDict, leg.C_code)
-    g = get_numerical_values(subDict, leg.g_code)
+    M = get_numerical_values(subDict, legObj.M_code)
+    C = get_numerical_values(subDict, legObj.C_code)
+    g = get_numerical_values(subDict, legObj.g_code)
 
     MInv = M.inv()
     
     term1 = MInv*uEqm
-    term2 = MInv*C*x[leg.dof:,:]
+    term2 = MInv*C*x[legObj.dof:,:]
     term3 = MInv*g
 
     return term1 - term2 - term3
 
 
 
-def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legdef, leg):
+def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legDef, legObj):
     ''' 
     val  : value of variable
     row  : which row of F2 to evaluate
@@ -98,15 +106,29 @@ def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legdef, leg):
     x       = copy.deepcopy(xEqm)
     x[xIdx] = val
     
-    return F2(x, uEqm, paramsDict, legdef, leg)[row]
+    return F2(x, uEqm, paramsDict, legDef, legObj)[row]
 
 
 
-def loadLinearizedSystem():
+def generateLinearFilenames(leg):
+    ''' Generate filenames for the specified leg, e.g. 'L1' '''
+    Afn = directory + leg + '_' + Aname
+    Bfn = directory + leg + '_' + Bname
+    xfn = directory + leg + '_' + xname
+    ufn = directory + leg + '_' + uname
+    
+    return (Afn, Bfn, xfn, ufn)
+    
+
+
+def loadLinearizedSystem(leg):
     ''' 
     Loads files containing ALin, BLin, xEqm, uEqm generated from 
-    getLinearizedSystem() and returns contents 
-    '''    
+    getLinearizedSystem() and returns contents for the specified leg, e.g. 'L1'
+    '''
+    
+    (Afn, Bfn, xfn, ufn) = generateLinearFilenames(leg)
+    
     ALin = np.load(Afn, allow_pickle=True)
     BLin = np.load(Bfn, allow_pickle=True)
     xEqm  = np.load(xfn, allow_pickle=True)
@@ -116,55 +138,65 @@ def loadLinearizedSystem():
 
 
 
-def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, saveToFiles=True):
+def saveLinearizedSystem(ALin, BLin, xEqm, uEqm, leg):
+    (Afn, Bfn, xfn, ufn) = generateLinearFilenames(leg)
+    
+    ALin.dump(Afn)
+    BLin.dump(Bfn)
+    xEqm.dump(xfn)
+    uEqm.dump(ufn)
+
+
+
+def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, leg):
     ''' 
-    Given physical properties and DH parameters of robot, return linearized system.
+    Given physical properties and DH parameters of robot, save linearized system.
     DHTable     : DH table ordered (alpha, a, d, theta)
     linkMasses  : list of link masses
     inertias    : inertias (following Le convention of sympybotics)
     xEqm        : state operating point
-    saveToFiles : whether to save the outputs to files
+    leg         : which leg it is, e.g. 'L1'
     
-    output      : (A, B, uEqm, xEqm) system matrices and o
-                  operating point (equilibrium) each is a numpy matrix
+    output      : Saves (A, B, uEqm, xEqm) system matrices and
+                  operating point (equilibrium) to data files as numpy
     '''
     xEqm = sympy.Matrix(xEqm) # Convert to sympy    
     
     # Generate dynamics 
-    legdef = sympybotics.RobotDef('LegRobot', DHTable, dh_convention='standard')
-    legdef.frictionmodel = None        
-    leg    = sympybotics.RobotDynCode(legdef, verbose=True)
+    legDef = sympybotics.RobotDef('LegRobot', DHTable, dh_convention='standard')
+    legDef.frictionmodel = None        
+    legObj = sympybotics.RobotDynCode(legDef, verbose=True)
+    dof    = legObj.dof
     
     # Generate equilibrium state dictionary (for subbing into sympy)
-    stateEqmDict = x_to_dict(xEqm, legdef)
+    stateEqmDict = x_to_dict(xEqm, legDef)
     
     # Generate parameters dictionary (for subbing into sympy)
     paramsDict = {}
-    for i in range(leg.dof):
-        paramsDict[legdef.m[i]] = linkMasses[i]
-        for j in range(len(legdef.Le[i])):
-            paramsDict[legdef.Le[i][j]] = inertias[i][j]
-        for j in range(len(legdef.l[i])):
-            paramsDict[legdef.l[i][j]] = 0 # Ignore first moment of inertia
+    for i in range(dof):
+        paramsDict[legDef.m[i]] = linkMasses[i]
+        for j in range(len(legDef.Le[i])):
+            paramsDict[legDef.Le[i][j]] = inertias[i][j]
+        for j in range(len(legDef.l[i])):
+            paramsDict[legDef.l[i][j]] = 0 # Ignore first moment of inertia
     
     subDict = {**paramsDict, **stateEqmDict} # Combined dictionary
-    uEqm    = get_numerical_values(subDict, leg.g_code) # eqm input = g
+    uEqm    = get_numerical_values(subDict, legObj.g_code) # eqm input = g
     
     # Calculate matrices for the systems
-    B1   = sympy.zeros(leg.dof, leg.dof)
-    B2   = get_numerical_values(subDict, leg.M_code).inv()
+    B1   = sympy.zeros(dof, dof)
+    B2   = get_numerical_values(subDict, legObj.M_code).inv()
     BLin = B1.col_join(B2)
 
-    A11 = sympy.zeros(leg.dof, leg.dof)
-    A12 = sympy.eye(leg.dof)
+    A11 = sympy.zeros(dof, dof)
+    A12 = sympy.eye(dof)
     A1  = A11.row_join(A12)
     
-    A2 = sympy.zeros(leg.dof, 2*leg.dof) # Jacobian
-    for i in range(leg.dof): # row of F2    
-        for j in range(2*leg.dof): # element of x
-            print(f'Calculating element {i},{j} of Jacobian')
+    A2 = sympy.zeros(dof, 2*dof) # Jacobian
+    for i in trange(dof, desc=' Computing Jacobian ', position=0): # row of F2    
+        for j in trange(2*dof, desc=f' Row {i}              ', position=1, leave=False): # element of x
             A2[i,j] = derivative(F2_scalar, xEqm[j], dx=1e-5, 
-                      args=(i, j, xEqm, uEqm, paramsDict, legdef, leg))
+                      args=(i, j, xEqm, uEqm, paramsDict, legDef, legObj))
     ALin = A1.col_join(A2)
 
     # Convert to numpy
@@ -173,10 +205,63 @@ def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, saveToFiles=True):
     xEqm = np.array(xEqm).astype(np.float64)
     uEqm = np.array(uEqm).astype(np.float64)
     
-    # Store to files (since A2 calculation takes a while)    
-    ALin.dump(Afn)
-    BLin.dump(Bfn)
-    xEqm.dump(xfn)
-    uEqm.dump(ufn)
+    # Store to files
+    saveLinearizedSystem(ALin, BLin, xEqm, uEqm, leg)
     
-    return (ALin, BLin, xEqm, uEqm)
+    return
+
+
+
+class ControlAndDynamics:
+    def __init__(self, leg, anglePen, drvPen, inputPen, Ts):
+        # Assumes we already ran getLinearizedSystem() for the appropriate leg
+        ALin, BLin, self._xEqm, self._uEqm = loadLinearizedSystem(leg)
+
+        self._Nx     = len(ALin)
+        self._Nu     = int(self._Nx / 2)
+        self._Ts     = Ts
+        self._leg    = leg
+        self._legPos = int(leg[-1])
+        
+        # Zeroth order discretization
+        self._A = np.eye(self._Nx) + ALin*Ts
+        self._B = Ts*BLin
+        eigsOL    = np.linalg.eig(self._A)[0]
+        specRadOL = max(np.abs(eigsOL))
+        print(f'Open-loop spectral radius: {specRadOL}')
+
+        # Sanity check: controllability
+        Qc = control.ctrb(self._A, self._B)
+        rankCtrb = np.linalg.matrix_rank(Qc)
+        if rankCtrb != self._Nx:
+            print('Error: System uncontrollable!')
+
+        # LQR matrices
+        Q1 = anglePen * np.eye(self._Nu)
+        Q2 = drvPen * np.eye(self._Nu)
+        Q  = block_diag(Q1, Q2)
+        R  = inputPen * np.eye(self._Nu)
+
+        # Generate controller
+        self._K   = control.dlqr(self._A, self._B, Q, R)[0]
+        ACL       = self._A - self._B @ self._K
+        eigsCL    = np.linalg.eig(ACL)[0]
+        specRadCL = max(np.abs(eigsCL))
+        print(f'Closed-loop spectral radius: {specRadCL}')
+        
+    def step_forward(self, yNow, angleNow, angleNxt, drvNow, drvNxt):
+        # Assumes angles and drv are in TG format
+        xEqmFlat = self._xEqm.flatten()
+        
+        trajNow = np.append(tg_to_ctrl(angleNow, self._legPos), 
+                            tg_to_ctrl(drvNow/self._Ts, self._legPos))
+        trajNxt = np.append(tg_to_ctrl(angleNxt, self._legPos), 
+                            tg_to_ctrl(drvNxt/self._Ts, self._legPos))
+        wTraj   = self._A @ (trajNow - xEqmFlat) + xEqmFlat - trajNxt
+
+        # Give some look-ahead to wtraj
+        uNow = -self._K @ (yNow + wTraj)
+        yNxt = self._A @ yNow + self._B @ uNow + wTraj
+        
+        return (uNow, yNxt)
+

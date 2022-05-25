@@ -5,6 +5,50 @@ import numpy as np
 from tqdm import tqdm, trange
 
 
+
+# Note: L1A_abduct is actually flexion (misnamed)
+anglesTG   = ['C_flex', 'A_rot', 'A_abduct', 'B_flex', 'B_rot']
+
+anglesCtrl = {1: ['A_abduct', 'A_rot', 'B_flex', 'C_flex'],
+              2: ['B_flex', 'B_rot', 'C_flex'],
+              3: ['B_flex', 'C_flex']
+             }
+
+# ctrlAngles = tgAngles[mapTG2Ctrl]
+mapTG2Ctrl = {1: [2, 1, 3, 0],
+              2: [3, 4, 0],
+              3: [3, 0]
+             }
+
+# tgAngles[mapTGIdx] = ctrlAngles[mapCtrl2TG]
+mapCtrl2TG = {1: [3, 1, 0, 2],
+              2: [2, 0, 1],
+              3: [1, 0]
+             }
+mapTGIdx   = {1: [0, 1, 2, 3] ,
+              2: [0, 3, 4],
+              3: [0, 3]
+             }
+
+
+
+def tg_to_ctrl(angles, legPos):
+    ''' Convert angles for use by TG to angles for use by controller '''
+    return np.radians(angles[mapTG2Ctrl[legPos]])
+
+
+
+def ctrl_to_tg(angles, legPos):
+    ''' 
+    Convert angles for use by controller to angles for use by TG
+    If angle is not used by controller, put 0
+    '''
+    tgAngles = np.zeros(len(anglesTG))
+    tgAngles[mapTGIdx[legPos]] = np.degrees(angles[mapCtrl2TG[legPos]])
+    return tgAngles            
+
+
+
 def forward_chain(angles, lengths):
     shoulder, flexion, rotation = angles
     cfs = []
