@@ -44,6 +44,10 @@ def ctrl_to_tg(angles, legPos):
     If angle is not used by controller, put 0
     '''
     tgAngles = np.zeros(len(anglesTG))
+    
+    if len(angles.shape) > 1:
+        tgAngles = np.zeros((len(anglesTG), angles.shape[1]))
+    
     tgAngles[mapTGIdx[legPos]] = np.degrees(angles[mapCtrl2TG[legPos]])
     return tgAngles            
 

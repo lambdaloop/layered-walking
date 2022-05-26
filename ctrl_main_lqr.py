@@ -11,27 +11,16 @@ from angle_functions import angles_to_pose_names, make_fly_video, legs, anglesTG
 ################################################################################
 # User-defined parameters
 ################################################################################
-leg         = 'L1'
 numSimSteps = 200 # How many timesteps to run model for
 Ts          = 1/300 # Sampling time
 
-# LQR penalties
-anglePen = 1e0
-drvPen   = 5e1
-inputPen = 1e-8
 
-makeVideo = False
-
-################################################################################
-# Generate controller
-################################################################################
-CD = ControlAndDynamics(leg, anglePen, drvPen, inputPen, Ts)
 
 ################################################################################
 # Solo TG
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_5.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_5.pickle'
 
 def kuramato_deriv(px, alphas, offsets, ws):
     return ws + np.array([
@@ -62,7 +51,7 @@ for legnum, leg in enumerate(legs):
     angleTG[legnum,:,0], drvTG[legnum,:,0], phaseTG[legnum,0] = TG[legnum].get_initial_vals()
 
 
-
+'''
 for t in range(numSimSteps-1):
     ws = np.zeros(6)
     px = phaseTG[:, t]
@@ -74,31 +63,100 @@ for t in range(numSimSteps-1):
             TG[legnum].step_forward(angleTG[legnum, :,t], drvTG[legnum, :,t],
                                     px[legnum], TG[legnum]._context[t])
 
+matplotlib.use('Agg')
+angs           = angleTG.reshape(-1, angleTG.shape[-1]).T
+angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
+pose_3d        = angles_to_pose_names(angs, angNames)
+make_fly_video(pose_3d, 'vids/multileg_twolayer_tgonly.mp4')
+'''
 ################################################################################
 # 2-Layer: TG + Controller + Dynamics
 ################################################################################
-legPos   = int(leg[-1])
-dof      = CD._Nu
-ys       = np.zeros([CD._Nx, numSimSteps])
-us       = np.zeros([CD._Nu, numSimSteps])
+# LQR penalties
+anglePen = 1e0
+drvPen1  = 5e1 # for R1 and L1
+drvPen2  = 1e0 # for others
+inputPen = 1e-8
 
-angleTG2 = np.zeros((dofTG, numSimSteps))
-drvTG2   = np.zeros((dofTG, numSimSteps))
-phaseTG2 = np.zeros(numSimSteps)
+CD = [None for i in range(n_legs)]
 
-ang, drv, phase = TG.get_initial_vals() 
-angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = ang, drv, phase
+angleTG2 = np.zeros((n_legs, dofTG, numSimSteps))
+drvTG2   = np.zeros((n_legs, dofTG, numSimSteps))
+phaseTG2 = np.zeros((n_legs, numSimSteps))
+ang = np.zeros((n_legs, dofTG))
+drv = np.zeros((n_legs, dofTG))
+phase = np.zeros(n_legs)
 
-for t in range(numSimSteps-1):
-    angleTG2[:,t+1], drvTG2[:,t+1], phaseTG2[t+1] = \
-        TG.step_forward(ang, drv, phaseTG2[t], TG._context[t])
+ys = [None for i in range(n_legs)]
+us = [None for i in range(n_legs)]
+
+for legnum, leg in enumerate(legs):
+    if leg == 'L1' or leg == 'R1':
+        CD[legnum] = ControlAndDynamics(leg, anglePen, drvPen1, inputPen, Ts)
+    else:
+        CD[legnum] = ControlAndDynamics(leg, anglePen, drvPen2, inputPen, Ts)
     
-    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,t], angleTG2[:,t+1],
-                                         drvTG2[:,t], drvTG2[:,t+1])
+    dof      = CD[legnum]._Nu
+    ys[legnum]       = np.zeros([CD[legnum]._Nx, numSimSteps])
+    us[legnum]       = np.zeros([CD[legnum]._Nu, numSimSteps])
+
+    ang[legnum], drv[legnum], phase[legnum] = TG[legnum].get_initial_vals()
+    angleTG2[legnum,:,0], drvTG2[legnum,:,0], phaseTG2[legnum,0] = ang[legnum], drv[legnum], phase[legnum]
+
+
+# Simulation
+for t in range(numSimSteps-1):
+    ws = np.zeros(6)
+    px = phaseTG2[:, t]
+    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)
+    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)
+
+    for legnum, leg in enumerate(legs):
+        legPos   = int(leg[-1])
+        dof      = CD[legnum]._Nu
+        
+        angleTG2[legnum, :,t+1], drvTG2[legnum, :,t+1], phaseTG2[legnum, t+1] = \
+            TG[legnum].step_forward(ang[legnum], drv[legnum], px[legnum], TG[legnum]._context[t])
+        
+        us[legnum][:,t], ys[legnum][:,t+1] = CD[legnum].step_forward(ys[legnum][:,t], angleTG2[legnum,:,t], angleTG2[legnum,:,t+1],
+                                     drvTG2[legnum,:,t], drvTG2[legnum,:,t+1])
+        
+        ang[legnum] = angleTG2[legnum,:,t+1] + ctrl_to_tg(ys[legnum][0:dof,t+1], legPos)    
+        drv[legnum] = drvTG2[legnum,:,t+1]   + ctrl_to_tg(ys[legnum][dof:,t+1]*Ts, legPos)
+
+
+angle2 = np.zeros((n_legs, dofTG, numSimSteps))
+for legnum, leg in enumerate(legs):
+    legPos         = int(leg[-1])
+    dof      = CD[legnum]._Nu
+    angle2[legnum] = angleTG2[legnum] + ctrl_to_tg(ys[legnum][0:dof,:], legPos)
+
+## TODO
+matplotlib.use('Agg')
+angs           = angle2.reshape(-1, angle2.shape[-1]).T
+angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
+pose_3d        = angles_to_pose_names(angs, angNames)
+make_fly_video(pose_3d, 'vids/multileg_3layer.mp4')
+
+
+
+'''
+for t in range(numSimSteps-1):
+    #angleTG2[:,t+1], drvTG2[:,t+1], phaseTG2[t+1] = \
+    #    TG.step_forward(ang, drv, phaseTG2[t], TG._context[t])
+    
+    #us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,t], angleTG2[:,t+1],
+    #                                     drvTG2[:,t], drvTG2[:,t+1])
     
     ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1], legPos)    
     drv = drvTG2[:,t+1]   + ctrl_to_tg(ys[dof:,t+1]*Ts, legPos)
-    
+'''
+
+
+
+
+
+'''    
 angleErr = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
 drvErr   = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
 
@@ -135,11 +193,6 @@ if makeVideo:
     pose_3d        = angles_to_pose_names(angs, angNames)
     pose_3d[:, 1:] = np.nan
     make_fly_video(pose_3d, 'vids/' + leg + '_twolayer.mp4')
+'''
 
 
-matplotlib.use('Agg')
-angs           = angleTG.reshape(-1, angleTG.shape[-1]).T
-angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
-pose_3d        = angles_to_pose_names(angs, angNames)
-# pose_3d[:, 1:] = np.nan
-make_fly_video(pose_3d, 'vids/multileg_twolayer_tgonly.mp4')
