@@ -19,8 +19,8 @@ Ts          = 1/300 # Sampling time
 ################################################################################
 # Solo TG
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_5.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_2.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
 
 def kuramato_deriv(px, alphas, offsets, ws):
     return ws + np.array([
@@ -51,7 +51,6 @@ for legnum, leg in enumerate(legs):
     angleTG[legnum,:,0], drvTG[legnum,:,0], phaseTG[legnum,0] = TG[legnum].get_initial_vals()
 
 
-'''
 for t in range(numSimSteps-1):
     ws = np.zeros(6)
     px = phaseTG[:, t]
@@ -63,12 +62,13 @@ for t in range(numSimSteps-1):
             TG[legnum].step_forward(angleTG[legnum, :,t], drvTG[legnum, :,t],
                                     px[legnum], TG[legnum]._context[t])
 
-matplotlib.use('Agg')
-angs           = angleTG.reshape(-1, angleTG.shape[-1]).T
-angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
-pose_3d        = angles_to_pose_names(angs, angNames)
-make_fly_video(pose_3d, 'vids/multileg_twolayer_tgonly.mp4')
-'''
+# matplotlib.use('Agg')
+# angs           = angleTG.reshape(-1, angleTG.shape[-1]).T
+# angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
+# pose_3d        = angles_to_pose_names(angs, angNames)
+# make_fly_video(pose_3d, 'vids/multileg_twolayer_tgonly.mp4')
+
+
 ################################################################################
 # 2-Layer: TG + Controller + Dynamics
 ################################################################################
