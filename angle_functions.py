@@ -53,6 +53,27 @@ def ctrl_to_tg(angles, legPos):
 
 
 
+offsets = np.array([
+    [0, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 0],
+    [0, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 0],
+    [0, 1, 0, 1, 0, 1],
+    [1, 0, 1, 0, 1, 0],
+])*np.pi
+
+alphas = np.ones((6,6))*4.0
+
+
+
+def kuramato_deriv(px, alphas, offsets, ws):
+    return ws + np.array([
+        np.sum(alphas[i] * np.sin(px - px[i] - offsets[i]))
+        for i in range(len(px))
+    ])
+
+
+
 def forward_chain(angles, lengths):
     shoulder, flexion, rotation = angles
     cfs = []
