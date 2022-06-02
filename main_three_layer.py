@@ -15,6 +15,7 @@ from angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
 ################################################################################
 numSimSteps = 200 # How many timesteps to run model for
 Ts          = 1/300 # Sampling time
+TGInterval  = 1     # Give feedback to TG once per interval 
 
 # LQR penalties
 drvPen = {'L1': 1e1,
@@ -67,7 +68,6 @@ for t in range(numSimSteps-1):
 
     for ln, leg in enumerate(legs):
         legPos   = int(leg[-1])
-        dof      = CD[ln]._Nu
         
         angleTG[ln, :,t+1], drvTG[ln, :,t+1], phaseTG[ln, t+1] = \
             TG[ln].step_forward(ang[ln], drv[ln], px[ln], TG[ln]._context[t])
@@ -76,14 +76,17 @@ for t in range(numSimSteps-1):
             CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,t], angleTG[ln,:,t+1],
                                 drvTG[ln,:,t], drvTG[ln,:,t+1])
         
-        ang[ln] = angleTG[ln,:,t+1] + ctrl_to_tg(ys[ln][0:dof,t+1], legPos)    
-        drv[ln] = drvTG[ln,:,t+1]   + ctrl_to_tg(ys[ln][dof:,t+1]*Ts, legPos)
+        ang[ln] = angleTG[ln,:,t+1]
+        drv[ln] = drvTG[ln,:,t+1]
+        
+        if not ((t+1) % TGInterval):
+            ang[ln] += ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t+1], legPos)    
+            drv[ln] += ctrl_to_tg(ys[ln][CD[ln]._Nu:,t+1]*Ts, legPos)
 
 angle = np.zeros((nLegs, dofTG, numSimSteps))
 for ln, leg in enumerate(legs):
-    legPos         = int(leg[-1])
-    dof      = CD[ln]._Nu
-    angle[ln] = angleTG[ln] + ctrl_to_tg(ys[ln][0:dof,:], legPos)
+    legPos    = int(leg[-1])
+    angle[ln] = angleTG[ln] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,:], legPos)
 
 matplotlib.use('Agg')
 angs           = angle.reshape(-1, angle.shape[-1]).T

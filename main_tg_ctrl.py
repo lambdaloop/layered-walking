@@ -8,20 +8,23 @@ from ctrl_tools import ControlAndDynamics
 from trajgen_tools import TrajectoryGenerator
 from angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl
-    
+
+# Usage: python3 main_tg_ctrl.py <leg> <optional: basic>
 ################################################################################
 # User-defined parameters
 ################################################################################
-numSimSteps   = 200   # How many timesteps to run model for
-Ts            = 1/300 # Sampling time
+numSimSteps = 200   # How many timesteps to run model for
+Ts          = 1/300 # Sampling time
+TGInterval  = 1     # Give feedback to TG once per interval 
 
 # LQR penalties
-drvPen = {'L1': 1e1,
-          'L2': 1e0,
-          'L3': 1e0,
-          'R1': 1e1,
-          'R2': 1e2,
-          'R3': 1e0}
+drvPen = {'L1': 1e1, # Weird
+          'L2': 1e0, # OK
+          'L3': 1e0, # OK
+          'R1': 1e1, # Weird
+          'R2': 1e2, # Weird
+          'R3': 1e0  # OK
+         }
 anglePen = 1e0
 inputPen = 1e-8
 
@@ -30,6 +33,7 @@ leg = sys.argv[1]
 # Use this option to track pre-generated trajectory
 basicTracking = False  
 if len(sys.argv) > 2 and sys.argv[2] == 'basic':
+    print('Basic tracking (use trajectory from solo TG)')
     basicTracking = True
 
 ################################################################################
@@ -74,19 +78,17 @@ else:
 for t in range(numSimSteps-1):
     if not basicTracking: # when doing basic tracking, no need to update TG
         angleTG2[:,t+1], drvTG2[:,t+1], phaseTG2[t+1] = \
-            TG.step_forward(ang, drv, phase, TG._context[t])
+            TG.step_forward(ang, drv, phaseTG2[t], TG._context[t])
     
     us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,t], angleTG2[:,t+1],
                                          drvTG2[:,t], drvTG2[:,t+1])
     
-    ang = angleTG2[:,t+1] + ctrl_to_tg(ys[0:dof,t+1], legPos)    
-    drv = drvTG2[:,t+1]   + ctrl_to_tg(ys[dof:,t+1]*Ts, legPos)
+    ang = angleTG2[:,t+1]   
+    drv = drvTG2[:,t+1]
 
-angleErr = np.linalg.norm(np.degrees(ys[0:dof,]), ord='fro')
-drvErr   = np.linalg.norm(np.degrees(ys[dof:,]*Ts), ord='fro')
-
-print(f'Frob norm of angle error: {angleErr} deg')
-print(f'Frob norm of angular velocity error: {drvErr} deg/s')
+    if not ((t+1) % TGInterval):
+        ang = ang + ctrl_to_tg(ys[0:dof,t+1], legPos) 
+        drv = drv + ctrl_to_tg(ys[dof:,t+1]*Ts, legPos)
 
 angle2 = tg_to_ctrl(angleTG2, legPos) + ys[0:dof,:]
 drv2   = tg_to_ctrl(drvTG2, legPos)   + ys[dof:,:]*Ts
