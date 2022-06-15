@@ -13,34 +13,36 @@ from angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
 ################################################################################
 # User-defined parameters
 ################################################################################
-numSimSteps = 200 # How many timesteps to run model for
+filename = '/home/lisa/Downloads/walk_sls_legs_8.pickle'
+#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
+
+numTGSteps  = 200 # How many timesteps to run TG for
 Ts          = 1/300 # Sampling time
-TGInterval  = 1     # Give feedback to TG once per interval 
+ctrlTsRatio = 5    # Controller will sample at Ts / ctrlTsRatio
 
 # LQR penalties
-drvPen = {'L1': 1e1,
-          'L2': 1e0,
-          'L3': 1e0,
-          'R1': 1e1,
-          'R2': 1e2,
-          'R3': 1e0}
+drvPen = {'L1': 1e-2,
+          'L2': 1e-2,
+          'L3': 1e-2,
+          'R1': 1e-2,
+          'R2': 1e-2,
+          'R3': 1e-2}
 anglePen = 1e0
 inputPen = 1e-8
 
 ################################################################################
 # Phase coordinator + trajectory generator + ctrl and dynamics
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_8.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
+numSimSteps = numTGSteps*ctrlTsRatio
 
 nLegs   = len(legs)
 dofTG   = len(anglesTG)
 TG      = [None for i in range(nLegs)]
 CD      = [None for i in range(nLegs)]
 
-angleTG = np.zeros((nLegs, dofTG, numSimSteps))
-drvTG   = np.zeros((nLegs, dofTG, numSimSteps))
-phaseTG = np.zeros((nLegs, numSimSteps))
+angleTG = np.zeros((nLegs, dofTG, numTGSteps))
+drvTG   = np.zeros((nLegs, dofTG, numTGSteps))
+phaseTG = np.zeros((nLegs, numTGSteps))
 
 ys = [None for i in range(nLegs)]
 us = [None for i in range(nLegs)]
@@ -50,8 +52,8 @@ drv   = np.zeros((nLegs, dofTG))
 phase = np.zeros(nLegs)
 
 for ln, leg in enumerate(legs):
-    TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numSimSteps)
-    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts)
+    TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
+    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
     
     ang[ln], drv[ln], phase[ln] = TG[ln].get_initial_vals()
     angleTG[ln,:,0], drvTG[ln,:,0], phaseTG[ln,0] = ang[ln], drv[ln], phase[ln]
@@ -61,33 +63,36 @@ for ln, leg in enumerate(legs):
 
 # Simulation
 for t in range(numSimSteps-1):
+    k  = int(t / ctrlTsRatio)      # Index for TG/PC
+    kn = int((t+1) / ctrlTsRatio)  # Next index for TG/PC
+    
+    # This is only used if TG is updated
     ws = np.zeros(6)
-    px = phaseTG[:, t]
+    px = phaseTG[:,k]
     px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)
     px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)
-
+    
     for ln, leg in enumerate(legs):
-        legPos   = int(leg[-1])
+        if not ((t+1) % ctrlTsRatio): 
+            legPos  = int(leg[-1])
+            ang[ln] = angleTG[ln,:,k] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t], legPos)   
+            drv[ln] = drvTG[ln,:,k] + ctrl_to_tg(ys[ln][CD[ln]._Nu:,t]*CD[ln]._Ts, legPos)
+            
+            angleTG[ln,:,kn], drvTG[ln,:,kn], phaseTG[ln,kn] = \
+                TG[ln].step_forward(ang[ln], drv[ln], px[ln], TG[ln]._context[k])
+            
+            us[ln][:,t], ys[ln][:,t+1] = \
+                CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,k], angleTG[ln,:,kn],
+                                    drvTG[ln,:,k]/ctrlTsRatio, drvTG[ln,:,kn]/ctrlTsRatio)
         
-        angleTG[ln, :,t+1], drvTG[ln, :,t+1], phaseTG[ln, t+1] = \
-            TG[ln].step_forward(ang[ln], drv[ln], px[ln], TG[ln]._context[t])
-        
-        us[ln][:,t], ys[ln][:,t+1] = \
-            CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,t], angleTG[ln,:,t+1],
-                                drvTG[ln,:,t], drvTG[ln,:,t+1])
-        
-        ang[ln] = angleTG[ln,:,t+1]
-        drv[ln] = drvTG[ln,:,t+1]
-        
-        if not ((t+1) % TGInterval):
-            ang[ln] += ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t+1], legPos)    
-            drv[ln] += ctrl_to_tg(ys[ln][CD[ln]._Nu:,t+1]*Ts, legPos)
+# True angles sampled at Ts
+angle    = np.zeros((nLegs, dofTG, numTGSteps))
+downSamp = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
 
-angle = np.zeros((nLegs, dofTG, numSimSteps))
 for ln, leg in enumerate(legs):
     legPos    = int(leg[-1])
-    angle[ln] = angleTG[ln] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,:], legPos)
-
+    angle[ln,:,:] = angleTG[ln,:,:] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,downSamp], legPos)
+    
 matplotlib.use('Agg')
 angs           = angle.reshape(-1, angle.shape[-1]).T
 angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
