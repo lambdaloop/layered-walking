@@ -44,8 +44,9 @@ angleTG = np.zeros((nLegs, dofTG, numTGSteps))
 drvTG   = np.zeros((nLegs, dofTG, numTGSteps))
 phaseTG = np.zeros((nLegs, numTGSteps))
 
-ys = [None for i in range(nLegs)]
-us = [None for i in range(nLegs)]
+ys    = [None for i in range(nLegs)]
+us    = [None for i in range(nLegs)]
+dists = [None for i in range(nLegs)]
 
 ang   = np.zeros((nLegs, dofTG))
 drv   = np.zeros((nLegs, dofTG))
@@ -58,8 +59,9 @@ for ln, leg in enumerate(legs):
     ang[ln], drv[ln], phase[ln] = TG[ln].get_initial_vals()
     angleTG[ln,:,0], drvTG[ln,:,0], phaseTG[ln,0] = ang[ln], drv[ln], phase[ln]
         
-    ys[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
-    us[ln] = np.zeros([CD[ln]._Nu, numSimSteps])
+    ys[ln]    = np.zeros([CD[ln]._Nx, numSimSteps])
+    us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
+    dists[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
 
 # Simulation
 for t in range(numSimSteps-1):
@@ -83,7 +85,7 @@ for t in range(numSimSteps-1):
             
             us[ln][:,t], ys[ln][:,t+1] = \
                 CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,k], angleTG[ln,:,kn],
-                                    drvTG[ln,:,k]/ctrlTsRatio, drvTG[ln,:,kn]/ctrlTsRatio)
+                                    drvTG[ln,:,k]/ctrlTsRatio, drvTG[ln,:,kn]/ctrlTsRatio, dists[ln][:,t])
         
 # True angles sampled at Ts
 angle    = np.zeros((nLegs, dofTG, numTGSteps))

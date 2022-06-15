@@ -249,8 +249,9 @@ class ControlAndDynamics:
         specRadCL = max(np.abs(eigsCL))
         print(f'Closed-loop spectral radius: {specRadCL}')
         
-    def step_forward(self, yNow, angleNow, angleNxt, drvNow, drvNxt):
+    def step_forward(self, yNow, angleNow, angleNxt, drvNow, drvNxt, dists):
         # Assumes angles and drv are in TG format
+        # dists are disturbances, in ctrl format
         xEqmFlat = self._xEqm.flatten()
         
         trajNow = np.append(tg_to_ctrl(angleNow, self._legPos), 
@@ -261,7 +262,7 @@ class ControlAndDynamics:
 
         # Give some look-ahead to wtraj
         uNow = -self._K @ (yNow + wTraj)
-        yNxt = self._A @ yNow + self._B @ uNow + wTraj
+        yNxt = self._A @ yNow + self._B @ uNow + wTraj + dists
         
         return (uNow, yNxt)
 

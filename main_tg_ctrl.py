@@ -61,10 +61,11 @@ for t in range(numTGSteps-1):
 ################################################################################
 numSimSteps = numTGSteps*ctrlTsRatio
 
-CD  = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
-dof = CD._Nu
-ys  = np.zeros([CD._Nx, numSimSteps])
-us  = np.zeros([CD._Nu, numSimSteps])
+CD    = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
+dof   = CD._Nu
+ys    = np.zeros([CD._Nx, numSimSteps])
+us    = np.zeros([CD._Nu, numSimSteps])
+dists = np.zeros([CD._Nx, numSimSteps]) # perturbations
 
 if basicTracking:
     angleTG2 = angleTG
@@ -90,7 +91,7 @@ for t in range(numSimSteps-1):
             TG.step_forward(ang, drv, phaseTG2[k], TG._context[k])
 
     us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,k], angleTG2[:,kn],
-                                         drvTG2[:,k]/ctrlTsRatio, drvTG2[:,kn]/ctrlTsRatio)
+                                         drvTG2[:,k]/ctrlTsRatio, drvTG2[:,kn]/ctrlTsRatio, dists[:,t])
 
 # True angle + derivative (sampled at Ts)
 downSamp = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
