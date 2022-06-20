@@ -85,6 +85,6 @@ def get_robot_params(leg):
 for leg in legs_to_compute:
     print('Calculating for leg ' + leg)
     (DHTable, linkMasses, inertias, xEqm) = get_robot_params(leg)
-    getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, leg)
+    get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg)
 
 

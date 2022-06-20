@@ -110,7 +110,7 @@ def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legDef, legObj):
 
 
 
-def generateLinearFilenames(leg):
+def generate_linear_filenames(leg):
     ''' Generate filenames for the specified leg, e.g. 'L1' '''
     Afn = directory + leg + '_' + Aname
     Bfn = directory + leg + '_' + Bname
@@ -121,13 +121,13 @@ def generateLinearFilenames(leg):
     
 
 
-def loadLinearizedSystem(leg):
+def load_linearized_system(leg):
     ''' 
     Loads files containing ALin, BLin, xEqm, uEqm generated from 
-    getLinearizedSystem() and returns contents for the specified leg, e.g. 'L1'
+    get_linearized_system() and returns contents for the specified leg, e.g. 'L1'
     '''
     
-    (Afn, Bfn, xfn, ufn) = generateLinearFilenames(leg)
+    (Afn, Bfn, xfn, ufn) = generate_linear_filenames(leg)
     
     ALin = np.load(Afn, allow_pickle=True)
     BLin = np.load(Bfn, allow_pickle=True)
@@ -138,8 +138,8 @@ def loadLinearizedSystem(leg):
 
 
 
-def saveLinearizedSystem(ALin, BLin, xEqm, uEqm, leg):
-    (Afn, Bfn, xfn, ufn) = generateLinearFilenames(leg)
+def save_linearized_system(ALin, BLin, xEqm, uEqm, leg):
+    (Afn, Bfn, xfn, ufn) = generate_linear_filenames(leg)
     
     ALin.dump(Afn)
     BLin.dump(Bfn)
@@ -148,7 +148,7 @@ def saveLinearizedSystem(ALin, BLin, xEqm, uEqm, leg):
 
 
 
-def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, leg):
+def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
     ''' 
     Given physical properties and DH parameters of robot, save linearized system.
     DHTable     : DH table ordered (alpha, a, d, theta)
@@ -206,7 +206,7 @@ def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, leg):
     uEqm = np.array(uEqm).astype(np.float64)
     
     # Store to files
-    saveLinearizedSystem(ALin, BLin, xEqm, uEqm, leg)
+    save_linearized_system(ALin, BLin, xEqm, uEqm, leg)
     
     return
 
@@ -214,8 +214,8 @@ def getLinearizedSystem(DHTable, linkMasses, inertias, xEqm, leg):
 
 class ControlAndDynamics:
     def __init__(self, leg, anglePen, drvPen, inputPen, Ts):
-        # Assumes we already ran getLinearizedSystem() for the appropriate leg
-        ALin, BLin, self._xEqm, self._uEqm = loadLinearizedSystem(leg)
+        # Assumes we already ran get_linearized_system() for the appropriate leg
+        ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
 
         self._Nx     = len(ALin)
         self._Nu     = int(self._Nx / 2)
