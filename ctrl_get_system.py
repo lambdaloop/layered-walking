@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 
-from ctrl_tools import *
-from angle_functions import *
+import numpy as np
+from ctrl_tools import get_linearized_system
+from angle_functions import anglesCtrl, get_avg_angles, get_leg_lengths, \
+                            legs, median_angles, name_to_index
 
 ################################################################################
 # Parameters / DH conventions
@@ -27,16 +29,12 @@ def get_robot_params(leg):
     legPos = int(leg[-1])
 
     # Set equilibrium as average joint angle with zero velocity
-    xEqm = []
-    for angle in anglesCtrl[legPos]:
-        angName = leg + angle
-        xEqm.append(np.radians(median_angles[name_to_index[angName]]))
-    xEqm += [0] * len(xEqm) # Angular velocity entires are zero
+
+    xEqm = get_avg_angles(anglesCtrl[legPos], leg)
+    xEqm += [0] * len(xEqm) # Angular velocity entries are zero
 
     # Get lengths (convert from millimeters)
-    lCoxa  = all_lengths[legIdx][0] / 1000
-    lFemur = all_lengths[legIdx][1] / 1000
-    lTT    = (all_lengths[legIdx][2] + all_lengths[legIdx][3]) / 1000
+    lCoxa, lFemur, lTT = get_leg_lengths(legIdx)
     
     # Calculate inertias
     iCoxa  = 1.0/3.0 * mCoxa * lCoxa * lCoxa

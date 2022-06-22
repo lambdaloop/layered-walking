@@ -53,6 +53,24 @@ def ctrl_to_tg(angles, legPos):
 
 
 
+def get_leg_lengths(legIdx):
+    lCoxa  = all_lengths[legIdx][0] / 1000 # convert millimeteres to meters
+    lFemur = all_lengths[legIdx][1] / 1000
+    lTT    = (all_lengths[legIdx][2] + all_lengths[legIdx][3]) / 1000
+    return lCoxa, lFemur, lTT
+
+
+
+def get_avg_angles(angleNames, leg):
+    ''' Returns median angles (in radians) for the leg and angles in question'''
+    avgAngles = []
+    for angle in angleNames:
+        angName = leg + angle
+        avgAngles.append(np.radians(median_angles[name_to_index[angName]]))
+    return avgAngles
+
+
+
 offsets = np.array([
     [0, 1, 0, 1, 0, 1],
     [1, 0, 1, 0, 1, 0],
