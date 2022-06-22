@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import sys
 
-from ctrl_tools import ControlAndDynamics
-from trajgen_tools import TrajectoryGenerator
-from angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
+from tools.ctrl_tools import ControlAndDynamics
+from tools.trajgen_tools import TrajectoryGenerator
+from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl
 
 # Usage: python3 main_tg_ctrl.py <leg> <optional: basic>

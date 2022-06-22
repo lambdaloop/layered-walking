@@ -1,8 +1,8 @@
 import pickle
 from collections import Counter
 
-from angle_functions import *
-from model_functions import MLPScaledXY
+from tools.angle_functions import *
+from tools.model_functions import MLPScaledXY
        
 
 

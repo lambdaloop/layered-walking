@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import numpy as np
-from ctrl_tools import get_linearized_system
-from angle_functions import anglesCtrl, get_avg_angles, get_leg_lengths, \
+from tools.ctrl_tools import get_linearized_system
+from tools.angle_functions import anglesCtrl, get_avg_angles, get_leg_lengths, \
                             legs, median_angles, name_to_index
 
 ################################################################################

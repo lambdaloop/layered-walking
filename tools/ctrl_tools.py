@@ -7,7 +7,7 @@ from scipy.misc import derivative
 from scipy.linalg import block_diag
 from tqdm import trange
 
-from angle_functions import *
+from tools.angle_functions import *
 
 # Use version 0.7.5
 # python3 -m pip install sympy==0.7.5

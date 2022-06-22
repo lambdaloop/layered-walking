@@ -3,7 +3,7 @@
 import numpy as np
 
 from scipy.optimize import fsolve
-from angle_functions import all_lengths, anglesCtrl, get_avg_angles, get_leg_lengths, legs
+from tools.angle_functions import all_lengths, anglesCtrl, get_avg_angles, get_leg_lengths, legs
 
 
 ################################################################################

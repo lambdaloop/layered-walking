@@ -3,8 +3,8 @@
 import matplotlib
 import numpy as np
 
-from trajgen_tools import TrajectoryGenerator
-from angle_functions import legs, anglesTG, offsets, alphas, kuramato_deriv, \
+from tools.trajgen_tools import TrajectoryGenerator
+from tools.angle_functions import legs, anglesTG, offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video
                             
 ################################################################################

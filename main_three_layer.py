@@ -3,9 +3,9 @@
 import matplotlib
 import numpy as np
 
-from ctrl_tools import ControlAndDynamics
-from trajgen_tools import TrajectoryGenerator
-from angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
+from tools.ctrl_tools import ControlAndDynamics
+from tools.trajgen_tools import TrajectoryGenerator
+from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl, \
                             offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video                            
