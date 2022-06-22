@@ -62,38 +62,18 @@ for t in range(numTGSteps-1):
 numSimSteps = numTGSteps*ctrlTsRatio
 
 CD    = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
-dof   = CD._Nu
-ys    = np.zeros([CD._Nx, numSimSteps])
-us    = np.zeros([CD._Nu, numSimSteps])
-dists = np.zeros([CD._Nx, numSimSteps]) # perturbations
+dists = np.zeros([CD._Nx, numSimSteps])
 
 if basicTracking:
     angleTG2 = angleTG
     drvTG2   = drvTG
     phaseTG2 = phaseTG
-else:
-    angleTG2 = np.zeros((dofTG, numTGSteps))
-    drvTG2   = np.zeros((dofTG, numTGSteps))
-    phaseTG2 = np.zeros(numTGSteps)
-    ang, drv, phase = TG.get_initial_vals()
-    angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = ang, drv, phase
-
-for t in range(numSimSteps-1):
-    k  = int(t / ctrlTsRatio)      # Index for TG data
-    kn = int((t+1) / ctrlTsRatio)  # Next index for TG data
-    
-    if not basicTracking and not ((t+1) % ctrlTsRatio): 
-        # Only update TG if we are not doing basic tracking
-        ang = angleTG2[:,k] + ctrl_to_tg(ys[0:dof,t], legPos)         
-        drv = drvTG2[:,k] + ctrl_to_tg(ys[dof:,t]*CD._Ts, legPos)
-        
-        angleTG2[:,k+1], drvTG2[:,k+1], phaseTG2[k+1] = \
-            TG.step_forward(ang, drv, phaseTG2[k], TG._context[k])
-
-    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,k], angleTG2[:,kn],
-                                         drvTG2[:,k]/ctrlTsRatio, drvTG2[:,kn]/ctrlTsRatio, dists[:,t])
+    ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio, dists)
+else: 
+    angleTG2, drvTG2, ys = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, dists)
 
 # True angle + derivative (sampled at Ts)
+dof      = CD._Nu
 downSamp = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
 angle2   = angleTG2 + ctrl_to_tg(ys[0:dof,downSamp], legPos)
 drv2     = drvTG2 + ctrl_to_tg(ys[dof:,downSamp]*CD._Ts, legPos)

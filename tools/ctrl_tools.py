@@ -266,3 +266,51 @@ class ControlAndDynamics:
         
         return (uNow, yNxt)
 
+    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, dists):
+        # TG is a trajectory generator
+        dofTG       = TG._numAng
+        numSimSteps = numTGSteps*ctrlTsRatio
+        
+        angleTG = np.zeros((dofTG, numTGSteps))
+        drvTG   = np.zeros((dofTG, numTGSteps))
+        phaseTG = np.zeros(numTGSteps)
+        ang, drv, phase = TG.get_initial_vals()
+        angleTG[:,0], drvTG[:,0], phaseTG[0] = ang, drv, phase
+        
+        ys = np.zeros([self._Nx, numSimSteps])
+        us = np.zeros([self._Nu, numSimSteps])
+
+        for t in range(numSimSteps-1):
+            k  = int(t / ctrlTsRatio)      # Index for TG data
+            kn = int((t+1) / ctrlTsRatio)  # Next index for TG data
+            
+            if not ((t+1) % ctrlTsRatio): 
+                ang = angleTG[:,k] + ctrl_to_tg(ys[0:self._Nu,t], self._legPos)         
+                drv = drvTG[:,k] + ctrl_to_tg(ys[self._Nu:,t]*self._Ts, self._legPos)
+                
+                angleTG[:,k+1], drvTG[:,k+1], phaseTG[k+1] = \
+                    TG.step_forward(ang, drv, phaseTG[k], contexts[k])
+
+            us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angleTG[:,k], angleTG[:,kn],
+                                                   drvTG[:,k]/ctrlTsRatio, drvTG[:,kn]/ctrlTsRatio, dists[:,t])
+        
+        return (angleTG, drvTG, ys)
+
+    def run_basic(self, angle, drv, ctrlTsRatio, dists):
+        # track given angles and drvs
+        numTGSteps  = angle.shape[1]
+        numSimSteps = numTGSteps*ctrlTsRatio
+        
+        ys = np.zeros([self._Nx, numSimSteps])
+        us = np.zeros([self._Nu, numSimSteps])
+
+        for t in range(numSimSteps-1):
+            k  = int(t / ctrlTsRatio)      # Index for TG data
+            kn = int((t+1) / ctrlTsRatio)  # Next index for TG data            
+
+            us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angle[:,k], angle[:,kn],
+                                                   drv[:,k]/ctrlTsRatio, drv[:,kn]/ctrlTsRatio, dists[:,t])
+
+        return ys
+        
+
