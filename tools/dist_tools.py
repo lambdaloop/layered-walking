@@ -49,6 +49,15 @@ def get_dists_endeffector_moves(height, leg):
 # Main functions for users
 # All return a dictionary of disturbances per leg
 ################################################################################
+def get_zero_dists(numSteps):
+    distDict = {}
+    for leg in legs:
+        legPos        = int(leg[-1])
+        numAngles     = len(anglesCtrl[legPos])
+        distDict[leg] = np.zeros([numAngles*2, numSteps])
+    return distDict
+
+
 def get_dists_slippery(maxVelocity, numSteps):
     ''' Gives disturbances corresponding to walking on slippery surface
         maxVelocity: maximum velocity induced by slip '''
@@ -85,7 +94,7 @@ def get_dists_uneven(maxHt, numSteps):
 
 
 
-def get_dists_bump_or_pit(height, distLeg, numSteps):
+def get_dists_bump_or_pit(height, distLeg, numSteps, start, stop):
     ''' Gives disturbances simulating one leg stepping on bump or in a pit
         height  : height of bump (positive) or pit (negative)
         distLeg : which leg steps on the bump/pit '''
@@ -97,7 +106,7 @@ def get_dists_bump_or_pit(height, distLeg, numSteps):
 
         if leg == distLeg:
             dist = get_dists_endeffector_moves(height, leg)
-            for t in range(numSteps):
+            for t in range(start, stop):
                 distDict[leg][:,t] = dist
     return distDict
 

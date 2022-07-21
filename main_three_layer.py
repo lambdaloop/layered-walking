@@ -8,8 +8,9 @@ from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl, \
                             offsets, alphas, kuramato_deriv, \
-                            angles_to_pose_names, make_fly_video                            
-                            
+                            angles_to_pose_names, make_fly_video
+from tools.dist_tools import *
+
 ################################################################################
 # User-defined parameters
 ################################################################################
@@ -47,7 +48,10 @@ phaseTG = np.zeros((nLegs, numTGSteps))
 
 ys    = [None for i in range(nLegs)]
 us    = [None for i in range(nLegs)]
-dists = [None for i in range(nLegs)]
+
+# Slippery surface
+maxVelocity = 50
+dists       = get_dists_slippery(maxVelocity, numSimSteps)
 
 ang   = np.zeros((nLegs, dofTG))
 drv   = np.zeros((nLegs, dofTG))
@@ -95,7 +99,7 @@ for t in range(numSimSteps-1):
             
             us[ln][:,t], ys[ln][:,t+1] = \
                 CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,k], angleTG[ln,:,kn],
-                                    drvTG[ln,:,k]/ctrlTsRatio, drvTG[ln,:,kn]/ctrlTsRatio, dists[ln][:,t])
+                                    drvTG[ln,:,k]/ctrlTsRatio, drvTG[ln,:,kn]/ctrlTsRatio, dists[leg][:,t])
         
 # True angles sampled at Ts
 angle    = np.zeros((nLegs, dofTG, numTGSteps))

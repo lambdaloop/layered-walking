@@ -59,10 +59,7 @@ distsTrue = get_dists_uneven(maxHt, numSimSteps)[leg]
 '''
 # Stepping on a bump (+ve) or in a pit (-ve) for the second quarter of the simulation
 height    = 0.01/1000
-zeroPad1  = np.zeros([CD._Nx, 250])
-zeroPad2  = np.zeros([CD._Nx, 500])
-distsBump = get_dists_bump_or_pit(height, leg, 250)[leg]
-distsTrue = np.concatenate((zeroPad1, distsBump, zeroPad2), axis=1)
+distsBump = get_dists_bump_or_pit(height, leg, numSimSteps, 250, 500)[leg]
 '''
 
 '''
