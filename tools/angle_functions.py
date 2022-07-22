@@ -217,6 +217,9 @@ def angles_to_pose_multirow(rows, lengths=None, offsets=None, progress=False):
 
 def angles_to_pose_names(angs, angnames,
                          lengths=None, offsets=None, progress=False):
+    ''' Input dimension : [timesteps, angles]
+        Return dimension: [timesteps, legs, joint, 3]  
+    '''
     new_angs = np.tile(median_angles, (angs.shape[0], 1))
     for ix_source, name in enumerate(angnames):
         ix_dest = name_to_index[name]

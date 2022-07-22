@@ -3,7 +3,9 @@
 import numpy as np
 
 from scipy.optimize import fsolve
-from tools.angle_functions import all_lengths, anglesCtrl, get_avg_angles, get_leg_lengths, legs
+from tools.angle_functions import all_lengths, angles_to_pose_names, \
+                                  anglesCtrl, anglesTG, \
+                                  get_avg_angles, get_leg_lengths, legs
 
 
 ################################################################################
@@ -43,12 +45,46 @@ def get_dists_endeffector_moves(height, leg):
     
     return dists
 
- 
+
 
 ################################################################################
-# Main functions for users
-# All return a dictionary of disturbances per leg
+# Ground contact functions for users
 ################################################################################
+def get_ground_contact_threshold(angles, fullAngleNames, legIdx):
+    ''' Expect angles in degrees, in order specified by anglesTG, e.g. angleTG '''
+    angs     = angles.reshape(-1, angles.shape[-1]).T
+    poses    = angles_to_pose_names(angs, fullAngleNames)
+
+    numSteps       = angles.shape[1] 
+    contactHeights = np.array([])
+
+    for t in range(1, numSteps-1):
+        lastHeight = poses[t-1, legIdx, -1, -1]
+        thisHeight = poses[t, legIdx, -1, -1]
+        nextHeight = poses[t+1, legIdx, -1, -1]
+    
+        if thisHeight < lastHeight and thisHeight < nextHeight:
+            contactHeights = np.append(contactHeights, thisHeight)
+
+    # Hard-coded constants
+    DISCARD   = 2
+    EPS       = 0.01
+    threshold = -sorted(-contactHeights)[DISCARD] + EPS
+    return threshold
+
+
+
+def get_current_height(angles, fullAngleNames, legIdx):
+    ''' Expect angles in degrees, in order specified by anglesTG '''
+    pose = angles_to_pose_names(angles.reshape(-1, len(anglesTG)), fullAngleNames)
+    return pose[0, legIdx, -1, -1]
+
+
+
+################################################################################
+# Main disturbance functions for users
+################################################################################
+
 def get_zero_dists(numSteps):
     distDict = {}
     for leg in legs:
@@ -58,7 +94,9 @@ def get_zero_dists(numSteps):
     return distDict
 
 
-def get_dists_slippery(maxVelocity, numSteps):
+# TODO: this is the only one that does per-timestep at the moment
+# TODO: will also have to pass in disturbances in a different way in main fn?
+def get_dists_slippery(maxVelocity):
     ''' Gives disturbances corresponding to walking on slippery surface
         maxVelocity: maximum velocity induced by slip '''
     distDict = {}
@@ -69,10 +107,10 @@ def get_dists_slippery(maxVelocity, numSteps):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
+        distDict[leg] = np.zeros([numAngles*2, 1])
         distDict[leg][numAngles+distAngles[legPos],:] = \
             np.random.uniform(-maxVelocity, maxVelocity, 
-                              [len(distAngles[legPos]), numSteps])
+                              [len(distAngles[legPos]), 1])
     return distDict
 
 
