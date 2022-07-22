@@ -4,7 +4,7 @@ import matplotlib
 import numpy as np
 
 from tools.ctrl_tools import ControlAndDynamics
-from tools.trajgen_tools import TrajectoryGenerator
+from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl, \
                             offsets, alphas, kuramato_deriv, \
@@ -13,8 +13,9 @@ from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_8.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_8.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
 
 numTGSteps  = 200 # How many timesteps to run TG for
 Ts          = 1/300 # Sampling time
@@ -52,16 +53,25 @@ ang   = np.zeros((nLegs, dofTG))
 drv   = np.zeros((nLegs, dofTG))
 phase = np.zeros(nLegs)
 
+wd = WalkingData(filename)
+bout = wd.get_bout([15, 0, 0])
+
 for ln, leg in enumerate(legs):
     TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
     CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
-    
-    ang[ln], drv[ln], phase[ln] = TG[ln].get_initial_vals()
+
+    ang[ln] = bout['angles'][leg][0]
+    drv[ln] = bout['derivatives'][leg][0]
+    phase[ln] = bout['phases'][leg][0]
+
+    # ang[ln], drv[ln], phase[ln] = TG[ln].get_initial_vals()
     angleTG[ln,:,0], drvTG[ln,:,0], phaseTG[ln,0] = ang[ln], drv[ln], phase[ln]
         
     ys[ln]    = np.zeros([CD[ln]._Nx, numSimSteps])
     us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
     dists[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
+
+context = bout['contexts']
 
 # Simulation
 for t in range(numSimSteps-1):
@@ -71,8 +81,8 @@ for t in range(numSimSteps-1):
     # This is only used if TG is updated
     ws = np.zeros(6)
     px = phaseTG[:,k]
-    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)
-    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)
+    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*5
+    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*5
     
     for ln, leg in enumerate(legs):
         if not ((t+1) % ctrlTsRatio): 
@@ -81,7 +91,7 @@ for t in range(numSimSteps-1):
             drv[ln] = drvTG[ln,:,k] + ctrl_to_tg(ys[ln][CD[ln]._Nu:,t]*CD[ln]._Ts, legPos)
             
             angleTG[ln,:,kn], drvTG[ln,:,kn], phaseTG[ln,kn] = \
-                TG[ln].step_forward(ang[ln], drv[ln], px[ln], TG[ln]._context[k])
+                TG[ln].step_forward(ang[ln], drv[ln], px[ln], context[k])
             
             us[ln][:,t], ys[ln][:,t+1] = \
                 CD[ln].step_forward(ys[ln][:,t], angleTG[ln,:,k], angleTG[ln,:,kn],
