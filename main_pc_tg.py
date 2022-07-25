@@ -16,8 +16,8 @@ Ts          = 1/300 # Sampling time
 ################################################################################
 # Phase coordinator + trajectory generator
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_8.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_8.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
+#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
 
 nLegs   = len(legs)
 dofTG   = len(anglesTG)
