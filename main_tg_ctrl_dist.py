@@ -7,7 +7,7 @@ import sys
 from tools.ctrl_tools import ControlAndDynamics
 from tools.trajgen_tools import TrajectoryGenerator
 from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
-                            ctrl_to_tg, tg_to_ctrl
+                            ctrl_to_tg, tg_to_ctrl, legs
 from tools.dist_tools import *
 
 # Usage: python3 main_tg_ctrl_dist.py <leg>
@@ -44,70 +44,119 @@ TG      = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
 numSimSteps = numTGSteps*ctrlTsRatio
 CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
 
+# Simulate without disturbance (for comparison)
+distsZero         = np.zeros([CD._Nx, numSimSteps])
+angleTG, drvTG, ysTG = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+
+################################################################################
+# Simulate with disturbances
+################################################################################
+legIdx = legs.index(leg)
 np.random.seed(623) # For perturbations generated randomly
 
+distType = DistType.SLIPPERY_SURFACE
+    
 # Slippery surface
-maxVelocity = 15
-distsTrue   = get_dists_slippery(maxVelocity, numSimSteps)[leg]
+maxVelocity = 100
 
-'''
 # Uneven surface
 maxHt     = 0.05/1000
-distsTrue = get_dists_uneven(maxHt, numSimSteps)[leg]
-'''
 
-'''
-# Stepping on a bump (+ve) or in a pit (-ve) for the second quarter of the simulation
-height    = 0.01/1000
-distsBump = get_dists_bump_or_pit(height, leg, numSimSteps, 250, 500)[leg]
-'''
+# Stepping on a bump (+ve) or in a pit (-ve)
+height    = -0.01/1000
 
-'''
 # Walking on an incline (+ve) or decline (-ve)
-angle     = np.radians(30)
-distsTrue = get_dists_incline_or_decline(angle, numSimSteps)[leg]
-'''
+angle     = -np.radians(30)
 
-'''
 # Leg is missing
 missingLeg = 'L1'
-distsTrue  = get_dists_missing_leg(missingLeg, numSimSteps)[leg]
-'''
 
-distsZero = np.zeros([CD._Nx, numSimSteps])
-angleTGDist, drvTGDist, ysDist = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsTrue)
-angleTG, drvTG, ys             = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+angleTGDist      = np.zeros((dofTG, numTGSteps))
+drvTGDist        = np.zeros((dofTG, numTGSteps))
+phaseTGDist      = np.zeros(numTGSteps)
+ang, drv, phase = TG.get_initial_vals()
+angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = ang, drv, phase
 
+ysDist = np.zeros([CD._Nx, numSimSteps])
+usDist = np.zeros([CD._Nu, numSimSteps])
+
+# Visualize height detection
+heights = np.array([None] * numSimSteps)
+groundContact = np.array([None] * numSimSteps)
+window = 2*ctrlTsRatio
+
+fullAngleNames = [(leg + ang) for ang in anglesTG]
+
+for t in range(numSimSteps-1):
+    k  = int(t / ctrlTsRatio)      # Index for TG data
+    kn = int((t+1) / ctrlTsRatio)  # Next index for TG data      
+    
+    ang = angleTGDist[:,k] + ctrl_to_tg(ysDist[0:CD._Nu,t], legPos)
+    if not ((t+1) % ctrlTsRatio):             
+        drv = drvTGDist[:,k] + ctrl_to_tg(ysDist[CD._Nu:,t]*CD._Ts, legPos)
+        
+        angleTGDist[:,k+1], drvTGDist[:,k+1], phaseTGDist[k+1] = \
+            TG.step_forward(ang, drv, phaseTGDist[k], TG._context[k])
+    
+    dist = get_zero_dists()[leg]
+    
+    heights[t] = get_current_height(ang, fullAngleNames, legIdx)
+    if t > window*2: # Live detection
+        center = t-window
+        if heights[center] == min(heights[center-window:t]): # center is minimum
+            groundContact[t] = heights[t] # visualize height detection
+            if distType == DistType.SLIPPERY_SURFACE:
+                dist = get_dists_slippery(maxVelocity)[leg]
+            elif distType == DistType.UNEVEN_SURFACE:
+                dist = get_dists_uneven(maxHt)[leg]
+            elif distType == DistType.BUMP_ON_SURFACE:
+                dist = get_dists_bump_or_pit(height, distLeg)[leg]
+            elif distType == DistType.SLOPED_SURFACE:
+                dist = get_dists_incline_or_decline(angle)[leg]
+            elif distType == DistType.MISSING_LEG:
+                dist = get_dists_missing_leg(missingLeg)[leg]
+            else:
+                pass
+
+    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k], angleTGDist[:,kn],
+        drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
 
 # True angle + derivative (sampled at Ts)
-dof       = CD._Nu
-downSamp  = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
-angle     = angleTG + ctrl_to_tg(ys[0:dof,downSamp], legPos)
-drv       = drvTG + ctrl_to_tg(ys[dof:,downSamp]*CD._Ts, legPos)
-angleDist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
-drvDist   = drvTGDist + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
+dof        = CD._Nu
+downSamp   = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
+angle2     = angleTG + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
+drv2       = drvTG + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
+angle2Dist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
+drv2Dist   = drvTGDist + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
 
 time = np.array(range(numTGSteps))
+time2 = np.array(range(numSimSteps))
+
 plt.figure(1)
 plt.clf()
 for i in range(dof):
-    plt.subplot(2,dof,i+1)
+    plt.subplot(3,dof,i+1)
     plt.title(anglesCtrl[legPos][i])
     idx = mapTG2Ctrl[legPos][i]
     
     plt.plot(time, angleTG[idx,:], 'b', label=f'2LayerTG')
-    plt.plot(time, angle[idx,:], 'g--', label=f'2Layer')
+    plt.plot(time, angle2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, angleTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
-    plt.plot(time, angleDist[idx,:], 'm--', label=f'2Layer-Dist')
+    plt.plot(time, angle2Dist[idx,:], 'm--', label=f'2Layer-Dist')
     
-    plt.subplot(2,dof,i+dof+1)
+    plt.subplot(3,dof,i+dof+1)
     plt.title('Velocity')
     plt.plot(time, drvTG[idx,:], 'b', label=f'2LayerTG')
-    plt.plot(time, drv[idx,:], 'g--', label=f'2Layer')
+    plt.plot(time, drv2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, drvTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
-    plt.plot(time, drvDist[idx,:], 'm--', label=f'2Layer-Dist')
+    plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
+    plt.legend()
+    
+    plt.subplot(3,dof,2*dof+1)
+    plt.title('Ground contact detection')
+    plt.plot(time2, heights, 'b')
+    plt.plot(time2, groundContact, 'k*')
 
-plt.legend()
 plt.show()
 
 

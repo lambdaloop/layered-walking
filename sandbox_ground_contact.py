@@ -49,12 +49,15 @@ print(f'Ground Contact Threshold for {leg}: {threshold}')
 # Visualize when "ground detection" has occurred, using two methods
 groundContact1 = [None] * numTGSteps # Use live detection of local minima (this will be 1 step late)
 groundContact2 = [None] * numTGSteps # Use thresholding
+heights        = [None] * numTGSteps
 
-heights = []
+window = 2 # Amount of steps to look back and forward for minimum
+
 for t in range(numTGSteps):
-    heights.append(get_current_height(angleTG[:,t], fullAngleNames, legIdx))
-    if t > 1: # Live detection
-        if heights[t-1] < min(heights[t], heights[t-2]): # Minimum occured at t-1
+    heights[t] = get_current_height(angleTG[:,t], fullAngleNames, legIdx)
+    if t > window*2: # Live detection
+        center = t-window
+        if heights[center] == min(heights[center-window:t]): # center is minimum
             groundContact1[t] = heights[t]
     if heights[t] < threshold: # Thresholding
         groundContact2[t] = heights[t]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import numpy as np
-
+from enum import Enum
 from scipy.optimize import fsolve
 from tools.angle_functions import all_lengths, angles_to_pose_names, \
                                   anglesCtrl, anglesTG, \
@@ -83,19 +83,28 @@ def get_current_height(angles, fullAngleNames, legIdx):
 
 ################################################################################
 # Main disturbance functions for users
+# Returns a dict of leg: disturbance (per-timestep)
 ################################################################################
+class DistType(Enum):
+    ZERO             = 0
+    SLIPPERY_SURFACE = 1
+    UNEVEN_SURFACE   = 2
+    BUMP_ON_SURFACE  = 3
+    SLOPED_SURFACE   = 4
+    MISSING_LEG      = 5
+    
 
-def get_zero_dists(numSteps):
+
+def get_zero_dists():
     distDict = {}
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
+        distDict[leg] = np.zeros(numAngles*2)
     return distDict
 
 
-# TODO: this is the only one that does per-timestep at the moment
-# TODO: will also have to pass in disturbances in a different way in main fn?
+
 def get_dists_slippery(maxVelocity):
     ''' Gives disturbances corresponding to walking on slippery surface
         maxVelocity: maximum velocity induced by slip '''
@@ -103,19 +112,17 @@ def get_dists_slippery(maxVelocity):
     distAngles = {1: np.array([3]),    # femur-tibia flexion
                   2: np.array([1, 2]), # femur rotation, femur-tibia flexion
                   3: np.array([1])}    # femur-tibia flexion
-    
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, 1])
-        distDict[leg][numAngles+distAngles[legPos],:] = \
-            np.random.uniform(-maxVelocity, maxVelocity, 
-                              [len(distAngles[legPos]), 1])
+        distDict[leg] = np.zeros(numAngles*2)
+        distDict[leg][numAngles+distAngles[legPos]] = \
+            np.random.uniform(-maxVelocity, maxVelocity, len(distAngles[legPos]))
     return distDict
 
 
 
-def get_dists_uneven(maxHt, numSteps):
+def get_dists_uneven(maxHt):
     ''' Gives disturbances corresponding to walking on uneven surface with many
         random bumps and pits
         maxHt: maximum vertical height of bumps/pits '''
@@ -123,16 +130,13 @@ def get_dists_uneven(maxHt, numSteps):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
-        
-        for t in range(numSteps): # TODO: This is hacky slow way
-            height = np.random.uniform(-maxHt, maxHt)
-            distDict[leg][:,t] = get_dists_endeffector_moves(height, leg)
+        height        = np.random.uniform(-maxHt, maxHt)
+        distDict[leg] = get_dists_endeffector_moves(height, leg)
     return distDict          
 
 
 
-def get_dists_bump_or_pit(height, distLeg, numSteps, start, stop):
+def get_dists_bump_or_pit(height, distLeg):
     ''' Gives disturbances simulating one leg stepping on bump or in a pit
         height  : height of bump (positive) or pit (negative)
         distLeg : which leg steps on the bump/pit '''
@@ -140,17 +144,15 @@ def get_dists_bump_or_pit(height, distLeg, numSteps, start, stop):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
+        distDict[leg] = np.zeros(numAngles*2)
 
         if leg == distLeg:
-            dist = get_dists_endeffector_moves(height, leg)
-            for t in range(start, stop):
-                distDict[leg][:,t] = dist
+            distDict[leg] = get_dists_endeffector_moves(height, leg)
     return distDict
 
 
 
-def get_dists_incline_or_decline(angle, numSteps): 
+def get_dists_incline_or_decline(angle): 
     ''' Gives disturbances simulating walking on incline/decline
         angle: angle of incline (negative for decline), degrees'''
     femurLen = all_lengths[0][1] / 1000 # Femur length for L1
@@ -161,21 +163,16 @@ def get_dists_incline_or_decline(angle, numSteps):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
 
         if legPos == 1:
-            dist = get_dists_endeffector_moves(height, leg)
-            for t in range(numSteps):
-                distDict[leg][:,t] = dist
+            distDict[leg] = get_dists_endeffector_moves(height, leg)
         elif legPos == 3:
-            dist = get_dists_endeffector_moves(-height, leg)
-            for t in range(numSteps):
-                distDict[leg][:,t] = dist           
+            distDict[leg] = get_dists_endeffector_moves(-height, leg)
     return distDict
 
 
 
-def get_dists_missing_leg(missingLeg, numSteps):
+def get_dists_missing_leg(missingLeg):
     ''' Gives disturbances simulating walking with a missing leg '''
     # Which legs get affected by missing leg
     distLegs = {'R1': ['R2', 'L1'],
@@ -189,11 +186,9 @@ def get_dists_missing_leg(missingLeg, numSteps):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        distDict[leg] = np.zeros([numAngles*2, numSteps])
+        distDict[leg] = np.zeros(numAngles*2)
 
         if leg in distLegs[missingLeg]:
-            dist = get_dists_endeffector_moves(height, leg)
-            for t in range(numSteps):
-                distDict[leg][:,t] = dist
+            distDict[leg] = get_dists_endeffector_moves(height, leg)
     return distDict
 
