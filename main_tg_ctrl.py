@@ -22,11 +22,11 @@ ctrlTsRatio = 5    # Controller will sample at Ts / ctrlTsRatio
 
 # LQR penalties
 drvPen = {'L1': 1e-2, # Looks gait-like but different from pure TG
-          'L2': 1e-2, # OK
-          'L3': 1e-2, # OK
-          'R1': 1e-2, # Looks gait-like but different from pure TG
-          'R2': 1e-2, # A bit off pure TG
-          'R3': 1e-2  # OK
+          'L2': 1e-2, # Good
+          'L3': 1e-2, # Looks the same but slower than pure TG
+          'R1': 1e-2, # Looks the same but slower than pure TG
+          'R2': 1e-2, # I mean, even pure TG doesn't look right
+          'R3': 1e-2  # Looks the same but slower than pure TG
          }
 anglePen = 1e0
 inputPen = 1e-8
