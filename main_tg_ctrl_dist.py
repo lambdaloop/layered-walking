@@ -46,7 +46,7 @@ CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTs
 
 # Simulate without disturbance (for comparison)
 distsZero            = np.zeros([CD._Nx, numSimSteps])
-angleTG, drvTG, ysTG = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+angleTG, drvTG, ys = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
 
 ################################################################################
 # Simulate with disturbances
@@ -54,27 +54,27 @@ angleTG, drvTG, ysTG = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZer
 legIdx = legs.index(leg)
 np.random.seed(623) # For perturbations generated randomly
 
-# Tested: OK
+# Tested:
 #distType = DistType.SLIPPERY_SURFACE
-distType = DistType.UNEVEN_SURFACE
+#distType = DistType.UNEVEN_SURFACE
+#distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
+#distType = DistType.SLOPED_SURFACE
 
-# To be tested/adjusted
-#distType = DistType.BUMP_ON_SURFACE # bad
-#distType = DistType.SLOPED_SURFACE # Looks OK but too similar
-#distType = DistType.MISSING_LEG # bad
+# The equivalent disturbance for this appears to be too large for the system
+distType = DistType.MISSING_LEG 
             
 # Slippery surface
 maxVelocity = 150
 
 # Uneven surface
-maxHt = 0.1/1000
+maxHt = 0.5/1000
 
 # Stepping on a bump (+ve) or in a pit (-ve)
-height  = 0.1/1000
+height  = -0.1/1000
 distLeg = leg
 
 # Walking on an incline (+ve) or decline (-ve)
-angle = -np.radians(30)
+angle = 10
 
 # Leg is missing
 missingLeg = 'L1'
@@ -132,7 +132,7 @@ for t in range(numSimSteps-1):
 # True angle + derivative (sampled at Ts)
 dof        = CD._Nu
 downSamp   = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
-angle2     = angleTG + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
+angle2     = angleTG + ctrl_to_tg(ys[0:dof,downSamp], legPos)
 drv2       = drvTG + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
 angle2Dist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
 drv2Dist   = drvTGDist + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
@@ -169,7 +169,7 @@ for i in range(dof):
     plt.title('Ground contact detection')
     plt.plot(time, heights, 'g')
     plt.plot(time2, heightsDist, 'm')
-    plt.plot(time2, groundContact, 'k*')
+    #plt.plot(time2, groundContact, 'k*')
 
 plt.show()
 
