@@ -45,7 +45,7 @@ numSimSteps = numTGSteps*ctrlTsRatio
 CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
 
 # Simulate without disturbance (for comparison)
-distsZero         = np.zeros([CD._Nx, numSimSteps])
+distsZero            = np.zeros([CD._Nx, numSimSteps])
 angleTG, drvTG, ysTG = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
 
 ################################################################################
@@ -54,19 +54,27 @@ angleTG, drvTG, ysTG = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZer
 legIdx = legs.index(leg)
 np.random.seed(623) # For perturbations generated randomly
 
-distType = DistType.SLIPPERY_SURFACE
-    
+# Tested: OK
+#distType = DistType.SLIPPERY_SURFACE
+distType = DistType.UNEVEN_SURFACE
+
+# To be tested/adjusted
+#distType = DistType.BUMP_ON_SURFACE # bad
+#distType = DistType.SLOPED_SURFACE # Looks OK but too similar
+#distType = DistType.MISSING_LEG # bad
+            
 # Slippery surface
-maxVelocity = 100
+maxVelocity = 150
 
 # Uneven surface
-maxHt     = 0.05/1000
+maxHt = 0.1/1000
 
 # Stepping on a bump (+ve) or in a pit (-ve)
-height    = -0.01/1000
+height  = 0.1/1000
+distLeg = leg
 
 # Walking on an incline (+ve) or decline (-ve)
-angle     = -np.radians(30)
+angle = -np.radians(30)
 
 # Leg is missing
 missingLeg = 'L1'
@@ -80,8 +88,8 @@ angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = ang, drv, phase
 ysDist = np.zeros([CD._Nx, numSimSteps])
 usDist = np.zeros([CD._Nu, numSimSteps])
 
-# Visualize height detection
-heights = np.array([None] * numSimSteps)
+# Visualize height detection and compare heights
+heightsDist   = np.array([None] * numSimSteps)
 groundContact = np.array([None] * numSimSteps)
 window = 2*ctrlTsRatio
 
@@ -98,13 +106,13 @@ for t in range(numSimSteps-1):
         angleTGDist[:,k+1], drvTGDist[:,k+1], phaseTGDist[k+1] = \
             TG.step_forward(ang, drv, phaseTGDist[k], TG._context[k])
     
-    dist = get_zero_dists()[leg]
+    dist           = get_zero_dists()[leg]    
+    heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
     
-    heights[t] = get_current_height(ang, fullAngleNames, legIdx)
     if t > window*2: # Live detection
         center = t-window
-        if heights[center] == min(heights[center-window:t]): # center is minimum
-            groundContact[t] = heights[t] # visualize height detection
+        if heightsDist[center] == min(heightsDist[center-window:t]): # center is minimum
+            groundContact[t] = heightsDist[t] # visualize height detection
             if distType == DistType.SLIPPERY_SURFACE:
                 dist = get_dists_slippery(maxVelocity)[leg]
             elif distType == DistType.UNEVEN_SURFACE:
@@ -129,8 +137,13 @@ drv2       = drvTG + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
 angle2Dist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
 drv2Dist   = drvTGDist + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
 
-time = np.array(range(numTGSteps))
-time2 = np.array(range(numSimSteps))
+# Get heights for non-perturbed case as well
+heights       = np.array([None] * numTGSteps)
+for t in range(numTGSteps-1):
+    heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
+
+time  = np.array(range(numTGSteps))
+time2 = np.array(range(numSimSteps)) / ctrlTsRatio
 
 plt.figure(1)
 plt.clf()
@@ -143,18 +156,19 @@ for i in range(dof):
     plt.plot(time, angle2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, angleTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, angle2Dist[idx,:], 'm--', label=f'2Layer-Dist')
-    
+    if i==0:
+        plt.legend()
     plt.subplot(3,dof,i+dof+1)
     plt.title('Velocity')
     plt.plot(time, drvTG[idx,:], 'b', label=f'2LayerTG')
     plt.plot(time, drv2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, drvTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
-    plt.legend()
     
-    plt.subplot(3,dof,2*dof+1)
+    plt.subplot(3,dof,i+2*dof+1)
     plt.title('Ground contact detection')
-    plt.plot(time2, heights, 'b')
+    plt.plot(time, heights, 'g')
+    plt.plot(time2, heightsDist, 'm')
     plt.plot(time2, groundContact, 'k*')
 
 plt.show()

@@ -168,6 +168,8 @@ def get_dists_incline_or_decline(angle):
             distDict[leg] = get_dists_endeffector_moves(height, leg)
         elif legPos == 3:
             distDict[leg] = get_dists_endeffector_moves(-height, leg)
+        else:
+            distDict[leg] = np.zeros(numAngles*2)
     return distDict
 
 
