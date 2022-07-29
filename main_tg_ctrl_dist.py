@@ -46,28 +46,60 @@ CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTs
 
 # Simulate without disturbance (for comparison)
 distsZero            = np.zeros([CD._Nx, numSimSteps])
-angleTG, drvTG, ys = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+angleTG, drvTG, ys   = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+
+################################################################################
+# Experimental: TG only, but with disturbances
+################################################################################
+dof        = CD._Nu
+
+legIdx = legs.index(leg)
+np.random.seed(600) # For perturbations generated randomly
+angleTGPure = np.zeros((dofTG, numTGSteps))
+drvTGPure   = np.zeros((dofTG, numTGSteps))
+phaseTGPure = np.zeros(numTGSteps)
+
+fullAngleNames = [(leg + ang) for ang in anglesTG]
+window = 2 # Amount of steps to look back and forward for minimum
+heightsPure        = np.array([None] * numTGSteps)
+groundContactPure = np.array([None] * numTGSteps)
+
+angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = TG.get_initial_vals()
+
+for t in range(numTGSteps-1):
+    heightsPure[t] = get_current_height(angleTGPure[:,t], fullAngleNames, legIdx)
+    if t > window*2: # Live detection
+        center = t-window
+        if heightsPure[center] == min(heightsPure[center-window:t]): # center is minimum
+            groundContactPure[t] = heightsPure[t]
+            
+            # TODO: hardcoded
+            dist = get_dists_slippery(200)[leg]
+            drvTGPure[:,t] = drvTGPure[:,t] + ctrl_to_tg(dist[dof:], legPos)*CD._Ts
+            
+    angleTGPure[:,t+1], drvTGPure[:,t+1], phaseTGPure[t+1] = \
+        TG.step_forward(angleTGPure[:,t], drvTGPure[:,t], phaseTGPure[t], TG._context[t])
+
 
 ################################################################################
 # Simulate with disturbances
 ################################################################################
-legIdx = legs.index(leg)
 np.random.seed(623) # For perturbations generated randomly
 
 # Tested:
 #distType = DistType.SLIPPERY_SURFACE
-#distType = DistType.UNEVEN_SURFACE
+distType = DistType.UNEVEN_SURFACE
 #distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
 #distType = DistType.SLOPED_SURFACE
 
 # The equivalent disturbance for this appears to be too large for the system
-distType = DistType.MISSING_LEG 
+#distType = DistType.MISSING_LEG 
             
 # Slippery surface
-maxVelocity = 150
+maxVelocity = 200
 
 # Uneven surface
-maxHt = 0.5/1000
+maxHt = 0.1/1000
 
 # Stepping on a bump (+ve) or in a pit (-ve)
 height  = -0.1/1000
@@ -92,8 +124,6 @@ usDist = np.zeros([CD._Nu, numSimSteps])
 heightsDist   = np.array([None] * numSimSteps)
 groundContact = np.array([None] * numSimSteps)
 window = 2*ctrlTsRatio
-
-fullAngleNames = [(leg + ang) for ang in anglesTG]
 
 for t in range(numSimSteps-1):
     k  = int(t / ctrlTsRatio)      # Index for TG data
@@ -130,7 +160,6 @@ for t in range(numSimSteps-1):
         drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
 
 # True angle + derivative (sampled at Ts)
-dof        = CD._Nu
 downSamp   = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
 angle2     = angleTG + ctrl_to_tg(ys[0:dof,downSamp], legPos)
 drv2       = drvTG + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
@@ -169,7 +198,8 @@ for i in range(dof):
     plt.title('Ground contact detection')
     plt.plot(time, heights, 'g')
     plt.plot(time2, heightsDist, 'm')
-    #plt.plot(time2, groundContact, 'k*')
+    plt.plot(time2, groundContact, 'k*')
+    #plt.plot(time, groundContactPure, 'k*')
 
 plt.show()
 
