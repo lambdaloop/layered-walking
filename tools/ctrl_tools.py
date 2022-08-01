@@ -266,8 +266,8 @@ class ControlAndDynamics:
         
         return (uNow, yNxt)
 
-    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, dists):
-        # TG is a trajectory generator
+    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, dists, bout=None):
+        # TG is a trajectory generator, bout is generated from some walking data
         dofTG       = TG._numAng
         numSimSteps = numTGSteps*ctrlTsRatio
         
@@ -275,6 +275,10 @@ class ControlAndDynamics:
         drvTG   = np.zeros((dofTG, numTGSteps))
         phaseTG = np.zeros(numTGSteps)
         ang, drv, phase = TG.get_initial_vals()
+        if bout: # Use data from bout instead, if defined
+            ang   = bout['angles'][self._leg][0]
+            drv   = bout['derivatives'][self._leg][0]
+            phase = bout['phases'][self._leg][0]
         angleTG[:,0], drvTG[:,0], phaseTG[0] = ang, drv, phase
         
         ys = np.zeros([self._Nx, numSimSteps])

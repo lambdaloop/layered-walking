@@ -5,7 +5,7 @@ import numpy as np
 import sys
 
 from tools.ctrl_tools import ControlAndDynamics
-from tools.trajgen_tools import TrajectoryGenerator
+from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl
 
@@ -46,15 +46,21 @@ legPos  = int(leg[-1])
 dofTG   = len(anglesTG)
 TG      = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
 
+wd       = WalkingData(filename)
+bout     = wd.get_bout([15, 0, 0])
+contexts = bout['contexts']
+
 angleTG = np.zeros((dofTG, numTGSteps))
 drvTG   = np.zeros((dofTG, numTGSteps))
 phaseTG = np.zeros(numTGSteps)
 
-angleTG[:,0], drvTG[:,0], phaseTG[0] = TG.get_initial_vals()
+angleTG[:,0] = bout['angles'][leg][0]
+drvTG[:,0]   = bout['derivatives'][leg][0]
+phaseTG[0]   = bout['phases'][leg][0]
 
 for t in range(numTGSteps-1):
     angleTG[:,t+1], drvTG[:,t+1], phaseTG[t+1] = \
-        TG.step_forward(angleTG[:,t], drvTG[:,t], phaseTG[t], TG._context[t])
+        TG.step_forward(angleTG[:,t], drvTG[:,t], phaseTG[t], contexts[t])
 
 ################################################################################
 # Trajectory generator + ctrl and dynamics
@@ -70,7 +76,7 @@ if basicTracking:
     phaseTG2 = phaseTG
     ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio, dists)
 else: 
-    angleTG2, drvTG2, ys = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, dists)
+    angleTG2, drvTG2, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, dists, bout)
 
 # True angle + derivative (sampled at Ts)
 dof      = CD._Nu

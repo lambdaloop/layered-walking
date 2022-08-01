@@ -5,7 +5,7 @@ import numpy as np
 import sys
 
 from tools.ctrl_tools import ControlAndDynamics
-from tools.trajgen_tools import TrajectoryGenerator
+from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl, legs
 from tools.dist_tools import *
@@ -41,12 +41,20 @@ legPos  = int(leg[-1])
 dofTG   = len(anglesTG)
 TG      = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
 
+wd       = WalkingData(filename)
+bout     = wd.get_bout([15, 0, 0])
+contexts = bout['contexts']
+
+ang   = bout['angles'][leg][0]
+drv   = bout['derivatives'][leg][0]
+phase = bout['phases'][leg][0]
+
 numSimSteps = numTGSteps*ctrlTsRatio
 CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
 
 # Simulate without disturbance (for comparison)
 distsZero            = np.zeros([CD._Nx, numSimSteps])
-angleTG, drvTG, ys   = CD.run(TG, TG._context, numTGSteps, ctrlTsRatio, distsZero)
+angleTG, drvTG, ys   = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, distsZero, bout)
 
 ################################################################################
 # Experimental: TG only, but with disturbances
@@ -64,7 +72,7 @@ window = 2 # Amount of steps to look back and forward for minimum
 heightsPure        = np.array([None] * numTGSteps)
 groundContactPure = np.array([None] * numTGSteps)
 
-angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = TG.get_initial_vals()
+angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = ang, drv, phase
 
 for t in range(numTGSteps-1):
     heightsPure[t] = get_current_height(angleTGPure[:,t], fullAngleNames, legIdx)
@@ -78,7 +86,7 @@ for t in range(numTGSteps-1):
             drvTGPure[:,t] = drvTGPure[:,t] + ctrl_to_tg(dist[dof:], legPos)*CD._Ts
             
     angleTGPure[:,t+1], drvTGPure[:,t+1], phaseTGPure[t+1] = \
-        TG.step_forward(angleTGPure[:,t], drvTGPure[:,t], phaseTGPure[t], TG._context[t])
+        TG.step_forward(angleTGPure[:,t], drvTGPure[:,t], phaseTGPure[t], contexts[t])
 
 
 ################################################################################
@@ -114,7 +122,6 @@ missingLeg = 'L1'
 angleTGDist      = np.zeros((dofTG, numTGSteps))
 drvTGDist        = np.zeros((dofTG, numTGSteps))
 phaseTGDist      = np.zeros(numTGSteps)
-ang, drv, phase = TG.get_initial_vals()
 angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = ang, drv, phase
 
 ysDist = np.zeros([CD._Nx, numSimSteps])
@@ -136,7 +143,7 @@ for t in range(numSimSteps-1):
         drv = drvTGDist[:,k] + ctrl_to_tg(ysDist[CD._Nu:,t]*CD._Ts, legPos)
         
         angleTGDist[:,k+1], drvTGDist[:,k+1], phaseTGDist[k+1] = \
-            TG.step_forward(ang, drv, phaseTGDist[k], TG._context[k])
+            TG.step_forward(ang, drv, phaseTGDist[k], contexts[k])
     
     dist           = get_zero_dists()[leg]    
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)

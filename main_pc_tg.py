@@ -3,7 +3,7 @@
 import matplotlib
 import numpy as np
 
-from tools.trajgen_tools import TrajectoryGenerator
+from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import legs, anglesTG, offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video
                             
@@ -26,9 +26,15 @@ angleTG = np.zeros((nLegs, dofTG, numSimSteps))
 drvTG   = np.zeros((nLegs, dofTG, numSimSteps))
 phaseTG = np.zeros((nLegs, numSimSteps))
 
+wd       = WalkingData(filename)
+bout     = wd.get_bout([15, 0, 0])
+contexts = bout['contexts']
+
 for ln, leg in enumerate(legs):
-    TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numSimSteps)
-    angleTG[ln,:,0], drvTG[ln,:,0], phaseTG[ln,0] = TG[ln].get_initial_vals()
+    TG[ln]          = TrajectoryGenerator(filename, leg, dofTG, numSimSteps)
+    angleTG[ln,:,0] = bout['angles'][leg][0]
+    drvTG[ln,:,0]   = bout['derivatives'][leg][0]
+    phaseTG[ln,0]   = bout['phases'][leg][0]
 
 for t in range(numSimSteps-1):
     ws = np.zeros(6)
@@ -39,7 +45,7 @@ for t in range(numSimSteps-1):
     for ln in range(nLegs):
         angleTG[ln, :,t+1], drvTG[ln, :,t+1], phaseTG[ln, t+1] = \
             TG[ln].step_forward(angleTG[ln, :,t], drvTG[ln, :,t],
-                                    px[ln], TG[ln]._context[t])
+                                    px[ln], contexts[t])
 
 matplotlib.use('Agg')
 angs           = angleTG.reshape(-1, angleTG.shape[-1]).T
