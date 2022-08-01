@@ -121,10 +121,12 @@ ysDist = np.zeros([CD._Nx, numSimSteps])
 usDist = np.zeros([CD._Nu, numSimSteps])
 
 # Visualize height detection and compare heights
-heightsDist   = np.array([None] * numSimSteps)
-groundContact = np.array([None] * numSimSteps)
-window = 2*ctrlTsRatio
+heightsDist     = np.array([None] * numSimSteps)
+groundContact   = np.array([None] * numSimSteps)
+window          = 2*ctrlTsRatio
+nonRepeatWindow = 3*ctrlTsRatio # Assumed minimum distance between minima
 
+lastDetection = -nonRepeatWindow
 for t in range(numSimSteps-1):
     k  = int(t / ctrlTsRatio)      # Index for TG data
     kn = int((t+1) / ctrlTsRatio)  # Next index for TG data      
@@ -142,19 +144,23 @@ for t in range(numSimSteps-1):
     if t > window*2: # Live detection
         center = t-window
         if heightsDist[center] == min(heightsDist[center-window:t]): # center is minimum
-            groundContact[t] = heightsDist[t] # visualize height detection
-            if distType == DistType.SLIPPERY_SURFACE:
-                dist = get_dists_slippery(maxVelocity)[leg]
-            elif distType == DistType.UNEVEN_SURFACE:
-                dist = get_dists_uneven(maxHt)[leg]
-            elif distType == DistType.BUMP_ON_SURFACE:
-                dist = get_dists_bump_or_pit(height, distLeg)[leg]
-            elif distType == DistType.SLOPED_SURFACE:
-                dist = get_dists_incline_or_decline(angle)[leg]
-            elif distType == DistType.MISSING_LEG:
-                dist = get_dists_missing_leg(missingLeg)[leg]
-            else:
-                pass
+            if t - lastDetection >= nonRepeatWindow:
+                groundContact[t] = heightsDist[t] # visualize height detection
+                lastDetection    = t
+                     
+                # Get disturbance
+                if distType == DistType.SLIPPERY_SURFACE:
+                    dist = get_dists_slippery(maxVelocity)[leg]
+                elif distType == DistType.UNEVEN_SURFACE:
+                    dist = get_dists_uneven(maxHt)[leg]
+                elif distType == DistType.BUMP_ON_SURFACE:
+                    dist = get_dists_bump_or_pit(height, distLeg)[leg]
+                elif distType == DistType.SLOPED_SURFACE:
+                    dist = get_dists_incline_or_decline(angle)[leg]
+                elif distType == DistType.MISSING_LEG:
+                    dist = get_dists_missing_leg(missingLeg)[leg]
+                else:
+                    pass
 
     usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k], angleTGDist[:,kn],
         drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
@@ -195,7 +201,7 @@ for i in range(dof):
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
     
     plt.subplot(3,dof,i+2*dof+1)
-    plt.title('Ground contact detection')
+    plt.title('Disturbance injected')
     plt.plot(time, heights, 'g')
     plt.plot(time2, heightsDist, 'm')
     plt.plot(time2, groundContact, 'k*')
