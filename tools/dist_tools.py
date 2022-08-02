@@ -69,8 +69,7 @@ def loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heights, t):
 
 
 ################################################################################
-# Main disturbance functions for users
-# Returns a dict of leg: disturbance (per-timestep)
+# All-in-one disturbance function; wrapper for all disturbance functions
 ################################################################################
 class DistType(Enum):
     ZERO             = 0
@@ -79,9 +78,32 @@ class DistType(Enum):
     BUMP_ON_SURFACE  = 3
     SLOPED_SURFACE   = 4
     MISSING_LEG      = 5
-    
 
 
+
+def get_dist(distDict, leg):
+    ''' distDict should contain keys distType and other key/values for args
+        for the specified disturbance type '''
+    distType = distDict['distType']
+    if distType == DistType.SLIPPERY_SURFACE:
+        return get_dists_slippery(distDict['maxVelocity'])[leg]
+    elif distType == DistType.UNEVEN_SURFACE:
+        return get_dists_uneven(distDict['maxHt'])[leg]
+    elif distType == DistType.BUMP_ON_SURFACE:
+        return get_dists_bump_or_pit(distDict['height'], distDict['distLeg'])[leg]
+    elif distType == DistType.SLOPED_SURFACE:
+        return get_dists_incline_or_decline(distDict['angle'])[leg]
+    elif distType == DistType.MISSING_LEG:
+        return get_dists_missing_leg(distDict['missingLeg'])[leg]
+    else: # Default to zero
+        return get_zero_dists()[leg]
+
+
+
+################################################################################
+# Disturbance functions for different scenarios
+# All functions return a dict of leg: disturbance (per-timestep)
+################################################################################
 def get_zero_dists():
     distDict = {}
     for leg in legs:

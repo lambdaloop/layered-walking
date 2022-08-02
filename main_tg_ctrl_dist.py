@@ -95,30 +95,21 @@ for t in range(numTGSteps-1):
 ################################################################################
 np.random.seed(623) # For perturbations generated randomly
 
-# Tested:
-#distType = DistType.SLIPPERY_SURFACE
-distType = DistType.UNEVEN_SURFACE
+distType  = DistType.SLIPPERY_SURFACE
+#distType = DistType.UNEVEN_SURFACE
 #distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
 #distType = DistType.SLOPED_SURFACE
+#distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
-# The equivalent disturbance for this appears to be too large for the system
-#distType = DistType.MISSING_LEG 
-            
-# Slippery surface
-maxVelocity = 200
-
-# Uneven surface
-maxHt = 0.1/1000
-
-# Stepping on a bump (+ve) or in a pit (-ve)
-height  = -0.1/1000
-distLeg = leg
-
-# Walking on an incline (+ve) or decline (-ve)
-angle = 10
-
-# Leg is missing
-missingLeg = 'L1'
+# Contains params relevant to any type of disturbance
+distDict = {'maxVelocity' : 200,        # Slippery surface
+            'maxHt'       : 0.1/1000,   # Uneven surface
+            'height'      : -0.1/1000,  # Stepping on a bump/pit
+            'distLeg'     : leg,        # Stepping on a bump/pit
+            'angle'       : 10,         # Walking on slope (degrees)
+            'missingLeg'  : 'L1'        # Missing leg
+           }
+distDict['distType'] = distType
 
 angleTGDist      = np.zeros((dofTG, numTGSteps))
 drvTGDist        = np.zeros((dofTG, numTGSteps))
@@ -152,20 +143,7 @@ for t in range(numSimSteps-1):
     if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsDist, t):
         groundContact[t] = heightsDist[t] # Visualize height minimum detection
         lastDetection    = t
-                         
-        # Get disturbance
-        if distType == DistType.SLIPPERY_SURFACE:
-            dist = get_dists_slippery(maxVelocity)[leg]
-        elif distType == DistType.UNEVEN_SURFACE:
-            dist = get_dists_uneven(maxHt)[leg]
-        elif distType == DistType.BUMP_ON_SURFACE:
-            dist = get_dists_bump_or_pit(height, distLeg)[leg]
-        elif distType == DistType.SLOPED_SURFACE:
-            dist = get_dists_incline_or_decline(angle)[leg]
-        elif distType == DistType.MISSING_LEG:
-            dist = get_dists_missing_leg(missingLeg)[leg]
-        else:
-            pass
+        dist             = get_dist(distDict, leg)               
 
     usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k],
         angleTGDist[:,kn], drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
