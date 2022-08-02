@@ -50,34 +50,21 @@ def get_dists_endeffector_moves(height, leg):
 ################################################################################
 # Ground contact functions for users
 ################################################################################
-def get_ground_contact_threshold(angles, fullAngleNames, legIdx):
-    ''' Expect angles in degrees, in order specified by anglesTG, e.g. angleTG '''
-    angs     = angles.reshape(-1, angles.shape[-1]).T
-    poses    = angles_to_pose_names(angs, fullAngleNames)
-
-    numSteps       = angles.shape[1] 
-    contactHeights = np.array([])
-
-    for t in range(1, numSteps-1):
-        lastHeight = poses[t-1, legIdx, -1, -1]
-        thisHeight = poses[t, legIdx, -1, -1]
-        nextHeight = poses[t+1, legIdx, -1, -1]
-    
-        if thisHeight < lastHeight and thisHeight < nextHeight:
-            contactHeights = np.append(contactHeights, thisHeight)
-
-    # Hard-coded constants
-    DISCARD   = 2
-    EPS       = 0.01
-    threshold = -sorted(-contactHeights)[DISCARD] + EPS
-    return threshold
-
-
-
 def get_current_height(angles, fullAngleNames, legIdx):
     ''' Expect angles in degrees, in order specified by anglesTG '''
     pose = angles_to_pose_names(angles.reshape(-1, len(anglesTG)), fullAngleNames)
     return pose[0, legIdx, -1, -1]
+
+
+
+def loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heights, t):
+    ''' Returns boolean of whether heights[center] is a local minimum '''
+    if t > locMinWindow*2:  
+        center = t - locMinWindow
+        if heights[center] == min(heights[center-locMinWindow:t]):
+            if t - lastDetection >= nonRepeatWindow:
+                return True
+    return False
 
 
 

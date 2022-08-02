@@ -67,6 +67,8 @@ drvTGPure   = np.zeros((dofTG, numTGSteps))
 phaseTGPure = np.zeros(numTGSteps)
 
 fullAngleNames = [(leg + ang) for ang in anglesTG]
+
+'''
 window = 2 # Amount of steps to look back and forward for minimum
 heightsPure        = np.array([None] * numTGSteps)
 groundContactPure = np.array([None] * numTGSteps)
@@ -86,7 +88,7 @@ for t in range(numTGSteps-1):
             
     angleTGPure[:,t+1], drvTGPure[:,t+1], phaseTGPure[t+1] = \
         TG.step_forward(angleTGPure[:,t], drvTGPure[:,t], phaseTGPure[t], contexts[t])
-
+'''
 
 ################################################################################
 # Simulate with disturbances
@@ -129,10 +131,10 @@ usDist = np.zeros([CD._Nu, numSimSteps])
 # Visualize height detection and compare heights
 heightsDist     = np.array([None] * numSimSteps)
 groundContact   = np.array([None] * numSimSteps)
-window          = 2*ctrlTsRatio
+locMinWindow    = 2*ctrlTsRatio
 nonRepeatWindow = 3*ctrlTsRatio # Assumed minimum distance between minima
+lastDetection   = -nonRepeatWindow
 
-lastDetection = -nonRepeatWindow
 for t in range(numSimSteps-1):
     k  = int(t / ctrlTsRatio)      # Index for TG data
     kn = int((t+1) / ctrlTsRatio)  # Next index for TG data      
@@ -147,29 +149,26 @@ for t in range(numSimSteps-1):
     dist           = get_zero_dists()[leg]    
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
     
-    if t > window*2: # Live detection
-        center = t-window
-        if heightsDist[center] == min(heightsDist[center-window:t]): # center is minimum
-            if t - lastDetection >= nonRepeatWindow:
-                groundContact[t] = heightsDist[t] # visualize height detection
-                lastDetection    = t
-                     
-                # Get disturbance
-                if distType == DistType.SLIPPERY_SURFACE:
-                    dist = get_dists_slippery(maxVelocity)[leg]
-                elif distType == DistType.UNEVEN_SURFACE:
-                    dist = get_dists_uneven(maxHt)[leg]
-                elif distType == DistType.BUMP_ON_SURFACE:
-                    dist = get_dists_bump_or_pit(height, distLeg)[leg]
-                elif distType == DistType.SLOPED_SURFACE:
-                    dist = get_dists_incline_or_decline(angle)[leg]
-                elif distType == DistType.MISSING_LEG:
-                    dist = get_dists_missing_leg(missingLeg)[leg]
-                else:
-                    pass
+    if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsDist, t):
+        groundContact[t] = heightsDist[t] # Visualize height minimum detection
+        lastDetection    = t
+                         
+        # Get disturbance
+        if distType == DistType.SLIPPERY_SURFACE:
+            dist = get_dists_slippery(maxVelocity)[leg]
+        elif distType == DistType.UNEVEN_SURFACE:
+            dist = get_dists_uneven(maxHt)[leg]
+        elif distType == DistType.BUMP_ON_SURFACE:
+            dist = get_dists_bump_or_pit(height, distLeg)[leg]
+        elif distType == DistType.SLOPED_SURFACE:
+            dist = get_dists_incline_or_decline(angle)[leg]
+        elif distType == DistType.MISSING_LEG:
+            dist = get_dists_missing_leg(missingLeg)[leg]
+        else:
+            pass
 
-    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k], angleTGDist[:,kn],
-        drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
+    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k],
+        angleTGDist[:,kn], drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
 
 # True angle + derivative (sampled at Ts)
 downSamp   = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
