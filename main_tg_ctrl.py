@@ -66,9 +66,7 @@ for t in range(numTGSteps-1):
 # Trajectory generator + ctrl and dynamics
 ################################################################################
 numSimSteps = numTGSteps*ctrlTsRatio
-
-CD    = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
-dists = np.zeros([CD._Nx, numSimSteps])
+CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
 
 if basicTracking:
     angleTG2 = angleTG
@@ -76,7 +74,7 @@ if basicTracking:
     phaseTG2 = phaseTG
     ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio, dists)
 else: 
-    angleTG2, drvTG2, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, dists, bout)
+    angleTG2, drvTG2, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
 
 # True angle + derivative (sampled at Ts)
 dof      = CD._Nu

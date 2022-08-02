@@ -266,10 +266,12 @@ class ControlAndDynamics:
         
         return (uNow, yNxt)
 
-    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, dists, bout=None):
+    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, bout=None):
         # TG is a trajectory generator, bout is generated from some walking data
+        # This function uses zero disturbances
         dofTG       = TG._numAng
         numSimSteps = numTGSteps*ctrlTsRatio
+        dist        = np.zeros(self._Nx)
         
         angleTG = np.zeros((dofTG, numTGSteps))
         drvTG   = np.zeros((dofTG, numTGSteps))
@@ -294,9 +296,9 @@ class ControlAndDynamics:
                 
                 angleTG[:,k+1], drvTG[:,k+1], phaseTG[k+1] = \
                     TG.step_forward(ang, drv, phaseTG[k], contexts[k])
-
+        
             us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angleTG[:,k], angleTG[:,kn],
-                                                   drvTG[:,k]/ctrlTsRatio, drvTG[:,kn]/ctrlTsRatio, dists[:,t])
+                                                   drvTG[:,k]/ctrlTsRatio, drvTG[:,kn]/ctrlTsRatio, dist)
         
         return (angleTG, drvTG, ys)
 

@@ -53,8 +53,7 @@ numSimSteps = numTGSteps*ctrlTsRatio
 CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
 
 # Simulate without disturbance (for comparison)
-distsZero            = np.zeros([CD._Nx, numSimSteps])
-angleTG, drvTG, ys   = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, distsZero, bout)
+angleTG, drvTG, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
 
 ################################################################################
 # Experimental: TG only, but with disturbances
