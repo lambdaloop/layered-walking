@@ -34,6 +34,23 @@ inputPen = 1e-8
 
 leg = sys.argv[1]
 
+distType  = DistType.SLIPPERY_SURFACE
+#distType = DistType.UNEVEN_SURFACE
+#distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
+#distType = DistType.SLOPED_SURFACE
+#distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
+
+# Contains params relevant to any type of disturbance
+distDict = {'maxVelocity' : 200,        # Slippery surface
+            'maxHt'       : 0.1/1000,   # Uneven surface
+            'height'      : -0.1/1000,  # Stepping on a bump/pit
+            'distLeg'     : leg,        # Stepping on a bump/pit
+            'angle'       : 10,         # Walking on slope (degrees)
+            'missingLeg'  : 'L1'        # Missing leg
+           }
+distDict['distType'] = distType
+
+plotPureTG = False # Whether or not to also plot data from disturbed pure TG
 ################################################################################
 # Trajectory generator + ctrl and dynamics
 ################################################################################
@@ -56,61 +73,45 @@ CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTs
 angleTG, drvTG, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
 
 ################################################################################
-# Experimental: TG only, but with disturbances
+# Experimental: Pure TG, but with disturbances
 ################################################################################
-dof        = CD._Nu
-
-legIdx = legs.index(leg)
 np.random.seed(600) # For perturbations generated randomly
+
+dof            = CD._Nu
+legIdx         = legs.index(leg)
+fullAngleNames = [(leg + ang) for ang in anglesTG]
+
 angleTGPure = np.zeros((dofTG, numTGSteps))
 drvTGPure   = np.zeros((dofTG, numTGSteps))
 phaseTGPure = np.zeros(numTGSteps)
 
-fullAngleNames = [(leg + ang) for ang in anglesTG]
+locMinWindow    = 2
+nonRepeatWindow = 3 # Assumed minimum distance between minima
+lastDetection   = -nonRepeatWindow
 
-'''
-window = 2 # Amount of steps to look back and forward for minimum
-heightsPure        = np.array([None] * numTGSteps)
+heightsPure       = np.array([None] * numTGSteps)
 groundContactPure = np.array([None] * numTGSteps)
 
 angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = ang, drv, phase
 
-for t in range(numTGSteps-1):
+for t in range(numTGSteps-1):        
     heightsPure[t] = get_current_height(angleTGPure[:,t], fullAngleNames, legIdx)
-    if t > window*2: # Live detection
-        center = t-window
-        if heightsPure[center] == min(heightsPure[center-window:t]): # center is minimum
-            groundContactPure[t] = heightsPure[t]
-            
-            # TODO: hardcoded
-            dist = get_dists_slippery(200)[leg]
-            drvTGPure[:,t] = drvTGPure[:,t] + ctrl_to_tg(dist[dof:], legPos)*CD._Ts
+
+    if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsPure, t):
+        groundContactPure[t] = heightsPure[t] # Visualize height minimum detection
+        lastDetection        = t
+        dist                 = get_dist(distDict, leg)       
+        
+        # Add perturbation
+        angleTGPure[:,t] = angleTGPure[:,t] + ctrl_to_tg(dist[:dof], legPos)       
+        drvTGPure[:,t]   = drvTGPure[:,t] + ctrl_to_tg(dist[dof:], legPos)*CD._Ts
             
     angleTGPure[:,t+1], drvTGPure[:,t+1], phaseTGPure[t+1] = \
         TG.step_forward(angleTGPure[:,t], drvTGPure[:,t], phaseTGPure[t], contexts[t])
-'''
 
 ################################################################################
 # Simulate with disturbances
 ################################################################################
-np.random.seed(623) # For perturbations generated randomly
-
-distType  = DistType.SLIPPERY_SURFACE
-#distType = DistType.UNEVEN_SURFACE
-#distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
-#distType = DistType.SLOPED_SURFACE
-#distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
-
-# Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 200,        # Slippery surface
-            'maxHt'       : 0.1/1000,   # Uneven surface
-            'height'      : -0.1/1000,  # Stepping on a bump/pit
-            'distLeg'     : leg,        # Stepping on a bump/pit
-            'angle'       : 10,         # Walking on slope (degrees)
-            'missingLeg'  : 'L1'        # Missing leg
-           }
-distDict['distType'] = distType
-
 angleTGDist      = np.zeros((dofTG, numTGSteps))
 drvTGDist        = np.zeros((dofTG, numTGSteps))
 phaseTGDist      = np.zeros(numTGSteps)
@@ -120,11 +121,11 @@ ysDist = np.zeros([CD._Nx, numSimSteps])
 usDist = np.zeros([CD._Nu, numSimSteps])
 
 # Visualize height detection and compare heights
-heightsDist     = np.array([None] * numSimSteps)
-groundContact   = np.array([None] * numSimSteps)
-locMinWindow    = 2*ctrlTsRatio
-nonRepeatWindow = 3*ctrlTsRatio # Assumed minimum distance between minima
-lastDetection   = -nonRepeatWindow
+heightsDist       = np.array([None] * numSimSteps)
+groundContactDist = np.array([None] * numSimSteps)
+locMinWindow      = 2*ctrlTsRatio
+nonRepeatWindow   = 3*ctrlTsRatio # Assumed minimum distance between minima
+lastDetection     = -nonRepeatWindow
 
 for t in range(numSimSteps-1):
     k  = int(t / ctrlTsRatio)      # Index for TG data
@@ -141,9 +142,9 @@ for t in range(numSimSteps-1):
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
     
     if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsDist, t):
-        groundContact[t] = heightsDist[t] # Visualize height minimum detection
-        lastDetection    = t
-        dist             = get_dist(distDict, leg)               
+        groundContactDist[t] = heightsDist[t] # Visualize height minimum detection
+        lastDetection        = t
+        dist                 = get_dist(distDict, leg)               
 
     usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k],
         angleTGDist[:,kn], drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
@@ -174,22 +175,31 @@ for i in range(dof):
     plt.plot(time, angle2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, angleTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, angle2Dist[idx,:], 'm--', label=f'2Layer-Dist')
+    if plotPureTG:
+        plt.plot(time, angleTGPure[idx,:], 'k', label=f'PureTG-Dist')
+
     if i==0:
         plt.legend()
+
     plt.subplot(3,dof,i+dof+1)
     plt.title('Velocity')
     plt.plot(time, drvTG[idx,:], 'b', label=f'2LayerTG')
     plt.plot(time, drv2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, drvTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
-    
+    if plotPureTG:
+        plt.plot(time, drvTGPure[idx,:], 'k', label=f'PureTG-Dist')
+        
     plt.subplot(3,dof,i+2*dof+1)
     plt.title('Disturbance injected')
-    plt.plot(time, heights, 'g')
-    plt.plot(time2, heightsDist, 'm')
-    plt.plot(time2, groundContact, 'k*')
-    #plt.plot(time, groundContactPure, 'k*')
+    plt.plot(time, heights, 'g', label=f'2Layer')
+    plt.plot(time2, heightsDist, 'm', label=f'2Layer-Dist')
+    if plotPureTG:
+        plt.plot(time, heightsPure, 'k', label=f'PureTG-Dist')
+    
+    plt.plot(time2, groundContactDist, 'm*')
+    if plotPureTG:
+        plt.plot(time, groundContactPure, 'k*')
 
 plt.show()
-
 
