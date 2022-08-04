@@ -151,5 +151,5 @@ class WalkingData:
             # a little noise to get more different contexts
             dist = dist + np.random.normal(size=dist.shape)*0.1
             ix = np.argsort(dist)
-        bnum = self.bnums_uniq[check][ix[0]]
+        bnum = self.bnums_uniq[check][ix[offset]]
         return self.get_bnum(bnum)
