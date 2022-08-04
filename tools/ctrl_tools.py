@@ -302,10 +302,11 @@ class ControlAndDynamics:
         
         return (angleTG, drvTG, ys)
 
-    def run_basic(self, angle, drv, ctrlTsRatio, dists):
+    def run_basic(self, angle, drv, ctrlTsRatio):
         # track given angles and drvs
         numTGSteps  = angle.shape[1]
         numSimSteps = numTGSteps*ctrlTsRatio
+        dist        = np.zeros(self._Nx)
         
         ys = np.zeros([self._Nx, numSimSteps])
         us = np.zeros([self._Nu, numSimSteps])
@@ -315,7 +316,7 @@ class ControlAndDynamics:
             kn = int((t+1) / ctrlTsRatio)  # Next index for TG data            
 
             us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angle[:,k], angle[:,kn],
-                                                   drv[:,k]/ctrlTsRatio, drv[:,kn]/ctrlTsRatio, dists[:,t])
+                                                   drv[:,k]/ctrlTsRatio, drv[:,kn]/ctrlTsRatio, dist)
 
         return ys
         

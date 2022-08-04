@@ -72,7 +72,7 @@ if basicTracking:
     angleTG2 = angleTG
     drvTG2   = drvTG
     phaseTG2 = phaseTG
-    ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio, dists)
+    ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio)
 else: 
     angleTG2, drvTG2, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
 
