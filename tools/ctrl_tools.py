@@ -212,6 +212,24 @@ def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
 
 
 
+def get_delayed_act_system(Areal, Breal, numDelays):
+    ''' Augment system to include delayed actuation '''
+    Nx = Breal.shape[0]
+    Nu = Breal.shape[1]
+    
+    A = np.zeros([(numDelays+1)*Nx, (numDelays+1)*Nx])
+    A[0:Nx, 0:Nx] = Areal
+    A[0:Nx, numDelays*Nx:(numDelays+1)*Nx] = Breal
+    for i in range(numDelays-1):
+        A[(i+2)*Nx:(i+3)*Nx, (i+1)*Nx:(i+2)*Nx] = np.eye(Nx)
+    
+    B = np.zeros([Nx*(numDelays+1), Nu])
+    B[Nx:2*Nx, :] = np.eye(Nx)
+
+    return (A, B)
+
+
+
 class ControlAndDynamics:
     def __init__(self, leg, anglePen, drvPen, inputPen, Ts):
         # Assumes we already ran get_linearized_system() for the appropriate leg
