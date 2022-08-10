@@ -67,7 +67,7 @@ drv   = bout['derivatives'][leg][0]
 phase = bout['phases'][leg][0]
 
 numSimSteps = numTGSteps*ctrlTsRatio
-CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
+CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio, 0)
 
 # Simulate without disturbance (for comparison)
 angleTG, drvTG, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)

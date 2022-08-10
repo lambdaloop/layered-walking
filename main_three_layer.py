@@ -61,7 +61,7 @@ bout = wd.get_bout([15, 0, 0])
 
 for ln, leg in enumerate(legs):
     TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
-    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
+    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio, 0)
 
     ang[ln] = bout['angles'][leg][0]
     drv[ln] = bout['derivatives'][leg][0]

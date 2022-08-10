@@ -60,7 +60,7 @@ wd = WalkingData(filename)
 
 for ln, leg in enumerate(legs):
     TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
-    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
+    CD[ln] = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio, 0)
 
 fictrac_speeds = [4, 8, 12, 16]
 fictrac_rots = [-8, -4, 0, 4, 8]

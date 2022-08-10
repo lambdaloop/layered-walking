@@ -9,54 +9,56 @@ from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl
 
-# Usage: python3 main_tg_ctrl.py <leg> <optional: basic>
+# Usage: python3 main_tg_ctrl_updated.py <leg>
 ################################################################################
 # User-defined parameters
 ################################################################################
 filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 #filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
 
-numTGSteps  = 200   # How many timesteps to run TG for
-Ts          = 1/300 # Sampling time
-ctrlTsRatio = 5    # Controller will sample at Ts / ctrlTsRatio
+walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
+
+numTGSteps     = 200   # How many timesteps to run TG for
+Ts             = 1/300 # How fast TG runs
+ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
+ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
+actDelay       = 0     # Seconds; typically 0.02-0.04
 
 # LQR penalties
-drvPen = {'L1': 1e-2, # Looks gait-like but different from pure TG
-          'L2': 1e-2, # Good
-          'L3': 1e-2, # Looks the same but slower than pure TG
-          'R1': 1e-2, # Looks the same but slower than pure TG
-          'R2': 1e-2, # I mean, even pure TG doesn't look right
-          'R3': 1e-2  # Looks the same but slower than pure TG
+drvPen = {'L1': 1e-2, # 
+          'L2': 1e-2, # 
+          'L3': 1e-2, # 
+          'R1': 1e-2, # 
+          'R2': 1e-2, # 
+          'R3': 1e-2  # 
          }
 anglePen = 1e0
 inputPen = 1e-8
 
 leg = sys.argv[1]
 
-# Use this option to track pre-generated trajectory
-basicTracking = False  
-if len(sys.argv) > 2 and sys.argv[2] == 'basic':
-    print('Basic tracking (use trajectory from solo TG)')
-    basicTracking = True
+################################################################################
+# Get walking data
+################################################################################
+wd       = WalkingData(filename)
+bout     = wd.get_bout(walkingSettings)
+contexts = bout['contexts']
+
+angInit   = bout['angles'][leg][0]
+drvInit   = bout['derivatives'][leg][0]
+phaseInit = bout['phases'][leg][0]
 
 ################################################################################
-# Trajectory generator
+# Solo trajectory generator
 ################################################################################
 legPos  = int(leg[-1])
 dofTG   = len(anglesTG)
 TG      = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
 
-wd       = WalkingData(filename)
-bout     = wd.get_bout([15, 0, 0])
-contexts = bout['contexts']
-
 angleTG = np.zeros((dofTG, numTGSteps))
 drvTG   = np.zeros((dofTG, numTGSteps))
 phaseTG = np.zeros(numTGSteps)
-
-angleTG[:,0] = bout['angles'][leg][0]
-drvTG[:,0]   = bout['derivatives'][leg][0]
-phaseTG[0]   = bout['phases'][leg][0]
+angleTG[:,0], drvTG[:,0], phaseTG[0] = angInit, drvInit, phaseInit
 
 for t in range(numTGSteps-1):
     angleTG[:,t+1], drvTG[:,t+1], phaseTG[t+1] = \
@@ -65,20 +67,41 @@ for t in range(numTGSteps-1):
 ################################################################################
 # Trajectory generator + ctrl and dynamics
 ################################################################################
-numSimSteps = numTGSteps*ctrlTsRatio
-CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio)
+numDelays = int(actDelay / Ts * ctrlSpeedRatio)
+CD        = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, 
+                               Ts/ctrlSpeedRatio, numDelays)
 
-if basicTracking:
-    angleTG2 = angleTG
-    drvTG2   = drvTG
-    phaseTG2 = phaseTG
-    ys       = CD.run_basic(angleTG2, drvTG2, ctrlTsRatio)
-else: 
-    angleTG2, drvTG2, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
+numSimSteps   = numTGSteps*ctrlSpeedRatio
+angleTG2      = np.zeros((dofTG, numTGSteps))
+drvTG2        = np.zeros((dofTG, numTGSteps))
+phaseTG2      = np.zeros(numTGSteps)
+angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
-# True angle + derivative (sampled at Ts)
+ys    = np.zeros([CD._Nx, numSimSteps])
+us    = np.zeros([CD._Nu, numSimSteps])
+dist  = np.zeros(CD._Nx) # Zero disturbances
+
+for t in range(numSimSteps-1):
+    k  = int(t / ctrlSpeedRatio)     # Index for TG data
+    kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
+
+    if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
+        ang   = angleTG2[:,k] + ctrl_to_tg(ys[0:CD._Nu,t], legPos)
+        drv   = drvTG2[:,k] + ctrl_to_tg(ys[CD._Nu:,t]*CD._Ts, legPos)
+        angleTG2[:,k+1], drvTG2[:,k+1], phaseTG2[k+1] = \
+            TG.step_forward(ang, drv, phaseTG2[k], contexts[k])
+
+        # Generate trajectory for future
+        for m in range(k+1, min(k+ctrlCommRatio, numTGSteps-1)):
+            angleTG2[:,m+1], drvTG2[:,m+1], phaseTG2[m+1] = \
+                TG.step_forward(angleTG2[:,m], drvTG2[:,m], phaseTG2[m], contexts[m])
+
+    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,k], angleTG2[:,kn], 
+                         drvTG2[:,k]/ctrlSpeedRatio, drvTG2[:,kn]/ctrlSpeedRatio, dist)
+
+# True angle + derivatives
 dof      = CD._Nu
-downSamp = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
+downSamp = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
 angle2   = angleTG2 + ctrl_to_tg(ys[0:dof,downSamp], legPos)
 drv2     = drvTG2 + ctrl_to_tg(ys[dof:,downSamp]*CD._Ts, legPos)
 time     = np.array(range(numTGSteps))

@@ -214,6 +214,9 @@ def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
 
 def get_delayed_act_system(Areal, Breal, numDelays):
     ''' Augment system to include delayed actuation '''
+    if numDelays == 0:
+        return (Areal, Breal)
+    
     Nx = Breal.shape[0]
     Nu = Breal.shape[1]
     
@@ -231,22 +234,29 @@ def get_delayed_act_system(Areal, Breal, numDelays):
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, anglePen, drvPen, inputPen, Ts):
+    def __init__(self, leg, anglePen, drvPen, inputPen, Ts, numDelays):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
-
-        self._Nx     = len(ALin)
-        self._Nu     = int(self._Nx / 2)
-        self._Ts     = Ts
-        self._leg    = leg
-        self._legPos = int(leg[-1])
+        self._Ts        = Ts
+        self._leg       = leg
+        self._legPos    = int(leg[-1])
+        self._numDelays = numDelays
+        self._Nr        = len(ALin) # Number of 'real' states
         
         # Zeroth order discretization
-        self._A = np.eye(self._Nx) + ALin*Ts
-        self._B = Ts*BLin
-        eigsOL    = np.linalg.eig(self._A)[0]
+        self._Ar  = np.eye(self._Nr) + ALin*Ts
+        self._Br  = Ts*BLin
+        eigsOL    = np.linalg.eig(self._Ar)[0]
         specRadOL = max(np.abs(eigsOL))
-        print(f'Open-loop spectral radius: {specRadOL}')
+        print(f'Open-loop spectral radius (real system): {specRadOL}')
+
+        # Convert to delayed system
+        self._Nx = (numDelays+1)*self._Nr
+        self._Nu = int(self._Nr / 2)
+        self._A, self._B = get_delayed_act_system(self._Ar, self._Br, numDelays)
+        eigsDelayOL    = np.linalg.eig(self._A)[0]
+        specRadDelayOL = max(np.abs(eigsDelayOL))
+        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL}')
 
         # Sanity check: controllability
         Qc = control.ctrb(self._A, self._B)
@@ -255,87 +265,42 @@ class ControlAndDynamics:
             print('Error: System uncontrollable!')
 
         # LQR matrices
-        Q1 = anglePen * np.eye(self._Nu)
-        Q2 = drvPen * np.eye(self._Nu)
-        Q  = block_diag(Q1, Q2)
-        R  = inputPen * np.eye(self._Nu)
-
+        QAngle = anglePen * np.eye(self._Nu)
+        QDrv   = drvPen * np.eye(self._Nu)
+        Q1     = block_diag(QAngle, QDrv)
+        Q      = np.zeros([self._Nx, self._Nx])
+        Q[0:self._Nx, 0:self._Nx] = Q1 # Only penalize actual states       
+        R      = inputPen * np.eye(self._Nu)
+        
         # Generate controller
         self._K   = control.dlqr(self._A, self._B, Q, R)[0]
         ACL       = self._A - self._B @ self._K
         eigsCL    = np.linalg.eig(ACL)[0]
         specRadCL = max(np.abs(eigsCL))
-        print(f'Closed-loop spectral radius: {specRadCL}')
+        print(f'Closed-loop spectral radius (delayed system): {specRadCL}')
         
-    def step_forward(self, yNow, angleNow, angleNxt, drvNow, drvNxt, dists):
+    def step_forward(self, yNow, angleNow, angleNxt, drvNow, drvNxt, dist):
+        ''' 
+        yNow  : includes delay states as well
+        dists : size of real system (not including delay states)
+        '''   
         # Assumes angles and drv are in TG format
         # dists are disturbances, in ctrl format
-        xEqmFlat = self._xEqm.flatten()
+        xEqmFlat = self._xEqm.flatten()        
+        trajNow  = np.append(tg_to_ctrl(angleNow, self._legPos), 
+                             tg_to_ctrl(drvNow/self._Ts, self._legPos))
+        trajNxt  = np.append(tg_to_ctrl(angleNxt, self._legPos), 
+                             tg_to_ctrl(drvNxt/self._Ts, self._legPos))
+        wTraj    = self._A @ (trajNow - xEqmFlat) + xEqmFlat - trajNxt
         
-        trajNow = np.append(tg_to_ctrl(angleNow, self._legPos), 
-                            tg_to_ctrl(drvNow/self._Ts, self._legPos))
-        trajNxt = np.append(tg_to_ctrl(angleNxt, self._legPos), 
-                            tg_to_ctrl(drvNxt/self._Ts, self._legPos))
-        wTraj   = self._A @ (trajNow - xEqmFlat) + xEqmFlat - trajNxt
-
+        zeroPadding = np.zeros(self._Nx - self._Nr) # For delay states
+        wTrajFull   = np.append(wTraj, zeroPadding)
+        distFull    = np.append(dist, zeroPadding)
+        
         # Give some look-ahead to wtraj
-        uNow = -self._K @ (yNow + wTraj)
-        yNxt = self._A @ yNow + self._B @ uNow + wTraj + dists
+        uNow = -self._K @ (yNow + wTrajFull)
+        yNxt = self._A @ yNow + self._B @ uNow + wTrajFull + distFull
         
         return (uNow, yNxt)
 
-    def run(self, TG, contexts, numTGSteps, ctrlTsRatio, bout=None):
-        # TG is a trajectory generator, bout is generated from some walking data
-        # This function uses zero disturbances
-        dofTG       = TG._numAng
-        numSimSteps = numTGSteps*ctrlTsRatio
-        dist        = np.zeros(self._Nx)
-        
-        angleTG = np.zeros((dofTG, numTGSteps))
-        drvTG   = np.zeros((dofTG, numTGSteps))
-        phaseTG = np.zeros(numTGSteps)
-        ang, drv, phase = TG.get_initial_vals()
-        if bout: # Use data from bout instead, if defined
-            ang   = bout['angles'][self._leg][0]
-            drv   = bout['derivatives'][self._leg][0]
-            phase = bout['phases'][self._leg][0]
-        angleTG[:,0], drvTG[:,0], phaseTG[0] = ang, drv, phase
-        
-        ys = np.zeros([self._Nx, numSimSteps])
-        us = np.zeros([self._Nu, numSimSteps])
-
-        for t in range(numSimSteps-1):
-            k  = int(t / ctrlTsRatio)      # Index for TG data
-            kn = int((t+1) / ctrlTsRatio)  # Next index for TG data
-            
-            if not ((t+1) % ctrlTsRatio): 
-                ang = angleTG[:,k] + ctrl_to_tg(ys[0:self._Nu,t], self._legPos)         
-                drv = drvTG[:,k] + ctrl_to_tg(ys[self._Nu:,t]*self._Ts, self._legPos)
-                
-                angleTG[:,k+1], drvTG[:,k+1], phaseTG[k+1] = \
-                    TG.step_forward(ang, drv, phaseTG[k], contexts[k])
-        
-            us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angleTG[:,k], angleTG[:,kn],
-                                                   drvTG[:,k]/ctrlTsRatio, drvTG[:,kn]/ctrlTsRatio, dist)
-        
-        return (angleTG, drvTG, ys)
-
-    def run_basic(self, angle, drv, ctrlTsRatio):
-        # track given angles and drvs
-        numTGSteps  = angle.shape[1]
-        numSimSteps = numTGSteps*ctrlTsRatio
-        dist        = np.zeros(self._Nx)
-        
-        ys = np.zeros([self._Nx, numSimSteps])
-        us = np.zeros([self._Nu, numSimSteps])
-
-        for t in range(numSimSteps-1):
-            k  = int(t / ctrlTsRatio)      # Index for TG data
-            kn = int((t+1) / ctrlTsRatio)  # Next index for TG data            
-
-            us[:,t], ys[:,t+1] = self.step_forward(ys[:,t], angle[:,k], angle[:,kn],
-                                                   drv[:,k]/ctrlTsRatio, drv[:,kn]/ctrlTsRatio, dist)
-
-        return ys
-        
 
