@@ -223,18 +223,19 @@ def get_delayed_act_system(Areal, Breal, numDelays):
     Nx = Breal.shape[0]
     Nu = Breal.shape[1]
     
-    A = np.zeros([(numDelays+1)*Nx, (numDelays+1)*Nx])
+    A = np.zeros([Nx + numDelays*Nu, Nx + numDelays*Nu])
     A[0:Nx, 0:Nx] = Areal
-    A[0:Nx, numDelays*Nx:(numDelays+1)*Nx] = Breal
+    A[0:Nx, Nx+(numDelays-1)*Nu:Nx+numDelays*Nu] = Breal
+
     for i in range(numDelays-1):
-        A[(i+2)*Nx:(i+3)*Nx, (i+1)*Nx:(i+2)*Nx] = np.eye(Nx)
+        A[Nx+(i+1)*Nu:Nx+(i+2)*Nu, Nx+i*Nu:Nx+(i+1)*Nu] = np.eye(Nu)
     
-    B = np.zeros([Nx*(numDelays+1), Nu])
-    B[Nx:2*Nx, :] = np.eye(Nx)
+    B = np.zeros([Nx+numDelays*Nu, Nu])
+    B[Nx:Nx+Nu, :] = np.eye(Nu)
 
     return (A, B)
 
-
+    
 
 class ControlAndDynamics:
     def __init__(self, leg, anglePen, drvPen, inputPen, Ts, numDelays):
@@ -244,7 +245,7 @@ class ControlAndDynamics:
         self._leg       = leg
         self._legPos    = int(leg[-1])
         self._numDelays = numDelays
-        self._Nr        = len(ALin) # Number of 'real' states
+        self._Nr        = ALin.shape[0] # Number of 'real' states
         
         # Zeroth order discretization
         self._Ar  = np.eye(self._Nr) + ALin*Ts
@@ -254,9 +255,9 @@ class ControlAndDynamics:
         print(f'Open-loop spectral radius (real system): {specRadOL}')
 
         # Convert to delayed system
-        self._Nx = (numDelays+1)*self._Nr
-        self._Nu = int(self._Nr / 2)
         self._A, self._B = get_delayed_act_system(self._Ar, self._Br, numDelays)
+        self._Nx = self._B.shape[0]
+        self._Nu = self._B.shape[1]
         eigsDelayOL    = np.linalg.eig(self._A)[0]
         specRadDelayOL = max(np.abs(eigsDelayOL))
         print(f'Open-loop spectral radius (delayed system): {specRadDelayOL}')
@@ -272,7 +273,7 @@ class ControlAndDynamics:
         QDrv   = drvPen * np.eye(self._Nu)
         Q1     = block_diag(QAngle, QDrv)
         Q      = np.zeros([self._Nx, self._Nx])
-        Q[0:self._Nx, 0:self._Nx] = Q1 # Only penalize actual states       
+        Q[0:self._Nr, 0:self._Nr] = Q1 # Only penalize actual states       
         R      = inputPen * np.eye(self._Nu)
         
         # Generate controller
@@ -294,7 +295,7 @@ class ControlAndDynamics:
                              tg_to_ctrl(drvNow/self._Ts, self._legPos))
         trajNxt  = np.append(tg_to_ctrl(angleNxt, self._legPos), 
                              tg_to_ctrl(drvNxt/self._Ts, self._legPos))
-        wTraj    = self._A @ (trajNow - xEqmFlat) + xEqmFlat - trajNxt
+        wTraj    = self._A[0:self._Nr, 0:self._Nr] @ (trajNow - xEqmFlat) + xEqmFlat - trajNxt
         
         zeroPadding = np.zeros(self._Nx - self._Nr) # For delay states
         wTrajFull   = np.append(wTraj, zeroPadding)

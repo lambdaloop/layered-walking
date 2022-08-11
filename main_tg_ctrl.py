@@ -30,7 +30,7 @@ drvPen = {'L1': 1e-2, #
           'L3': 1e-2, # 
           'R1': 1e-2, # 
           'R2': 1e-2, # 
-          'R3': 1e-2  # 
+          'R3': 1e-2  #
          }
 anglePen = 1e0
 inputPen = 1e-8
@@ -68,6 +68,7 @@ for t in range(numTGSteps-1):
 # Trajectory generator + ctrl and dynamics
 ################################################################################
 numDelays = int(actDelay / Ts * ctrlSpeedRatio)
+print(f'Steps of actuation delay: {numDelays}')
 CD        = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, 
                                Ts/ctrlSpeedRatio, numDelays)
 
@@ -79,7 +80,7 @@ angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
 ys    = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
-dist  = np.zeros(CD._Nx) # Zero disturbances
+dist  = np.zeros(CD._Nr) # Zero disturbances
 
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
@@ -103,7 +104,7 @@ for t in range(numSimSteps-1):
 dof      = CD._Nu
 downSamp = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
 angle2   = angleTG2 + ctrl_to_tg(ys[0:dof,downSamp], legPos)
-drv2     = drvTG2 + ctrl_to_tg(ys[dof:,downSamp]*CD._Ts, legPos)
+drv2     = drvTG2 + ctrl_to_tg(ys[dof:CD._Nr,downSamp]*CD._Ts, legPos)
 time     = np.array(range(numTGSteps))
 
 plt.figure(1)
