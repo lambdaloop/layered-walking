@@ -13,6 +13,9 @@ from tools.angle_functions import *
 # python3 -m pip install sympy==0.7.5
 import sympy
 
+import warnings # Suppress warnings from sympybotics
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+
 # Install from https://github.com/cdsousa/SymPyBotics
 import sympybotics
 
