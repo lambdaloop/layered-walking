@@ -261,7 +261,10 @@ class ControlAndDynamics:
         eigsDelayOL    = np.linalg.eig(self._A)[0]
         specRadDelayOL = max(np.abs(eigsDelayOL))
         print(f'Open-loop spectral radius (delayed system): {specRadDelayOL}')
-
+        
+        # For lookahead
+        self._Bi = np.linalg.pinv(self._B)
+        
         # Sanity check: controllability
         Qc = control.ctrb(self._A, self._B)
         rankCtrb = np.linalg.matrix_rank(Qc)
@@ -302,7 +305,7 @@ class ControlAndDynamics:
         distFull    = np.append(dist, zeroPadding)
         
         # Give some look-ahead to wtraj
-        uNow = -self._K @ (yNow + wTrajFull)
+        uNow = -self._K @ yNow - self._Bi @ wTrajFull
         yNxt = self._A @ yNow + self._B @ uNow + wTrajFull + distFull
         
         return (uNow, yNxt)
