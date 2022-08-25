@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -22,7 +23,7 @@ numTGSteps     = 200   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0     # Seconds; typically 0.02-0.04
+actDelay       = 0.03  # Seconds; typically 0.02-0.04
 
 # LQR penalties
 drvPen = {'L1': 1e-2, # 
@@ -32,8 +33,11 @@ drvPen = {'L1': 1e-2, #
           'R2': 1e-2, # 
           'R3': 1e-2  #
          }
-anglePen = 1e0
-inputPen = 1e-8
+
+futurePenRatio = 1.0 # y_hat(t+1) is penalized (ratio)*pen as much as y(t)
+                     # y_hat(t+2) is penalized (ratio^2)*pen as much as y(t)
+anglePen       = 1e0
+inputPen       = 1e-8
 
 leg = sys.argv[1]
 
@@ -69,9 +73,10 @@ for t in range(numTGSteps-1):
 ################################################################################
 numDelays = int(actDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {numDelays}')
-CD        = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, 
-                               Ts/ctrlSpeedRatio, numDelays)
+CD        = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
+                               anglePen, drvPen[leg], inputPen)
 
+blah
 numSimSteps   = numTGSteps*ctrlSpeedRatio
 angleTG2      = np.zeros((dofTG, numTGSteps))
 drvTG2        = np.zeros((dofTG, numTGSteps))
@@ -81,6 +86,8 @@ angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = angInit, drvInit, phaseInit
 ys    = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
 dist  = np.zeros(CD._Nr) # Zero disturbances
+
+lookahead = math.ceil(numDelays/ctrlSpeedRatio)
 
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
@@ -93,12 +100,19 @@ for t in range(numSimSteps-1):
             TG.step_forward(ang, drv, phaseTG2[k], contexts[k])
 
         # Generate trajectory for future
-        for m in range(k+1, min(k+ctrlCommRatio, numTGSteps-1)):
+        for m in range(k+1, min(k+ctrlCommRatio+lookahead, numTGSteps-1)):
             angleTG2[:,m+1], drvTG2[:,m+1], phaseTG2[m+1] = \
                 TG.step_forward(angleTG2[:,m], drvTG2[:,m], phaseTG2[m], contexts[m])
 
-    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], angleTG2[:,k], angleTG2[:,kn], 
-                         drvTG2[:,k]/ctrlSpeedRatio, drvTG2[:,kn]/ctrlSpeedRatio, dist)
+    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
+    
+    anglesAhead = np.concatenate((angleTG2[:,k1].reshape(dofTG,1),
+                                  angleTG2[:,k2].reshape(dofTG,1)), axis=1)
+    drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(dofTG,1),
+                                  drvTG2[:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
+        
+    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], anglesAhead, drvsAhead, dist)
 
 # True angle + derivatives
 dof      = CD._Nu
