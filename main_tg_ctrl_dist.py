@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
@@ -17,31 +18,41 @@ from tools.dist_tools import *
 filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 #filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
 
-numTGSteps  = 200   # How many timesteps to run TG for
-Ts          = 1/300 # Sampling time
-ctrlTsRatio = 5     # Controller will sample at Ts / ctrlTsRatio
+walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
+
+numTGSteps     = 200   # How many timesteps to run TG for
+Ts             = 1/300 # How fast TG runs
+ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
+ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
+actDelay       = 0.01  # Seconds; typically 0.02-0.04
 
 # LQR penalties
-drvPen = {'L1': 1e-2, # Looks gait-like but different from pure TG
-          'L2': 1e-2, # OK
-          'L3': 1e-2, # OK
-          'R1': 1e-2, # Looks gait-like but different from pure TG
-          'R2': 1e-2, # A bit off pure TG
-          'R3': 1e-2  # OK
+drvPen = {'L1': 1e-5, # 
+          'L2': 1e-5, # 
+          'L3': 1e-3, # 
+          'R1': 1e-5, # 
+          'R2': 1e-5, # 
+          'R3': 1e-5  #
          }
-anglePen = 1e0
-inputPen = 1e-8
+
+futurePenRatio = 1.0 # y_hat(t+1) is penalized (ratio)*pen as much as y(t)
+                     # y_hat(t+2) is penalized (ratio^2)*pen as much as y(t)
+anglePen       = 1e0
+inputPen       = 1e-8
 
 leg = sys.argv[1]
 
-distType  = DistType.SLIPPERY_SURFACE
-#distType = DistType.UNEVEN_SURFACE
+################################################################################
+# Disturbance
+################################################################################
+#distType  = DistType.SLIPPERY_SURFACE
+distType = DistType.UNEVEN_SURFACE
 #distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
 #distType = DistType.SLOPED_SURFACE
 #distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
 # Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 200,        # Slippery surface
+distDict = {'maxVelocity' : 50,        # Slippery surface
             'maxHt'       : 0.1/1000,   # Uneven surface
             'height'      : -0.1/1000,  # Stepping on a bump/pit
             'distLeg'     : leg,        # Stepping on a bump/pit
@@ -51,26 +62,63 @@ distDict = {'maxVelocity' : 200,        # Slippery surface
 distDict['distType'] = distType
 
 plotPureTG = False # Whether or not to also plot data from disturbed pure TG
+
 ################################################################################
-# Trajectory generator + ctrl and dynamics
+# Get walking data
 ################################################################################
+wd       = WalkingData(filename)
+bout     = wd.get_bout(walkingSettings)
+contexts = bout['contexts']
+
+angInit   = bout['angles'][leg][0]
+drvInit   = bout['derivatives'][leg][0]
+phaseInit = bout['phases'][leg][0]
+
+################################################################################
+# Trajectory generator + ctrl and dynamics, w/o disturbances
+################################################################################
+numDelays = int(actDelay / Ts * ctrlSpeedRatio)
+print(f'Steps of actuation delay: {numDelays}')
+CD        = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
+                               anglePen, drvPen[leg], inputPen)
+
 legPos  = int(leg[-1])
 dofTG   = len(anglesTG)
 TG      = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
 
-wd       = WalkingData(filename)
-bout     = wd.get_bout([15, 0, 0])
-contexts = bout['contexts']
+numSimSteps   = numTGSteps*ctrlSpeedRatio
+angleTG2      = np.zeros((dofTG, numTGSteps))
+drvTG2        = np.zeros((dofTG, numTGSteps))
+phaseTG2      = np.zeros(numTGSteps)
+angleTG2[:,0], drvTG2[:,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
-ang   = bout['angles'][leg][0]
-drv   = bout['derivatives'][leg][0]
-phase = bout['phases'][leg][0]
+ys    = np.zeros([CD._Nx, numSimSteps])
+us    = np.zeros([CD._Nu, numSimSteps])
+dist  = np.zeros(CD._Nr) # Zero disturbances
 
-numSimSteps = numTGSteps*ctrlTsRatio
-CD          = ControlAndDynamics(leg, anglePen, drvPen[leg], inputPen, Ts/ctrlTsRatio, 0)
+lookahead = math.ceil(numDelays/ctrlSpeedRatio)
 
-# Simulate without disturbance (for comparison)
-angleTG, drvTG, ys = CD.run(TG, contexts, numTGSteps, ctrlTsRatio, bout)
+for t in range(numSimSteps-1):
+    k  = int(t / ctrlSpeedRatio)     # Index for TG data
+    kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
+
+    if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
+        ang   = angleTG2[:,k] + ctrl_to_tg(ys[0:CD._Nu,t], legPos)
+        drv   = drvTG2[:,k] + ctrl_to_tg(ys[CD._Nu:,t]*CD._Ts, legPos)
+        
+        kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
+        angleTG2[:,k+1:kEnd+1], drvTG2[:,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
+            TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
+
+    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
+    
+    anglesAhead = np.concatenate((angleTG2[:,k1].reshape(dofTG,1),
+                                  angleTG2[:,k2].reshape(dofTG,1)), axis=1)
+    drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(dofTG,1),
+                                  drvTG2[:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
+        
+    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], anglesAhead, drvsAhead, dist)
 
 ################################################################################
 # Experimental: Pure TG, but with disturbances
@@ -92,7 +140,7 @@ lastDetection   = -nonRepeatWindow
 heightsPure       = np.array([None] * numTGSteps)
 groundContactPure = np.array([None] * numTGSteps)
 
-angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = ang, drv, phase
+angleTGPure[:,0], drvTGPure[:,0], phaseTGPure[0] = angInit, drvInit, phaseInit
 
 for t in range(numTGSteps-1):        
     heightsPure[t] = get_current_height(angleTGPure[:,t], fullAngleNames, legIdx)
@@ -115,28 +163,31 @@ for t in range(numTGSteps-1):
 angleTGDist      = np.zeros((dofTG, numTGSteps))
 drvTGDist        = np.zeros((dofTG, numTGSteps))
 phaseTGDist      = np.zeros(numTGSteps)
-angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = ang, drv, phase
+angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = angInit, drvInit, phaseInit
 
-ysDist = np.zeros([CD._Nx, numSimSteps])
-usDist = np.zeros([CD._Nu, numSimSteps])
+ysDist    = np.zeros([CD._Nx, numSimSteps])
+usDist    = np.zeros([CD._Nu, numSimSteps])
 
 # Visualize height detection and compare heights
 heightsDist       = np.array([None] * numSimSteps)
 groundContactDist = np.array([None] * numSimSteps)
-locMinWindow      = 2*ctrlTsRatio
-nonRepeatWindow   = 3*ctrlTsRatio # Assumed minimum distance between minima
+locMinWindow      = 2*ctrlSpeedRatio
+nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 lastDetection     = -nonRepeatWindow
 
 for t in range(numSimSteps-1):
-    k  = int(t / ctrlTsRatio)      # Index for TG data
-    kn = int((t+1) / ctrlTsRatio)  # Next index for TG data      
-    
+    k   = int(t / ctrlSpeedRatio)     # Index for TG data
+    kn  = int((t+1) / ctrlSpeedRatio) # Next index for TG data
     ang = angleTGDist[:,k] + ctrl_to_tg(ysDist[0:CD._Nu,t], legPos)
-    if not ((t+1) % ctrlTsRatio):             
-        drv = drvTGDist[:,k] + ctrl_to_tg(ysDist[CD._Nu:,t]*CD._Ts, legPos)
-        
-        angleTGDist[:,k+1], drvTGDist[:,k+1], phaseTGDist[k+1] = \
-            TG.step_forward(ang, drv, phaseTGDist[k], contexts[k])
+    drv = drvTGDist[:,k] + ctrl_to_tg(ysDist[CD._Nu:,t]*CD._Ts, legPos)
+
+    if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
+        kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
+        angleTGDist[:,k+1:kEnd+1], drvTGDist[:,k+1:kEnd+1], phaseTGDist[k+1:kEnd+1] = \
+            TG.get_future_traj(k, kEnd, ang, drv, phaseTGDist[k], contexts)
+
+    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
     
     dist           = get_zero_dists()[leg]    
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
@@ -145,14 +196,21 @@ for t in range(numSimSteps-1):
         groundContactDist[t] = heightsDist[t] # Visualize height minimum detection
         lastDetection        = t
         dist                 = get_dist(distDict, leg)               
+    
+    anglesAhead = np.concatenate((angleTGDist[:,k1].reshape(dofTG,1),
+                                  angleTGDist[:,k2].reshape(dofTG,1)), axis=1)
+    drvsAhead   = np.concatenate((drvTGDist[:,k1].reshape(dofTG,1),
+                                  drvTGDist[:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
+        
+    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], anglesAhead, drvsAhead, dist)
 
-    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], angleTGDist[:,k],
-        angleTGDist[:,kn], drvTGDist[:,k]/ctrlTsRatio, drvTGDist[:,kn]/ctrlTsRatio, dist)
-
+################################################################################
+# Post-processing for plotting
+################################################################################
 # True angle + derivative (sampled at Ts)
-downSamp   = list(range(ctrlTsRatio-1, numSimSteps, ctrlTsRatio))
-angle2     = angleTG + ctrl_to_tg(ys[0:dof,downSamp], legPos)
-drv2       = drvTG + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
+downSamp   = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
+angle2     = angleTG2 + ctrl_to_tg(ys[0:dof,downSamp], legPos)
+drv2       = drvTG2 + ctrl_to_tg(ys[dof:,downSamp]*CD._Ts, legPos)
 angle2Dist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos)
 drv2Dist   = drvTGDist + ctrl_to_tg(ysDist[dof:,downSamp]*CD._Ts, legPos)
 
@@ -162,7 +220,7 @@ for t in range(numTGSteps-1):
     heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
 
 time  = np.array(range(numTGSteps))
-time2 = np.array(range(numSimSteps)) / ctrlTsRatio
+time2 = np.array(range(numSimSteps)) / ctrlSpeedRatio
 
 plt.figure(1)
 plt.clf()
@@ -171,7 +229,7 @@ for i in range(dof):
     plt.title(anglesCtrl[legPos][i])
     idx = mapTG2Ctrl[legPos][i]
     
-    plt.plot(time, angleTG[idx,:], 'b', label=f'2LayerTG')
+    plt.plot(time, angleTG2[idx,:], 'b', label=f'2LayerTG')
     plt.plot(time, angle2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, angleTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, angle2Dist[idx,:], 'm--', label=f'2Layer-Dist')
@@ -183,7 +241,7 @@ for i in range(dof):
 
     plt.subplot(3,dof,i+dof+1)
     plt.title('Velocity')
-    plt.plot(time, drvTG[idx,:], 'b', label=f'2LayerTG')
+    plt.plot(time, drvTG2[idx,:], 'b', label=f'2LayerTG')
     plt.plot(time, drv2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, drvTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
@@ -197,7 +255,7 @@ for i in range(dof):
     if plotPureTG:
         plt.plot(time, heightsPure, 'k', label=f'PureTG-Dist')
     
-    plt.plot(time2, groundContactDist, 'm*')
+    plt.plot(time2, groundContactDist, 'r*', markersize=10)
     if plotPureTG:
         plt.plot(time, groundContactPure, 'k*')
 
