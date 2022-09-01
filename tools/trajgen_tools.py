@@ -62,6 +62,22 @@ class TrajectoryGenerator:
         return ang, drv, phase
 
 
+    def get_future_traj(self, t1, t2, ang, drv, phase, contexts):
+        ''' Given values at time t1, returns values from t1+1 to t2, inclusive '''
+        numVals = t2 - t1
+        angs    = np.zeros([len(ang), numVals])
+        drvs    = np.zeros([len(drv), numVals])
+        phases  = np.zeros(numVals)
+        
+        angs[:,0], drvs[:,0], phases[0] = self.step_forward(ang, drv, 
+                                          phase, contexts[t1])
+        for i in range(1, numVals):
+            angs[:,i], drvs[:,i], phases[i] = self.step_forward(angs[:,i-1], drvs[:,i-1], 
+                                              phases[i-1], contexts[t1+i])
+        return angs, drvs, phases            
+
+
+
 class WalkingData:
     def __init__(self, filename):
         with open(filename, 'rb') as myfile:

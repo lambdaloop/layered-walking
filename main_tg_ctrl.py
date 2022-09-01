@@ -10,7 +10,7 @@ from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, mapTG2Ctrl, \
                             ctrl_to_tg, tg_to_ctrl
 
-# Usage: python3 main_tg_ctrl_updated.py <leg>
+# Usage: python3 main_tg_ctrl.py <leg>
 ################################################################################
 # User-defined parameters
 ################################################################################
@@ -26,12 +26,12 @@ ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple o
 actDelay       = 0.03  # Seconds; typically 0.02-0.04
 
 # LQR penalties
-drvPen = {'L1': 1e-2, # 
-          'L2': 1e-2, # 
-          'L3': 1e-2, # 
-          'R1': 1e-2, # 
-          'R2': 1e-2, # 
-          'R3': 1e-2  #
+drvPen = {'L1': 1e-5, #
+          'L2': 1e-5, #
+          'L3': 1e-5, # 
+          'R1': 1e-5, # 
+          'R2': 1e-5, # 
+          'R3': 1e-5  #
          }
 
 futurePenRatio = 1.0 # y_hat(t+1) is penalized (ratio)*pen as much as y(t)
@@ -76,7 +76,6 @@ print(f'Steps of actuation delay: {numDelays}')
 CD        = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
                                anglePen, drvPen[leg], inputPen)
 
-blah
 numSimSteps   = numTGSteps*ctrlSpeedRatio
 angleTG2      = np.zeros((dofTG, numTGSteps))
 drvTG2        = np.zeros((dofTG, numTGSteps))
@@ -96,13 +95,10 @@ for t in range(numSimSteps-1):
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
         ang   = angleTG2[:,k] + ctrl_to_tg(ys[0:CD._Nu,t], legPos)
         drv   = drvTG2[:,k] + ctrl_to_tg(ys[CD._Nu:,t]*CD._Ts, legPos)
-        angleTG2[:,k+1], drvTG2[:,k+1], phaseTG2[k+1] = \
-            TG.step_forward(ang, drv, phaseTG2[k], contexts[k])
-
-        # Generate trajectory for future
-        for m in range(k+1, min(k+ctrlCommRatio+lookahead, numTGSteps-1)):
-            angleTG2[:,m+1], drvTG2[:,m+1], phaseTG2[m+1] = \
-                TG.step_forward(angleTG2[:,m], drvTG2[:,m], phaseTG2[m], contexts[m])
+        
+        kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
+        angleTG2[:,k+1:kEnd+1], drvTG2[:,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
+            TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
 
     k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
