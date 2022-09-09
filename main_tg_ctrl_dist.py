@@ -185,9 +185,6 @@ for t in range(numSimSteps-1):
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
         angleTGDist[:,k+1:kEnd+1], drvTGDist[:,k+1:kEnd+1], phaseTGDist[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTGDist[k], contexts)
-
-    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
     
     dist           = get_zero_dists()[leg]    
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
@@ -196,6 +193,9 @@ for t in range(numSimSteps-1):
         groundContactDist[t] = heightsDist[t] # Visualize height minimum detection
         lastDetection        = t
         dist                 = get_dist(distDict, leg)               
+
+    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
     
     anglesAhead = np.concatenate((angleTGDist[:,k1].reshape(dofTG,1),
                                   angleTGDist[:,k2].reshape(dofTG,1)), axis=1)
