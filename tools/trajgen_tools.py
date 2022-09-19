@@ -58,7 +58,7 @@ class TrajectoryGenerator:
         new_inp = np.hstack([np.cos(rad1), np.sin(rad1),
                              drv1, context, np.cos(phase1), np.sin(phase1)])
         out = self._model(new_inp[None].astype('float32'))[0].numpy()
-        ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.2)
+        ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
         return ang, drv, phase
 
 
