@@ -153,8 +153,8 @@ for cond in tqdm(conditions, ncols=70):
 
     lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 
-    distDict = {'maxVelocity' : 2,         # Slippery surface
-                'maxHt'       : 0.1/1000,   # Uneven surface
+    distDict = {'maxVelocity' : 1,         # Slippery surface
+                'maxHt'       : 0.005 * 1e-3,   # Uneven surface
                 'height'      : -0.1/1000,  # Stepping on a bump/pit
                 'distLeg'     : 'L1',       # Stepping on a bump/pit
                 'angle'       : 10,         # Walking on slope (degrees)
@@ -198,7 +198,7 @@ for cond in tqdm(conditions, ncols=70):
             heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
             if k >= 200 and k < 400 and \
                loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-                print(k, distDict)
+                # print(k, distDict)
                 groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
                 lastDetection[ln]    = t
                 dist                 = get_dist(distDict, leg)
