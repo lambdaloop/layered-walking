@@ -110,8 +110,12 @@ def forward_chain(angles, lengths):
         p_local = r.apply([0, 0, lengths[i]])
         # p_global = cfs[i].point_to_world(p_local)
         p_global = prev_pos + prev_rot.apply(p_local)
+        try:
+            prev_rot = prev_rot * r
+        except:
+            p_global = p_global * np.nan
+
         positions.append(p_global)
-        prev_rot = prev_rot * r
         prev_pos = p_global
         # cc = CoordinateFrame(pos=p_global, rot=cfs[i].rot * r)
         # cfs.append(cc)
