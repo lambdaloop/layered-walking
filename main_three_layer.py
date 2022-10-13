@@ -20,7 +20,7 @@ filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 
 walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 200   # How many timesteps to run TG for
+numTGSteps     = 500   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -43,15 +43,15 @@ inputPen       = 1e-8
 ################################################################################
 # Disturbance
 ################################################################################
-distType  = DistType.ZERO
-#distType = DistType.SLIPPERY_SURFACE
+#distType  = DistType.ZERO
+distType = DistType.SLIPPERY_SURFACE
 #distType = DistType.UNEVEN_SURFACE
 #distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
 #distType = DistType.SLOPED_SURFACE
 #distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
 # Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 50,         # Slippery surface
+distDict = {'maxVelocity' : 10,         # Slippery surface
             'maxHt'       : 0.1/1000,   # Uneven surface
             'height'      : -0.1/1000,  # Stepping on a bump/pit
             'distLeg'     : 'L1',       # Stepping on a bump/pit
