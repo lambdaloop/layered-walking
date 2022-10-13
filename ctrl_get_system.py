@@ -15,6 +15,14 @@ mCoxa      = massPerLeg / 4
 mFemur     = massPerLeg / 4
 mTT        = massPerLeg / 2
 
+# friction coefficients
+coeff = 1e-9
+fBodyCoxa   = coeff
+fCoxaRot    = coeff
+fCoxaFemur  = coeff
+fFemurRot   = coeff
+fFemurTibia = coeff
+
 legs_to_compute = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'] # Which legs to get a system for
 
 def get_robot_params(leg):
@@ -48,15 +56,18 @@ def get_robot_params(leg):
                    (0,       lFemur,  0,      'q3'),
                    (0,       lTT,     0,      'q4')]
         linkMasses  = [0, mCoxa, mFemur, mTT]
+        frics       = [fBodyCoxa, fCoxaRot, fCoxaFemur, fFemurTibia]        
     elif legPos == 2: # Middle legs
         DHTable = [('pi/2',  0,    0,      'q1'),
                    ('-pi/2', 0,    lFemur, 'q2'),
                    (0,       lTT,  0,      'q3')]
         linkMasses  = [0, mFemur, mTT]
+        frics       = [fCoxaFemur, fFemurRot, fFemurTibia]
     else: # Hind legs
         DHTable = [(0, lFemur,  0, 'q1'),
                    (0, lTT,     0, 'q2')]
         linkMasses  = [mFemur, mTT]
+        frics       = [fCoxaFemur, fFemurTibia]
     
     # Get inertias
     dof      = len(DHTable)
@@ -75,14 +86,14 @@ def get_robot_params(leg):
         inertias[0][5] = iFemur # L1_zz
         inertias[1][5] = iTT    # L2_zz
 
-    return (DHTable, linkMasses, inertias, xEqm)
+    return (DHTable, linkMasses, inertias, frics, xEqm)
 
 ################################################################################
 # Compute linearized system
 ################################################################################
 for leg in legs_to_compute:
     print('Calculating for leg ' + leg)
-    (DHTable, linkMasses, inertias, xEqm) = get_robot_params(leg)
-    get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg)
+    (DHTable, linkMasses, inertias, frics, xEqm) = get_robot_params(leg)
+    get_linearized_system(DHTable, linkMasses, inertias, frics, xEqm, leg)
 
 

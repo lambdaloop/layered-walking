@@ -86,15 +86,11 @@ def F2(x, uEqm, paramsDict, legDef, legObj):
     M = get_numerical_values(subDict, legObj.M_code)
     C = get_numerical_values(subDict, legObj.C_code)
     g = get_numerical_values(subDict, legObj.g_code)
+    f = get_numerical_values(subDict, legObj.f_code)
 
     MInv = M.inv()
+    return MInv*(uEqm - C*x[legObj.dof:,:] - g - f)
     
-    term1 = MInv*uEqm
-    term2 = MInv*C*x[legObj.dof:,:]
-    term3 = MInv*g
-
-    return term1 - term2 - term3
-
 
 
 def F2_scalar(val, row, xIdx, xEqm, uEqm, paramsDict, legDef, legObj):
@@ -151,12 +147,13 @@ def save_linearized_system(ALin, BLin, xEqm, uEqm, leg):
 
 
 
-def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
+def get_linearized_system(DHTable, linkMasses, inertias, frics, xEqm, leg):
     ''' 
     Given physical properties and DH parameters of robot, save linearized system.
     DHTable     : DH table ordered (alpha, a, d, theta)
     linkMasses  : list of link masses
     inertias    : inertias (following Le convention of sympybotics)
+    frics       : list of friction coefficients
     xEqm        : state operating point
     leg         : which leg it is, e.g. 'L1'
     
@@ -167,7 +164,7 @@ def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
     
     # Generate dynamics 
     legDef = sympybotics.RobotDef('LegRobot', DHTable, dh_convention='standard')
-    legDef.frictionmodel = None        
+    legDef.frictionmodel = {'viscous'}       
     legObj = sympybotics.RobotDynCode(legDef, verbose=True)
     dof    = legObj.dof
     
@@ -177,7 +174,8 @@ def get_linearized_system(DHTable, linkMasses, inertias, xEqm, leg):
     # Generate parameters dictionary (for subbing into sympy)
     paramsDict = {}
     for i in range(dof):
-        paramsDict[legDef.m[i]] = linkMasses[i]
+        paramsDict[legDef.m[i]]  = linkMasses[i]
+        paramsDict[legDef.fv[i]] = frics[i]
         for j in range(len(legDef.Le[i])):
             paramsDict[legDef.Le[i][j]] = inertias[i][j]
         for j in range(len(legDef.l[i])):
@@ -299,7 +297,7 @@ class ControlAndDynamics:
         self._Br  = Ts*BLin
         eigsOL    = np.linalg.eig(self._Ar)[0]
         specRadOL = max(np.abs(eigsOL))
-        print(f'Open-loop spectral radius (real system): {specRadOL}')
+        print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
 
         # Convert to delayed system
         self._A, self._B = get_augmented_system(self._Ar, self._Br, numDelays)
@@ -307,7 +305,7 @@ class ControlAndDynamics:
         self._Nu = self._B.shape[1]
         eigsDelayOL    = np.linalg.eig(self._A)[0]
         specRadDelayOL = max(np.abs(eigsDelayOL))
-        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL}')
+        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
 
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
@@ -331,7 +329,7 @@ class ControlAndDynamics:
         ACL       = self._A - self._B @ self._K
         eigsCL    = np.linalg.eig(ACL)[0]
         specRadCL = max(np.abs(eigsCL))
-        print(f'Closed-loop spectral radius (delayed system): {specRadCL}')
+        print(f'Closed-loop spectral radius (delayed system): {specRadCL:.3f}')
     
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)

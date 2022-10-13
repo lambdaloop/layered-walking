@@ -29,7 +29,7 @@ actDelay       = 0.01  # Seconds; typically 0.02-0.04
 # LQR penalties
 drvPen = {'L1': 1e-5, # 
           'L2': 1e-5, # 
-          'L3': 1e-3, # 
+          'L3': 1e-5, # 
           'R1': 1e-5, # 
           'R2': 1e-5, # 
           'R3': 1e-5  #
@@ -45,8 +45,8 @@ leg = sys.argv[1]
 ################################################################################
 # Disturbance
 ################################################################################
-distType = DistType.ZERO
-#distType = DistType.SLIPPERY_SURFACE
+#distType = DistType.ZERO
+distType = DistType.SLIPPERY_SURFACE
 #distType = DistType.UNEVEN_SURFACE
 #distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
 #distType = DistType.SLOPED_SURFACE
