@@ -761,7 +761,7 @@ phased_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 500/500 [00:01<00:00, 368.75it/s]
+: 100%|██████████████████████████████| 500/500 [00:01<00:00, 372.32it/s]
 
 
 #+BEGIN_SRC jupyter-python
@@ -800,38 +800,137 @@ phased_real['speed_side'] = phased_real['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 171/171 [00:00<00:00, 274.24it/s]
+: 100%|██████████████████████████████| 171/171 [00:00<00:00, 284.77it/s]
 
 
 #+BEGIN_SRC jupyter-python
 phased = pd.concat([phased_sim, phased_real]).reset_index(drop=True)
+
+# Add pi to correct for offset due to the way we compute the phase
+phased['phase_L1'] += np.pi
+phased['phase_R1'] += np.pi
+phased['phase_R2'] += np.pi
 #+END_SRC
 
-#+RESULTS:
 
 #+BEGIN_SRC jupyter-python
-sns.histplot(np.mod(phased['phase_L1'] - phased['phase_R1'], 2*np.pi))
+fig, subplots = plt.subplots(6, 6, figsize=(8, 8))
+for i, leg_i in enumerate(legs):
+    for j, leg_j in enumerate(legs):
+        if i == j:
+            ax = subplots[i][j]
+            ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
+            ax.set_axis_off()
+            continue
+        ax = subplots[i][j]
+        d = phased[phased['type'] == 'simulated']
+        sns.kdeplot(np.mod(d['phase_'+leg_i] - d['phase_'+leg_j], 2*np.pi), cut=0, bw_method=0.1,
+                    shade=True, ax=ax)
+        d = phased[phased['type'] == 'real']
+        sns.kdeplot(np.mod(d['phase_'+leg_i] - d['phase_'+leg_j], 2*np.pi), cut=0, bw_method=0.1,
+                    shade=True, ax=ax)
+        ax.set_xlim(0, 2*np.pi)
+        ax.set_ylim(0, 0.6)
+        ax.set_ylabel("")
+        ax.set_xticks([np.pi])
+        ax.set_yticks([0.3])
+        if i != 5:
+            ax.set_xticklabels([])
+        if j != 0:
+            ax.set_yticklabels([])
+
+fig.savefig('plots/fig2G_phases_legs.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-: <AxesSubplot:ylabel='Count'>
-[[file:./.ob-jupyter/e37b2d82d293ef63476e6ea163be306ac053a708.png]]
-:END:
-
-#+BEGIN_SRC jupyter-python
-d = phased[phased['type'] == 'real']
-sns.kdeplot(np.mod(d['phase_L1'] - d['phase_R1'], 2*np.pi), cut=-2, bw_method=0.1)
-plt.ylim(0, 0.5)
-#+END_SRC
-
-#+RESULTS:
-:RESULTS:
-| 0.0 | 0.5 |
-[[file:./.ob-jupyter/afd3a257edcc3b50eba2efc99c01b58e278f00da.png]]
+[[file:./.ob-jupyter/d65ccd95ee0e02eab511b1ccb21cb346d0bd9288.png]]
 :END:
 
 
 * Step frequency
 
 Here, I think it would be interesting to show the step frequency of the model and the simulation at different speeds.
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in range(len(speeds)):
+    forward, rot, side = speeds[i]
+    leg = 'L1'
+    phaseang = 'C_flex'
+    ix_leg = legs.index(leg)
+    ix_ang_phase = angle_names_1leg.index(phaseang)
+    ang = angles[i, ix_leg, ix_ang_phase, :]
+    peaks, _ = signal.find_peaks(-ang, distance=18, height=-80)
+    if len(peaks) < 2: continue
+    freq = np.mean(300.0 / np.diff(peaks))
+    row = {
+        'step_freq': freq,
+        'speed_forward': forward,
+        'speed_rotation': rot,
+        'speed_side': side,
+        'type': 'simulated'
+    }
+    ds.append(row)
+steps_sim = pd.DataFrame.from_records(ds)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(100)
+for i in range(len(bnums)):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    leg = 'L1'
+    phaseang = 'C_flex'
+    ix_ang_phase = angle_names_1leg.index(phaseang)
+    ang = ww['angles'][leg][:, ix_ang_phase]
+    ang = angles[i, ix_leg, ix_ang_phase, :]
+    peaks, _ = signal.find_peaks(-np.abs(ang), distance=20, height=-90)
+    if len(peaks) < 4: continue
+    freq = np.mean(300.0 / np.diff(peaks))
+    row = {
+        'step_freq': freq,
+        'speed_forward_raw': forward,
+        'speed_rotation_raw': rot,
+        'speed_side_raw': side,
+        'bnum': bnum,
+        'type': 'real'
+    }
+    ds.append(row)
+steps_real = pd.DataFrame.from_records(ds)
+
+steps_real['speed_forward'] = ((steps_real['speed_forward_raw'] + 2) // 4) * 4
+steps_real['speed_rotation'] = ((steps_real['speed_rotation_raw'] + 2) // 4) * 4
+steps_real['speed_side'] = ((steps_real['speed_side_raw'] + 1) // 2) * 2
+steps_real['speed_forward'] = steps_real['speed_forward'].astype('int')
+steps_real['speed_rotation'] = steps_real['speed_rotation'].astype('int')
+steps_real['speed_side'] = steps_real['speed_side'].astype('int')
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+steps_df = pd.concat([steps_sim, steps_real])
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+dd = steps_df
+c = (dd['speed_side'].abs() <= 1) & (dd['speed_rotation'].abs() <= 1) \
+    & (dd['speed_forward'] > 1)
+sns.pointplot(x='speed_forward', y='step_freq', data=dd[c], hue='type')
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: <AxesSubplot:xlabel='speed_forward', ylabel='step_freq'>
+[[file:./.ob-jupyter/be6f570c41b5999ebcba93740ed222d7110f8070.png]]
+:END:
