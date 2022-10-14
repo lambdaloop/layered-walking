@@ -145,7 +145,7 @@ angle_names_1leg
 #+BEGIN_SRC jupyter-python
 angname = 'C_flex'
 leg = 'L1'
-speed = [4, 0, 0]
+speed = [8, 0, 0]
 
 ix_ang = angle_names_1leg.index(angname)
 ix_leg = legs.index(leg)
@@ -156,7 +156,7 @@ ang = angles[ix_speed, ix_leg, ix_ang]
 
 plt.plot(ang[:600], label='simulated')
 
-ww = wd.get_bout(speed, offset=2)
+ww = wd.get_bout(speed, offset=3)
 list(ww.keys())
 
 ang = ww['angles'][leg][:, ix_ang]
@@ -170,7 +170,7 @@ plt.xlabel("Frames (300Hz)")
 #+RESULTS:
 :RESULTS:
 : Text(0.5, 0, 'Frames (300Hz)')
-[[file:./.ob-jupyter/7044892ea99af19c3fc23ee6889896c2cb0547ae.png]]
+[[file:./.ob-jupyter/6ac7bbe0ce6f54b2f64f0d219e9b3e0d7a743043.png]]
 :END:
 
 #+BEGIN_SRC jupyter-python

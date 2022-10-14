@@ -167,7 +167,7 @@ for i in range(len(plot_speeds)):
     ww = wd.get_bout(plot_speeds[i], offset=6)
     ang = ww['angles'][leg][:, ix_ang]
     t = np.arange(len(ang))/300.0
-    plt.plot(t, ang)
+    plt.plot(t, ang, color="#FF7F0E")
     plt.ylim(30, 160)
     plt.yticks([60, 120])
     if i != 2:
@@ -181,12 +181,12 @@ plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches 
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/9216f42aa793746cf9791676015145babc8a8028.png]]
+[[file:./.ob-jupyter/e48225cfdb4cfae6a7750bc8f107baf9609d9f80.png]]
 
 
 #+BEGIN_SRC jupyter-python
 angname = 'B_rot'
-leg = 'R2'
+leg = 'L2'
 ix_ang = angle_names_1leg.index(angname)
 ix_leg = legs.index(leg)
 
@@ -198,9 +198,9 @@ for i in range(len(plot_speeds)):
     t = np.arange(len(ang))/300.0
     ang[ang > 50] -= 360
     ang += 360
-    plt.plot(t, ang)
-    plt.ylim(170, 230)
-    plt.yticks([180, 210])
+    plt.plot(t, ang, color="#FF7F0E")
+    plt.ylim(110, 160)
+    plt.yticks([120, 150])
     if i != 2:
         plt.xticks(ticks=[])
 
@@ -212,7 +212,7 @@ plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches 
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/d2c502595f213de721f92bfdebfc979759bce712.png]]
+[[file:./.ob-jupyter/20b7f47459f6cbfc91ab5dd638d519c7cb776f89.png]]
 
 ** Simulated plots
 
@@ -249,7 +249,7 @@ plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_in
 
 #+BEGIN_SRC jupyter-python
 angname = 'B_rot'
-leg = 'R2'
+leg = 'L2'
 ix_ang = angle_names_1leg.index(angname)
 ix_leg = legs.index(leg)
 
@@ -258,11 +258,11 @@ for i in range(len(plot_speeds)):
     plt.subplot(3, 1, i+1)
     ixs = np.where(np.all(speeds == plot_speeds[i], axis=1))[0]
     ix_bout = ixs[0]
-    ang = angles[ix_bout, ix_leg, ix_ang, :] + 360
+    ang = angles[ix_bout, ix_leg, ix_ang, :]
     t = np.arange(len(ang))/300.0
     plt.plot(t, ang)
-    plt.ylim(170, 230)
-    plt.yticks([180, 210])
+    plt.ylim(110, 160)
+    plt.yticks([120, 150])
     if i != 2:
         plt.xticks(ticks=[])
 
@@ -275,7 +275,7 @@ plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_in
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/e2b128885ea9f0c1f421163af3125d7331e4d1c5.png]]
+[[file:./.ob-jupyter/c5c662949b79f088eab76b49c187fa7ce24a40bd.png]]
 
 * Phase plots
 
@@ -305,7 +305,7 @@ allangf = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 500/500 [01:00<00:00,  8.30it/s]
+: 100%|███████████████████████████████| 500/500 [00:59<00:00,  8.38it/s]
 
 
 Load the real data
@@ -349,7 +349,7 @@ realangf['speed_side'] = realangf['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 171/171 [00:24<00:00,  7.02it/s]
+: 100%|███████████████████████████████| 171/171 [00:24<00:00,  7.11it/s]
 
 #+BEGIN_SRC jupyter-python
 fullangf = pd.concat([allangf, realangf]).reset_index(drop=True)
@@ -405,9 +405,9 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/c46ae0290ebb31c2a070e6a1bc394fdd18d7026c.png]]
-[[file:./.ob-jupyter/42496d153670ad98ad2be4e45d4e9a07f0fd8420.png]]
-[[file:./.ob-jupyter/1193699d1c6bb248c92b9d09c2e4861f3af180da.png]]
+[[file:./.ob-jupyter/a95404ee5acda38b42b679df2a85ab6d5ae7c31a.png]]
+[[file:./.ob-jupyter/46935b5ace0e1cf0f14f056f7b1eed1f682256e6.png]]
+[[file:./.ob-jupyter/bcb08ba25361a1db665ea733f9ac986ecc4f3051.png]]
 :END:
 
 #+BEGIN_SRC jupyter-python
@@ -445,9 +445,9 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/eb1a76b7adc12c6e0d2bec03b91461ebc4721ad0.png]]
-[[file:./.ob-jupyter/03ed5b8f9160fb9c70a328432e9c62c3975fc761.png]]
-[[file:./.ob-jupyter/f0f456624252ba7aa7748ffaccfc2bca127b86cd.png]]
+[[file:./.ob-jupyter/72cceb5a82fcc52f8e3b1e704a29d8f07e06ee95.png]]
+[[file:./.ob-jupyter/267544fb72bd24905153c732bac7a72357cbf888.png]]
+[[file:./.ob-jupyter/9530c307796f2b61fff65be11311073399cb5faa.png]]
 :END:
 
 
@@ -653,7 +653,7 @@ for i in trange(len(bnums), ncols=70):
         d['leg'] = leg
         d['bnum'] = bnum
         d['type'] = 'real'
-        ds.append(d)
+          ds.append(d)
 realangf_sync = pd.concat(ds).reset_index(drop=True)
 
 realangf_sync['speed_forward'] = ((realangf_sync['speed_forward_raw'] + 2) // 4) * 4
@@ -734,7 +734,102 @@ plt.savefig('plots/fig2D_coupling_perleg.pdf', bbox_inches = "tight")
 
 How to demonstrate the phase coupling across the legs?
 I guess we extract the phase from each leg, and compute the difference mod 2 pi?
-Hmm that seems like too much trouble for tonight.
+
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    d = pd.DataFrame()
+    forward, rot, side = speeds[i]
+    for ix_leg, leg in enumerate(legs):
+        if leg in ['L2', 'R2']:
+            phaseang = 'B_rot'
+        else:
+            phaseang = 'C_flex'
+        ix_ang_phase = angle_names_1leg.index(phaseang)
+        x = np.vstack([angles[i, ix_leg, ix_ang_phase, :],
+                       derivs[i, ix_leg, ix_ang_phase, :]]).T
+        phase = get_phase(x)
+        d['phase_' + leg] = phase
+
+
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'simulated'
+    ds.append(d)
+phased_sim = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 500/500 [00:01<00:00, 368.75it/s]
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        if leg in ['L2', 'R2']:
+            phaseang = 'B_rot'
+        else:
+            phaseang = 'C_flex'
+        ix_ang_phase = angle_names_1leg.index(phaseang)
+        x = np.vstack([ww['angles'][leg][:, ix_ang_phase],
+                       ww['derivatives'][leg][:, ix_ang_phase]]).T
+        phase = get_phase(x)
+        d['phase_' + leg] = phase
+    d['speed_forward_raw'] = forward
+    d['speed_rotation_raw'] = rot
+    d['speed_side_raw'] = side
+    d['bnum'] = bnum
+    d['type'] = 'real'
+    ds.append(d)
+phased_real = pd.concat(ds).reset_index(drop=True)
+
+phased_real['speed_forward'] = ((phased_real['speed_forward_raw'] + 2) // 4) * 4
+phased_real['speed_rotation'] = ((phased_real['speed_rotation_raw'] + 2) // 4) * 4
+phased_real['speed_side'] = ((phased_real['speed_side_raw'] + 1) // 2) * 2
+phased_real['speed_forward'] = phased_real['speed_forward'].astype('int')
+phased_real['speed_rotation'] = phased_real['speed_rotation'].astype('int')
+phased_real['speed_side'] = phased_real['speed_side'].astype('int')
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 171/171 [00:00<00:00, 274.24it/s]
+
+
+#+BEGIN_SRC jupyter-python
+phased = pd.concat([phased_sim, phased_real]).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+sns.histplot(np.mod(phased['phase_L1'] - phased['phase_R1'], 2*np.pi))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: <AxesSubplot:ylabel='Count'>
+[[file:./.ob-jupyter/e37b2d82d293ef63476e6ea163be306ac053a708.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+d = phased[phased['type'] == 'real']
+sns.kdeplot(np.mod(d['phase_L1'] - d['phase_R1'], 2*np.pi), cut=-2, bw_method=0.1)
+plt.ylim(0, 0.5)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| 0.0 | 0.5 |
+[[file:./.ob-jupyter/afd3a257edcc3b50eba2efc99c01b58e278f00da.png]]
+:END:
 
 
 * Step frequency
