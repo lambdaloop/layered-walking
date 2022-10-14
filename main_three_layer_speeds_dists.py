@@ -105,7 +105,7 @@ for ln, leg in enumerate(legs):
     fullAngleNames.append([(leg + ang) for ang in anglesTG])
 
 # fictrac_speeds = [4, 8, 12, 16]
-fictrac_speeds = [8, 12]
+fictrac_speeds = [8, 12, 16]
 # fictrac_rots = [-8, -4, 0, 4, 8]
 # fictrac_sides = [-4, -2, 0, 2, 4]
 fictrac_rots = [0]
@@ -123,7 +123,7 @@ conditions = [
     for f_rot in fictrac_rots
     for f_side in fictrac_sides
     for dd in dist_types
-    for offset in range(2)
+    for offset in range(5)
 ]
 
 for cond in tqdm(conditions, ncols=70):
@@ -154,7 +154,7 @@ for cond in tqdm(conditions, ncols=70):
     lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 
     distDict = {'maxVelocity' : 1,         # Slippery surface
-                'maxHt'       : 0.005 * 1e-3,   # Uneven surface
+                'maxHt'       : 0.0015 * 1e-3,   # Uneven surface
                 'height'      : -0.1/1000,  # Stepping on a bump/pit
                 'distLeg'     : 'L1',       # Stepping on a bump/pit
                 'angle'       : 10,         # Walking on slope (degrees)

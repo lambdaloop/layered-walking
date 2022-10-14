@@ -15,12 +15,12 @@ from tools.dist_tools import *
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 
-walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 500   # How many timesteps to run TG for
+numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -51,8 +51,8 @@ distType = DistType.SLIPPERY_SURFACE
 #distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
 # Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 10,         # Slippery surface
-            'maxHt'       : 0.1/1000,   # Uneven surface
+distDict = {'maxVelocity' : 1,         # Slippery surface
+            'maxHt'       : 0.0015 * 1e-3,   # Uneven surface
             'height'      : -0.1/1000,  # Stepping on a bump/pit
             'distLeg'     : 'L1',       # Stepping on a bump/pit
             'angle'       : 10,         # Walking on slope (degrees)
@@ -129,9 +129,10 @@ for t in range(numSimSteps-1):
     # This is only used if TG is updated
     ws = np.zeros(6)
     px = phaseTG[:,k]
-    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*5
-    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*5
-    
+    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*8
+    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
+    phaseTG[:,k] = px
+
     for ln, leg in enumerate(legs):
         legPos  = int(leg[-1])
         legIdx  = legs.index(leg)
@@ -148,7 +149,8 @@ for t in range(numSimSteps-1):
         # Apply disturbance if in contact with ground
         dist           = get_zero_dists()[leg]    
         heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
-        if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
+        if k > 200 and k <= 400 and \
+           loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
             groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
             lastDetection[ln]    = t
             dist                 = get_dist(distDict, leg)               
@@ -172,5 +174,4 @@ matplotlib.use('Agg')
 angs           = angle.reshape(-1, angle.shape[-1]).T
 angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
 pose_3d        = angles_to_pose_names(angs, angNames)
-make_fly_video(pose_3d, 'vids/multileg_3layer.mp4')
-
+make_fly_video(pose_3d, 'vids/multileg_3layer_uneven.mp4')
