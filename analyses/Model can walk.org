@@ -138,6 +138,19 @@ wd.bout_context
 :        [13.015    , -0.6182214,  1.8810371],
 :        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
 
+#+BEGIN_SRC jupyter-python
+fancy_angle_names = {
+    'C_flex': 'femur-tibia\nflexion',
+    'A_rot': 'coxa\nrotation',
+    'A_abduct': 'body-coxa\nflexion',
+    'B_flex': 'coxa-femur\nflexion',
+    'B_rot': 'femur\nrotation'
+}
+#+END_SRC
+
+#+RESULTS:
+
+
 * Example time series
 
 For the figure part A, we'd like to have multiple example angles. Perhaps R1 femur-tibia flexion would be good to show, but also L2 femur rotation?
@@ -567,7 +580,7 @@ plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
 [[file:./.ob-jupyter/f3947055e4639b0829292262bac94bf59d9a2c9f.png]]
 
 
-* Phase coupling within a leg
+* Phase coupling within a leg - angles version
 Here we make Figure 2D, which conveys the coupling with a single leg.
 In the past, I have conveyed this by plotting each leg angle against the phase of a single joint.
 
@@ -695,13 +708,6 @@ fullangf_sync.loc[:,'accel'] = fullangf_sync_melt.loc[
 #+RESULTS:
 
 #+BEGIN_SRC jupyter-python
-fancy_angle_names = {
-    'C_flex': 'femur-tibia\nflexion',
-    'A_rot': 'coxa\nrotation',
-    'A_abduct': 'body-coxa\nflexion',
-    'B_flex': 'coxa-femur\nflexion',
-    'B_rot': 'femur\nrotation'
-}
 fullangf_sync['fancy_angle_name'] = [fancy_angle_names[x] for x in fullangf_sync['angle_name']]
 #+END_SRC
 
@@ -728,6 +734,101 @@ plt.savefig('plots/fig2D_coupling_perleg.pdf', bbox_inches = "tight")
 [[file:./.ob-jupyter/68bf59a9410c6e7891331775608522fe09475962.png]]
 [[file:./.ob-jupyter/9ddd8d17abc57e9d8000246acfecef7639825ed4.png]]
 :END:
+
+* Phase coupling within a leg - phase version
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    forward, rot, side = speeds[i]
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(angle_names_1leg):
+            x = np.vstack([angles[i, ix_leg, ix_ang, :],
+                           derivs[i, ix_leg, ix_ang, :]]).T
+            phase = get_phase(x)
+            key = leg + angname
+            d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'simulated'
+    ds.append(d)
+phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 500/500 [00:04<00:00, 107.86it/s]
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(angle_names_1leg):
+            x = np.vstack([ww['angles'][leg][:, ix_ang],
+                           ww['derivatives'][leg][:, ix_ang]]).T
+            phase = get_phase(x)
+            key = leg + angname
+            d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'real'
+    ds.append(d)
+phases_byleg_real = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|███████████████████████████████| 171/171 [00:01<00:00, 99.52it/s]
+
+#+BEGIN_SRC jupyter-python
+phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+d = phases_byleg
+fig, subplots = plt.subplots(6, 5, figsize=(9, 1.5*6))
+for ix_leg, leg in enumerate(legs):
+    if leg in ['L2', 'R2']:
+        refname = 'B_rot'
+    else:
+        refname = 'C_flex'
+    for ix_ang, angname in enumerate(sorted(angle_names_1leg)):
+        ax = subplots[ix_leg][ix_ang]
+        if angname == refname:
+            if ix_leg == 0:
+                ax.set_title(fancy_angle_names[angname])
+            ax.set_axis_off()
+            continue
+        d = phases_byleg[phases_byleg['type'] == 'simulated']
+        sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
+                    cut=0, shade=True, ax=ax)
+        d = phases_byleg[phases_byleg['type'] == 'real']
+        sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
+                    cut=0, shade=True, ax=ax)
+        ax.set_ylim(0, 1.5)
+        if ix_leg == 0:
+            ax.set_title(fancy_angle_names[angname])
+        if ix_ang == 0:
+            ax.set_ylabel(leg + "\nProbability density")
+        else:
+            ax.set_yticklabels([])
+            ax.set_ylabel("")
+        if ix_leg != 5:
+            ax.set_xticklabels([])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/d31327ccca832c705b0e4023acf6281156ad9474.png]]
 
 
 * Phase coupling across legs
@@ -904,7 +1005,7 @@ for i in range(len(bnums)):
     ds.append(row)
 steps_real = pd.DataFrame.from_records(ds)
 
-steps_real['speed_forward'] = ((steps_real['speed_forward_raw'] + 2) // 4) * 4
+steps_real['speed_forward'] = ((steps_real['speed_forward_raw'] + 1) // 2) * 2
 steps_real['speed_rotation'] = ((steps_real['speed_rotation_raw'] + 2) // 4) * 4
 steps_real['speed_side'] = ((steps_real['speed_side_raw'] + 1) // 2) * 2
 steps_real['speed_forward'] = steps_real['speed_forward'].astype('int')
@@ -924,13 +1025,15 @@ steps_df = pd.concat([steps_sim, steps_real])
 
 #+BEGIN_SRC jupyter-python
 dd = steps_df
-c = (dd['speed_side'].abs() <= 1) & (dd['speed_rotation'].abs() <= 1) \
+c = (dd['speed_side'].abs() <= 2) & (dd['speed_rotation'].abs() <= 2) \
     & (dd['speed_forward'] > 1)
 sns.pointplot(x='speed_forward', y='step_freq', data=dd[c], hue='type')
+plt.xlabel("Forward speed (mm/s)")
+plt.ylabel("Step frequency (steps/s)")
 #+END_SRC
 
 #+RESULTS:
 :RESULTS:
-: <AxesSubplot:xlabel='speed_forward', ylabel='step_freq'>
-[[file:./.ob-jupyter/be6f570c41b5999ebcba93740ed222d7110f8070.png]]
+: Text(0, 0.5, 'Step frequency (steps/s)')
+[[file:./.ob-jupyter/6a7a4cb3a1787f7acf70ccb112afc38da115343c.png]]
 :END:
