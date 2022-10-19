@@ -128,8 +128,15 @@ def get_dists_slippery(maxVelocity):
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
         distDict[leg] = np.zeros(numAngles*2)
-        distDict[leg][numAngles+distAngles[legPos]] = \
-            np.random.uniform(-maxVelocity, maxVelocity, len(distAngles[legPos]))
+        
+        # Normal distribution about maxVelocity
+        dists = np.random.normal(maxVelocity, maxVelocity/10, len(distAngles[legPos]))
+        for i in range(len(dists)):
+            # Flip a coin to decide whether perturbation is negative or positive
+            if np.random.randint(2) == 0: 
+                dists[i] = -dists[i]
+
+        distDict[leg][numAngles+distAngles[legPos]] = dists
     return distDict
 
 
