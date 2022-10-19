@@ -149,7 +149,14 @@ def get_dists_uneven(maxHt):
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
-        height        = np.random.uniform(-maxHt, maxHt)
+        
+        height = np.random.normal(maxHt, maxHt/10)
+        if np.random.randint(2) == 0: # Flip a coin
+            height = -height
+        
+        #height        = np.random.uniform(-maxHt, maxHt)
+        
+        
         distDict[leg] = get_dists_endeffector_moves(height, leg)
     return distDict          
 
