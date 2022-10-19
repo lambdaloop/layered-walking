@@ -26,7 +26,7 @@ filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 600   # How many timesteps to run TG for
+numTGSteps     = 550   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -52,11 +52,11 @@ inputPen       = 1e-8
 #distType  = DistType.ZERO
 # Will only be applied between t=200 and t=400
 
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 6}
+#distType = DistType.SLIPPERY_SURFACE
+#distDict = {'maxVelocity' : 6}
 
-#distType = DistType.UNEVEN_SURFACE
-#distDict = {'maxHt'       : 0.0015 * 1e-3}
+distType = DistType.UNEVEN_SURFACE
+distDict = {'maxHt' : 0.02 * 1e-3}
 
 distDict['distType'] = distType
 
