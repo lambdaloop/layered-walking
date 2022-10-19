@@ -3,6 +3,7 @@
 import math
 import matplotlib
 import numpy as np
+import sys
 
 from tools.ctrl_tools import ControlAndDynamics
 from tools.trajgen_tools import TrajectoryGenerator, WalkingData
@@ -12,15 +13,20 @@ from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
                             angles_to_pose_names, make_fly_video
 from tools.dist_tools import *
 
+# python3 main_three_layer.py [optional: output file name]
+outfilename = 'vids/multileg_3layer.mp4' # default
+if len(sys.argv) > 1:
+    outfilename = sys.argv[1]
+
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
+#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 600   # How many timesteps to run TG for
+numTGSteps     = 500   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -44,20 +50,13 @@ inputPen       = 1e-8
 # Disturbance
 ################################################################################
 #distType  = DistType.ZERO
-distType = DistType.SLIPPERY_SURFACE
-#distType = DistType.UNEVEN_SURFACE
-#distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
-#distType = DistType.SLOPED_SURFACE
-#distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
-# Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 1,         # Slippery surface
-            'maxHt'       : 0.0015 * 1e-3,   # Uneven surface
-            'height'      : -0.1/1000,  # Stepping on a bump/pit
-            'distLeg'     : 'L1',       # Stepping on a bump/pit
-            'angle'       : 10,         # Walking on slope (degrees)
-            'missingLeg'  : 'L1'        # Missing leg
-           }
+distType = DistType.SLIPPERY_SURFACE
+distDict = {'maxVelocity' : 12}
+
+#distType = DistType.UNEVEN_SURFACE
+#distDict = {'maxHt'       : 0.0015 * 1e-3}
+
 distDict['distType'] = distType
 
 # Local minima detection parameters (for applying disturbance)
@@ -174,4 +173,4 @@ matplotlib.use('Agg')
 angs           = angle.reshape(-1, angle.shape[-1]).T
 angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
 pose_3d        = angles_to_pose_names(angs, angNames)
-make_fly_video(pose_3d, 'vids/multileg_3layer_uneven.mp4')
+make_fly_video(pose_3d, outfilename)
