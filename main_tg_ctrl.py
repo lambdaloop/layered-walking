@@ -46,20 +46,10 @@ leg = sys.argv[1]
 # Disturbance
 ################################################################################
 #distType = DistType.ZERO
-distType = DistType.SLIPPERY_SURFACE
-#distType = DistType.UNEVEN_SURFACE
-#distType = DistType.BUMP_ON_SURFACE # OK for some, bad for others
-#distType = DistType.SLOPED_SURFACE
-#distType = DistType.MISSING_LEG  # This might correspond to too-large disturbance
 
-# Contains params relevant to any type of disturbance
-distDict = {'maxVelocity' : 50,        # Slippery surface
-            'maxHt'       : 0.1/1000,   # Uneven surface
-            'height'      : -0.1/1000,  # Stepping on a bump/pit
-            'distLeg'     : leg,        # Stepping on a bump/pit
-            'angle'       : 10,         # Walking on slope (degrees)
-            'missingLeg'  : 'L1'        # Missing leg
-           }
+distType = DistType.UNEVEN_SURFACE
+distDict = {'maxHt'       : 0.1 * 1e-3}
+
 distDict['distType'] = distType
 
 plotPureTG = False # Whether or not to also plot data from disturbed pure TG
