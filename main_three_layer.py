@@ -26,7 +26,7 @@ filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 550   # How many timesteps to run TG for
+numTGSteps     = 900   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -52,11 +52,16 @@ inputPen       = 1e-8
 #distType  = DistType.ZERO
 # Will only be applied between t=200 and t=400
 
-#distType = DistType.SLIPPERY_SURFACE
-#distDict = {'maxVelocity' : 6}
+boutNum  = 5 # Default is 0; change bouts for different random behaviors
 
-distType = DistType.UNEVEN_SURFACE
-distDict = {'maxHt' : 0.02 * 1e-3}
+distStart = 300
+distEnd   = 600
+
+distType = DistType.SLIPPERY_SURFACE
+distDict = {'maxVelocity' : 6}
+
+#distType = DistType.UNEVEN_SURFACE
+#distDict = {'maxHt' : 0.02 * 1e-3}
 
 distDict['distType'] = distType
 
@@ -68,8 +73,12 @@ nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings)
-contexts = bout['contexts']
+bout     = wd.get_bout(walkingSettings, offset=boutNum)
+#contexts = bout['contexts']
+
+# Use constant contexts
+context  = np.array(walkingSettings).reshape(1,3)
+contexts = np.repeat(context, numTGSteps, axis=0)
 
 angInit   = bout['angles']
 drvInit   = bout['derivatives']
@@ -149,7 +158,7 @@ for t in range(numSimSteps-1):
         # Apply disturbance if in contact with ground
         dist           = get_zero_dists()[leg]    
         heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
-        if k > 200 and k <= 400 and \
+        if k > distStart and k <= distEnd and \
            loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
             groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
             lastDetection[ln]    = t
