@@ -52,13 +52,13 @@ inputPen       = 1e-8
 #distType  = DistType.ZERO
 # Will only be applied between t=200 and t=400
 
-boutNum  = 5 # Default is 0; change bouts for different random behaviors
+boutNum  = 1 # Default is 0; change bouts for different random behaviors
 
 distStart = 300
 distEnd   = 600
 
 distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 6}
+distDict = {'maxVelocity' : 5}
 
 #distType = DistType.UNEVEN_SURFACE
 #distDict = {'maxHt' : 0.02 * 1e-3}

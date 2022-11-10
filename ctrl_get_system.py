@@ -23,7 +23,9 @@ fCoxaFemur  = coeff
 fFemurRot   = coeff
 fFemurTibia = coeff
 
-legs_to_compute = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'] # Which legs to get a system for
+#legs_to_compute = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3'] # Which legs to get a system for
+
+legs_to_compute = ['L3', 'R3'] # Which legs to get a system for
 
 def get_robot_params(leg):
     ''' 
@@ -57,17 +59,12 @@ def get_robot_params(leg):
                    (0,       lTT,     0,      'q4')]
         linkMasses  = [0, mCoxa, mFemur, mTT]
         frics       = [fBodyCoxa, fCoxaRot, fCoxaFemur, fFemurTibia]        
-    elif legPos == 2: # Middle legs
+    elif legPos == 2 or legPos == 3: # Middle and hind legs
         DHTable = [('pi/2',  0,    0,      'q1'),
                    ('-pi/2', 0,    lFemur, 'q2'),
                    (0,       lTT,  0,      'q3')]
         linkMasses  = [0, mFemur, mTT]
         frics       = [fCoxaFemur, fFemurRot, fFemurTibia]
-    else: # Hind legs
-        DHTable = [(0, lFemur,  0, 'q1'),
-                   (0, lTT,     0, 'q2')]
-        linkMasses  = [mFemur, mTT]
-        frics       = [fCoxaFemur, fFemurTibia]
     
     # Get inertias
     dof      = len(DHTable)
@@ -79,12 +76,9 @@ def get_robot_params(leg):
         inertias[1][3] = iCoxa  # L2_yy
         inertias[2][5] = iFemur # L3_zz
         inertias[3][5] = iTT    # L4_zz
-    elif legPos == 2: 
+    elif legPos == 2 or legPos == 3:
         inertias[1][3] = iFemur # L2_yy
         inertias[2][5] = iTT    # L3_zz
-    else:
-        inertias[0][5] = iFemur # L1_zz
-        inertias[1][5] = iTT    # L2_zz
 
     return (DHTable, linkMasses, inertias, frics, xEqm)
 

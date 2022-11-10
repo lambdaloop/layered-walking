@@ -123,7 +123,7 @@ def get_dists_slippery(maxVelocity):
     distDict = {}
     distAngles = {1: np.array([3]),    # femur-tibia flexion
                   2: np.array([1, 2]), # femur rotation, femur-tibia flexion
-                  3: np.array([1])}    # femur-tibia flexion
+                  3: np.array([1, 2])} # femur rotation, femur-tibia flexion
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
