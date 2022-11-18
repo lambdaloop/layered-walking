@@ -4,6 +4,10 @@ from scipy.spatial.transform import Rotation
 import numpy as np
 from tqdm import tqdm, trange
 
+from mpl_toolkits.mplot3d import Axes3D
+import matplotlib.pyplot as plt
+import skvideo.io
+
 
 
 # Note: L1A_abduct is actually flexion (misnamed)
@@ -230,27 +234,36 @@ def angles_to_pose_names(angs, angnames,
         new_angs[:, ix_dest] = angs[:, ix_source]
     return angles_to_pose_multirow(new_angs, lengths, offsets, progress)
 
-from mpl_toolkits.mplot3d import Axes3D
-import matplotlib.pyplot as plt
-import skvideo.io
-
 def make_fly_video(pose_3d, outname):
     writer = skvideo.io.FFmpegWriter(outname, inputdict={
         '-framerate': str(30.0),
     }, outputdict={
-        '-vcodec': 'h264'
+        '-vcodec': 'h264',
+        '-pix_fmt': 'yuv420p', # to support more players
+        '-vf': 'pad=ceil(iw/2)*2:ceil(ih/2)*2' # to handle width/height not divisible by 2
     })
+
+    # pose_3d_flat = pose_3d[0].reshape(-1, 3)
+    # offset = np.mean(pose_3d_flat, axis=0)
+    offset = np.array([ 0.18773997, -0.4277914 , -0.30195438]) # precomputed
+    pose_3d  = pose_3d - offset
+
+    # colors = ['#1E88E5', '#D81B60']
+    colors = ['#5D3A9B', '#E68F00']
 
     fig = plt.figure(figsize=(4, 4), dpi=200)
     ax = fig.add_subplot(1, 1, 1, projection='3d')
     for i in trange(pose_3d.shape[0]):
         ax.cla()
         X_p = pose_3d[i]
-        for xyz in X_p:
-            ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o', markersize=4)
-        ax.set_xlim(-1, 1)
-        ax.set_ylim(-1, 1)
-        ax.set_zlim(-1, 1)
+        for il, xyz in enumerate(X_p):
+            ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o',
+                    markersize=7, linewidth=2,
+                    color=colors[il % 2])
+        ax.set_xlim(-0.8, 0.8)
+        ax.set_ylim(-0.8, 0.8)
+        ax.set_zlim(-0.8, 0.8)
+        ax.set_axis_off()
         plt.draw()
         img = np.array(fig.canvas.renderer._renderer).copy()
         writer.writeFrame(img)

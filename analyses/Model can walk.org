@@ -318,7 +318,7 @@ allangf = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 500/500 [00:59<00:00,  8.38it/s]
+: 100%|███████████████████████████████| 500/500 [00:58<00:00,  8.61it/s]
 
 
 Load the real data
@@ -362,7 +362,7 @@ realangf['speed_side'] = realangf['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 171/171 [00:24<00:00,  7.11it/s]
+: 100%|███████████████████████████████| 171/171 [00:23<00:00,  7.36it/s]
 
 #+BEGIN_SRC jupyter-python
 fullangf = pd.concat([allangf, realangf]).reset_index(drop=True)
@@ -516,13 +516,13 @@ angle_errors['accel_units'] = angle_errors['accel'] * 300.0 * 300.0
 
 #+RESULTS:
 : angle
-: /tmp/ipykernel_3062741/855530367.py:2: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1248377/855530367.py:2: RuntimeWarning: Mean of empty slice
 :   return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
 : deriv
-: /tmp/ipykernel_3062741/1432084253.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1248377/1432084253.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 : accel
-: /tmp/ipykernel_3062741/1432084253.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1248377/1432084253.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 
 
@@ -546,11 +546,32 @@ g = sns.violinplot(y='fancy_angle_name', x='accel_units', data=angle_errors,
 g.set(ylabel='', xlabel='Acceleration\nerror (deg/s^2)', yticklabels=[])
 g.legend_ = None
 
-plt.savefig('plots/fig2C_error_raw.pdf', bbox_inches = "tight")
+plt.savefig('plots/fig2C_error_raw_horizontal.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
 [[file:./.ob-jupyter/ce815b1e0d4cc42c1f74d41b029da1232490fad9.png]]
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='angle_name', y='angle', data=angle_errors, color='lightgray', cut=0)
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', data=angle_errors, color='lightgray', cut=0)
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+g.legend_ = None
+
+plt.savefig('plots/fig2C_error_raw_vertical.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/6346f591818bdbc31305ac66ff2e92cb6d5764f4.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -825,10 +846,12 @@ for ix_leg, leg in enumerate(legs):
             ax.set_ylabel("")
         if ix_leg != 5:
             ax.set_xticklabels([])
+
+plt.savefig("plots/fig2F_phases_withinleg.pdf", bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/d31327ccca832c705b0e4023acf6281156ad9474.png]]
+[[file:./.ob-jupyter/16a7476799877fbb71cf698558d1967a5bd5bcfe.png]]
 
 
 * Phase coupling across legs
@@ -1005,7 +1028,7 @@ for i in range(len(bnums)):
     ds.append(row)
 steps_real = pd.DataFrame.from_records(ds)
 
-steps_real['speed_forward'] = ((steps_real['speed_forward_raw'] + 1) // 2) * 2
+steps_real['speed_forward'] = ((steps_real['speed_forward_raw'] + 1) // 4) * 4
 steps_real['speed_rotation'] = ((steps_real['speed_rotation_raw'] + 2) // 4) * 4
 steps_real['speed_side'] = ((steps_real['speed_side_raw'] + 1) // 2) * 2
 steps_real['speed_forward'] = steps_real['speed_forward'].astype('int')
@@ -1027,13 +1050,14 @@ steps_df = pd.concat([steps_sim, steps_real])
 dd = steps_df
 c = (dd['speed_side'].abs() <= 2) & (dd['speed_rotation'].abs() <= 2) \
     & (dd['speed_forward'] > 1)
-sns.pointplot(x='speed_forward', y='step_freq', data=dd[c], hue='type')
+plt.figure(figsize=(6, 4))
+g = sns.pointplot(x='speed_forward', y='step_freq', data=dd[c], hue='type')
+g.legend_ = None
+sns.despine()
 plt.xlabel("Forward speed (mm/s)")
 plt.ylabel("Step frequency (steps/s)")
+plt.savefig("plots/fig2H_stepfreq.pdf", bbox_inches="tight")
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-: Text(0, 0.5, 'Step frequency (steps/s)')
-[[file:./.ob-jupyter/6a7a4cb3a1787f7acf70ccb112afc38da115343c.png]]
-:END:
+[[file:./.ob-jupyter/0e0a7c714b0951e59605940d330920c308aec7be.png]]

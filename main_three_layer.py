@@ -14,19 +14,22 @@ from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
 from tools.dist_tools import *
 
 # python3 main_three_layer.py [optional: output file name]
-outfilename = 'vids/multileg_3layer.mp4' # default
-if len(sys.argv) > 1:
-    outfilename = sys.argv[1]
+# outfilename = 'vids/multileg_3layer.mp4' # default
+# if len(sys.argv) > 1:
+    # outfilename = sys.argv[1]
+
+# basename = 'dist_12mms_uneven'
+basename = 'compare_8mms'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 
-walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [8, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 900   # How many timesteps to run TG for
+numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -52,16 +55,20 @@ inputPen       = 1e-8
 #distType  = DistType.ZERO
 # Will only be applied between t=200 and t=400
 
-boutNum  = 1 # Default is 0; change bouts for different random behaviors
+boutNum  = 0 # Default is 0; change bouts for different random behaviors
 
-distStart = 300
+distStart = 240
 distEnd   = 600
+# distStart = 120
+# distEnd = 600
 
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 5}
+distType = DistType.ZERO
 
-#distType = DistType.UNEVEN_SURFACE
-#distDict = {'maxHt' : 0.02 * 1e-3}
+# distType = DistType.SLIPPERY_SURFACE
+# distDict = {'maxVelocity' : 5}
+
+# distType = DistType.UNEVEN_SURFACE
+# distDict = {'maxHt' : 0.04 * 1e-3}
 
 distDict['distType'] = distType
 
@@ -74,7 +81,7 @@ nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 ################################################################################
 wd       = WalkingData(filename)
 bout     = wd.get_bout(walkingSettings, offset=boutNum)
-#contexts = bout['contexts']
+contexts = bout['contexts']
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -183,4 +190,9 @@ matplotlib.use('Agg')
 angs           = angle.reshape(-1, angle.shape[-1]).T
 angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
 pose_3d        = angles_to_pose_names(angs, angNames)
-make_fly_video(pose_3d, outfilename)
+# make_fly_video(pose_3d, outfilename)
+make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))
+
+angs = np.hstack([bout['angles'][leg] for leg in legs])
+p3d = angles_to_pose_names(angs, angNames)
+make_fly_video(p3d, 'vids/{}_real.mp4'.format(basename))

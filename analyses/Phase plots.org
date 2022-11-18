@@ -185,18 +185,63 @@ make_fly_video(p3d, 'vids/real_{}mms.mp4'.format(speed[0]))
 
 #+RESULTS:
 :RESULTS:
-: 100%|█████████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:27<00:00, 21.58it/s]
-: 100%|█████████████████████████████████████████████████████████████████████████████████████████████| 564/564 [00:26<00:00, 21.02it/s]
-[[file:./.ob-jupyter/814d4af959710cffcee1f49a1756c99a970e032a.png]]
-[[file:./.ob-jupyter/86a09db6b6dbc9afb5f9f56b72b773eaf940e423.png]]
+: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:12<00:00, 46.67it/s]
+: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:13<00:00, 45.60it/s]
+[[file:./.ob-jupyter/61715a6543306dda5120327d6b10eee210e81a2a.png]]
+[[file:./.ob-jupyter/aa6d4350bac99303124ef85c49e7b200c3138ce1.png]]
 :END:
 
 #+BEGIN_SRC jupyter-python
-  2+2
+pose_3d = poses[ix_speed, :600]
 #+END_SRC
 
 #+RESULTS:
-: 4
+
+
+#+BEGIN_SRC jupyter-python
+import skvideo
+outname = 'vids/test.mp4'
+writer = skvideo.io.FFmpegWriter(outname, inputdict={
+    '-framerate': str(30.0),
+}, outputdict={
+    '-vcodec': 'h264',
+    '-pix_fmt': 'yuv420p', # to support more players
+    '-vf': 'pad=ceil(iw/2)*2:ceil(ih/2)*2' # to handle width/height not divisible by 2
+})
+cmap = plt.get_cmap('tab10')
+fig = plt.figure(figsize=(4, 4), dpi=200)
+ax = fig.add_subplot(1, 1, 1, projection='3d')
+
+colors = ['#1E88E5', '#D81B60']
+
+for i in trange(pose_3d.shape[0]):
+# for i in range(5):
+    ax.cla()
+    X_p = pose_3d[i]
+    for il, xyz in enumerate(X_p):
+        ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2],
+                marker='o', markersize=5, linewidth=1.7,
+                # color=cmap((il * 2) % 6 + (il // 3))
+                color=colors[il % 2])
+    ax.set_xlim(-1, 1)
+    ax.set_ylim(-1, 1)
+    ax.set_zlim(-1, 1)
+    ax.set_axis_off()
+    plt.draw()
+    img = np.array(fig.canvas.renderer._renderer).copy()
+    writer.writeFrame(img)
+writer.close()
+
+#+END_SRC
+
+
+#+RESULTS:
+:RESULTS:
+: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:12<00:00, 48.05it/s]
+[[file:./.ob-jupyter/9dc825cd54345d4b56988bc6e7fc373f0b75dbcc.png]]
+:END:
+#+RESULTS:
+
 
 
 #+BEGIN_SRC jupyter-python
