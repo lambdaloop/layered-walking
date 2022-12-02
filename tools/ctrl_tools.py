@@ -8,6 +8,7 @@ from scipy.linalg import block_diag
 from tqdm import trange
 
 from tools.angle_functions import *
+from tools.trajgen_tools import ANGLE_NAMES_DEFAULT
 
 # Use version 0.7.5
 # python3 -m pip install sympy==0.7.5
@@ -283,7 +284,7 @@ def get_augmented_dist_mtx(AReal, numDelays):
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, numDelays, futurePenRatio, anglePen, drvPen, inputPen):
+    def __init__(self, leg, Ts, numDelays, futurePenRatio, anglePen, drvPen, inputPen, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
@@ -291,7 +292,12 @@ class ControlAndDynamics:
         self._legPos    = int(leg[-1])
         self._numDelays = numDelays
         self._Nr        = ALin.shape[0] # Number of 'real' states
-        
+
+        if namesTG is None:
+            self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
+        else:
+            self._namesTG = namesTG
+
         # Zeroth order discretization
         self._Ar  = np.eye(self._Nr) + ALin*Ts
         self._Br  = Ts*BLin
@@ -348,8 +354,8 @@ class ControlAndDynamics:
         xEqmFlat = self._xEqm.flatten()
         
         # Synthesize wtraj for t up to t+numDelay
-        angles = tg_to_ctrl(anglesAhead, self._legPos)
-        drvs   = tg_to_ctrl(drvsAhead, self._legPos)/self._Ts
+        angles = tg_to_ctrl(anglesAhead, self._legPos, self._namesTG)
+        drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
         
         # wTraj(t+numDelay)

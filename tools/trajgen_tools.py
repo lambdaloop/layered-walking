@@ -13,16 +13,31 @@ def update_state(ang, drv, phase, out, ratio=1.0):
     phase1 = phase + out[-1]*ratio
     return ang1, drv1, phase1
 
+ANGLE_NAMES_DEFAULT = {
+    'L1': ['L1C_flex', 'L1A_rot', 'L1A_abduct', 'L1B_flex', 'L1B_rot'],
+    'L2': ['L2C_flex', 'L2A_rot', 'L2A_abduct', 'L2B_flex', 'L2B_rot'],
+    'L3': ['L3C_flex', 'L3A_rot', 'L3A_abduct', 'L3B_flex', 'L3B_rot'],
+    'R1': ['R1C_flex', 'R1A_rot', 'R1A_abduct', 'R1B_flex', 'R1B_rot'],
+    'R2': ['R2C_flex', 'R2A_rot', 'R2A_abduct', 'R2B_flex', 'R2B_rot'],
+    'R3': ['R3C_flex', 'R3A_rot', 'R3A_abduct', 'R3B_flex', 'R3B_rot']
+}
 
 
 class TrajectoryGenerator:
-    def __init__(self, filename, leg, numAng, numSimSteps):
+    def __init__(self, filename, leg, numSimSteps):
         self._filename  = filename
         self._leg       = leg
-        self._numAng    = numAng
-        
+
         with open(filename, 'rb') as myfile:
             allmodels = pickle.load(myfile)
+
+        if 'angle_names' in allmodels[leg]:
+            self._angle_names = allmodels[leg]['angle_names']
+        else:
+            # backcompatible with older models
+            self._angle_names = ANGLE_NAMES_DEFAULT[leg]
+
+        self._numAng    = len(self._angle_names)
 
         # Walking model
         self._model     = MLPScaledXY.from_full(allmodels[leg]['model_walk'])
@@ -85,6 +100,12 @@ class WalkingData:
 
         self._legs = sorted(self.data.keys())
 
+        if 'angle_names' in self.data[self._legs[0]]:
+            self._angle_names = dict([(leg, self.data[leg]['angle_names']) for leg in self._legs])
+        else:
+            # backcompatible with older models
+            self._angle_names = dict([(leg, ANGLE_NAMES_DEFAULT[leg]) for leg in self._legs])
+
         xy_ws = dict()
         for leg in self._legs:
             xy_w, bnums = self.data[leg]['train']
@@ -92,8 +113,10 @@ class WalkingData:
         self.bnums = bnums
         self.xy_ws = xy_ws
 
-        k = xy_ws['L1'][0].shape[1]
-        self._numAng = (k - 5) // 3
+        # k = xy_ws['L1'][0].shape[1]
+        # self._numAng = (k - 5) // 3
+
+        self._numAng = dict([(leg, len(self._angle_names[leg])) for leg in self._legs])
 
         self.context = xy_ws['L1'][0][:, -5:-2]
 
@@ -135,12 +158,13 @@ class WalkingData:
         phases = dict()
 
         for leg in self._legs:
+            numAng = self._numAng[leg]
             x = self.xy_ws[leg][0]
             rows = x[subix]
-            ang_c = rows[:,:self._numAng]
-            ang_s = rows[:,self._numAng:self._numAng*2]
+            ang_c = rows[:,:numAng]
+            ang_s = rows[:,numAng:numAng*2]
             angs[leg] = np.degrees(np.arctan2(ang_s, ang_c))
-            drvs[leg] = rows[:,self._numAng*2:self._numAng*3]
+            drvs[leg] = rows[:,numAng*2:numAng*3]
             rcos, rsin = rows[:,[-2, -1]].T
             phases[leg] = np.arctan2(rsin, rcos)
 

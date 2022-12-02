@@ -19,15 +19,17 @@ from tools.dist_tools import *
     # outfilename = sys.argv[1]
 
 # basename = 'dist_12mms_uneven'
-basename = 'compare_8mms'
+# basename = 'compare_8mms'
+basename = 'test'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [8, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
 numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
@@ -65,7 +67,7 @@ distEnd   = 600
 distType = DistType.ZERO
 
 # distType = DistType.SLIPPERY_SURFACE
-# distDict = {'maxVelocity' : 5}
+distDict = {'maxVelocity' : 5}
 
 # distType = DistType.UNEVEN_SURFACE
 # distDict = {'maxHt' : 0.04 * 1e-3}
@@ -102,6 +104,7 @@ nLegs   = len(legs)
 dofTG   = len(anglesTG)
 TG      = [None for i in range(nLegs)]
 CD      = [None for i in range(nLegs)]
+namesTG = [None for i in range(nLegs)]
 
 angleTG = np.zeros((nLegs, dofTG, numTGSteps))
 drvTG   = np.zeros((nLegs, dofTG, numTGSteps))
@@ -119,11 +122,15 @@ fullAngleNames = []
 for ln, leg in enumerate(legs):
     fullAngleNames.append([(leg + ang) for ang in anglesTG])
 
-    TG[ln] = TrajectoryGenerator(filename, leg, dofTG, numTGSteps)
-    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
-                                anglePen, drvPen[leg], inputPen)
+    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
-    angleTG[ln,:,0], drvTG[ln,:,0], phaseTG[ln,0] = \
+    namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
+    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
+                                anglePen, drvPen[leg], inputPen, namesTG[ln])
+
+    numAng = TG[ln]._numAng
+
+    angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
         angInit[leg][0], drvInit[leg][0], phaseInit[leg][0]
         
     ys[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
@@ -152,14 +159,16 @@ for t in range(numSimSteps-1):
     for ln, leg in enumerate(legs):
         legPos  = int(leg[-1])
         legIdx  = legs.index(leg)
+        numAng = TG[ln]._numAng
 
-        ang = angleTG[ln,:,k] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t], legPos)
-        drv = drvTG[ln,:,k] + ctrl_to_tg(ys[ln][CD[ln]._Nu:,t]*CD[ln]._Ts, legPos)
+        ang = angleTG[ln,:numAng,k] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t], legPos, namesTG[ln])
+        drv = drvTG[ln,:numAng,k] + ctrl_to_tg(
+            ys[ln][CD[ln]._Nu:CD[ln]._Nu*2,t]*CD[ln]._Ts, legPos, namesTG[ln])
         
         # Communicate to trajectory generator and get future trajectory
         if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
             kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
-            angleTG[ln,:,k+1:kEnd+1], drvTG[ln,:,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
+            angleTG[ln,:numAng,k+1:kEnd+1], drvTG[ln,:numAng,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
         
         # Apply disturbance if in contact with ground
@@ -179,16 +188,24 @@ for t in range(numSimSteps-1):
         us[ln][:,t], ys[ln][:,t+1] = CD[ln].step_forward(ys[ln][:,t], anglesAhead, drvsAhead, dist)
         
 # True angles sampled at Ts
-angle    = np.zeros((nLegs, dofTG, numTGSteps))
+# angle    = np.zeros((nLegs, dofTG, numTGSteps))
 downSamp = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
+angle = []
+names = []
 
 for ln, leg in enumerate(legs):
+    numAng = TG[ln]._numAng
+    name = TG[ln]._angle_names
     legPos    = int(leg[-1])
-    angle[ln,:,:] = angleTG[ln,:,:] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,downSamp], legPos)
+    x = angleTG[ln,:numAng,:] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,downSamp], legPos, namesTG[ln])
+    angle.append(x)
+    names.append(name)
     
 matplotlib.use('Agg')
-angs           = angle.reshape(-1, angle.shape[-1]).T
-angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
+# angs           = angle.reshape(-1, angle.shape[-1]).T
+# angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
+angs = np.vstack(angle).T
+angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs, angNames)
 # make_fly_video(pose_3d, outfilename)
 make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))

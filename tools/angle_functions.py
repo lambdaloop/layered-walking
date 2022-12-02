@@ -10,7 +10,7 @@ import skvideo.io
 
 
 
-# Note: L1A_abduct is actually flexion (misnamed)
+# Note: L1 A_abduct is actually flexion (misnamed)
 anglesTG   = ['C_flex', 'A_rot', 'A_abduct', 'B_flex', 'B_rot']
 
 anglesCtrl = {1: ['A_abduct', 'A_rot', 'B_flex', 'C_flex'],
@@ -36,23 +36,38 @@ mapTGIdx   = {1: [0, 1, 2, 3] ,
 
 
 
-def tg_to_ctrl(angles, legPos):
+def tg_to_ctrl(angles, legPos, namesTG=None):
     ''' Convert angles for use by TG to angles for use by controller '''
-    return np.radians(angles[mapTG2Ctrl[legPos]])
+    if namesTG is None:
+        namesTG = anglesTG
+    namesCtrl = anglesCtrl[legPos]
+    mapIx = [namesTG.index(n) for n in namesCtrl]
+    # return np.radians(angles[mapTG2Ctrl[legPos]])
+    return np.radians(angles[mapIx])
 
 
 
-def ctrl_to_tg(angles, legPos):
+def ctrl_to_tg(angles, legPos, namesTG=None):
     ''' 
     Convert angles for use by controller to angles for use by TG
     If angle is not used by controller, put 0
     '''
-    tgAngles = np.zeros(len(anglesTG))
-    
+    if namesTG is None:
+        namesTG = anglesTG
+
+    namesCtrl = anglesCtrl[legPos]
+
+    tgAngles = np.zeros(len(namesTG))
     if len(angles.shape) > 1:
-        tgAngles = np.zeros((len(anglesTG), angles.shape[1]))
-    
-    tgAngles[mapTGIdx[legPos]] = np.degrees(angles[mapCtrl2TG[legPos]])
+        tgAngles = np.zeros((len(namesTG), angles.shape[1]))
+
+    mapIx = [namesTG.index(n) for n in namesCtrl]
+    if len(angles.shape) > 1:
+        tgAngles[mapIx, :] = np.degrees(angles)
+    else:
+        tgAngles[mapIx] = np.degrees(angles)
+
+    # tgAngles[mapTGIdx[legPos]] = np.degrees(angles[mapCtrl2TG[legPos]])
     return tgAngles            
 
 
