@@ -423,7 +423,6 @@ class ControlAndDynamics:
         augDist[0:self._Nxr*(self._dAct+1)] = self._distMtx @ dist
         return augDist
     
-    
     def get_penalty_matrices(self):
         ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
         ANGLE_PEN  = 1e0
@@ -479,7 +478,7 @@ class ControlAndDynamics:
             print(f'Observer  : {specRadALC:.3f}')
             
 
-    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
+    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, angleNxt, dist):
         ''' 
         xNow       : includes augmented states as well
         xEst       : internal estimation of xNow
@@ -523,6 +522,12 @@ class ControlAndDynamics:
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
+    
+        # Clip flexions from 0 to 180 degrees, or 0 to pi radians
+        angNxt  = tg_to_ctrl(angleNxt, self._legPos, self._namesTG) + xNxt[0:self._Nur]
+        clipIdx = anglesCtrlFlex[self._legPos]
+        angNxt[clipIdx] = np.clip(angNxt[clipIdx], 0, np.pi) # clip from 0 to pi
+        xNxt[0:self._Nur] = angNxt - tg_to_ctrl(angleNxt, self._legPos, self._namesTG)
 
         return (uNow, xNxt, xEstNxt)
 

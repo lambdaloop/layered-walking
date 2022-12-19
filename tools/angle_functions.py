@@ -18,6 +18,12 @@ anglesCtrl = {1: ['A_abduct', 'A_rot', 'B_flex', 'C_flex'],
               3: ['B_flex', 'B_rot', 'C_flex']
              }
 
+# Which angles (in ctrl coordinates) are flexion
+anglesCtrlFlex = {1: [0,2,3],
+                  2: [0,2],
+                  3: [0,2]
+                 }
+
 # ctrlAngles = tgAngles[mapTG2Ctrl]
 #mapTG2Ctrl = {1: [2, 1, 3, 0],
 #              2: [3, 4, 0],

@@ -101,7 +101,10 @@ for t in range(numSimSteps-1):
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
+    
+    angleNxt = angleTG2[:,kn]
+    
+    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, angleNxt, dist)
 
 ################################################################################
 # Simulate with disturbances
@@ -148,9 +151,10 @@ for t in range(numSimSteps-1):
                                   angleTGDist[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTGDist[:,k1].reshape(numAng,1),
                                   drvTGDist[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
+    angleNxt = angleTGDist[:,kn]
     
     usDist[:,t], xsDist[:,t+1], xEstsDist[:,t+1] = \
-        CD.step_forward(xsDist[:,t], xEstsDist[:,t], anglesAhead, drvsAhead, dist)
+        CD.step_forward(xsDist[:,t], xEstsDist[:,t], anglesAhead, drvsAhead, angleNxt, dist)
 
 ################################################################################
 # Post-processing for plotting

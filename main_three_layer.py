@@ -26,9 +26,8 @@ basename = 'poisson_sensedelay_5ms'
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+#filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -60,14 +59,9 @@ distEnd   = 400
 distType = DistType.POISSON_GAUSSIAN
 distDict = {
     'maxVelocity' : 5,
-    'rate': 20 * Ts / ctrlSpeedRatio # about 20 Hz
+    'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
+    'distType': distType
 }
-
-distDict['distType'] = distType
-
-# Local minima detection parameters (for applying disturbance)
-locMinWindow      = 2*ctrlSpeedRatio
-nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 
 ################################################################################
 # Get walking data
@@ -111,6 +105,7 @@ xEsts   = [None for i in range(nLegs)]
 us      = [None for i in range(nLegs)]
 
 # For height detection and visualization
+nonRepeatWindow = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 heights        = [None for i in range(nLegs)]
 groundContact  = [None for i in range(nLegs)] # For visualization only
 lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
@@ -184,9 +179,10 @@ for t in range(numSimSteps-1):
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                       drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
-            
+        
+        angleNxt = angleTG[ln,:,kn]
         us[ln][:,t], xs[ln][:,t+1], xEsts[ln][:,t+1] = \
-            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, dist)
+            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, angleNxt, dist)
         
 # True angles sampled at Ts
 # angle    = np.zeros((nLegs, dofTG, numTGSteps))
