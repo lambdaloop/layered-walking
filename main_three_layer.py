@@ -64,10 +64,8 @@ distEnd   = 600
 # distStart = 120
 # distEnd = 600
 
-distType = DistType.ZERO
-
-# distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 5}
+distType = DistType.SLIPPERY_SURFACE
+distDict = {'maxVelocity' : 20}
 
 # distType = DistType.UNEVEN_SURFACE
 # distDict = {'maxHt' : 0.04 * 1e-3}
@@ -120,14 +118,12 @@ lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
 for ln, leg in enumerate(legs):
-    fullAngleNames.append([(leg + ang) for ang in anglesTG])
-
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
     CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
                                 anglePen, drvPen[leg], inputPen, namesTG[ln])
-
+    fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
     numAng = TG[ln]._numAng
 
     angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \

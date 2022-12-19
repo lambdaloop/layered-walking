@@ -24,7 +24,7 @@ numTGSteps     = 200   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.01  # Seconds; typically 0.02-0.04
+actDelay       = 0.03  # Seconds; typically 0.02-0.04
 
 # LQR penalties
 drvPen = {'L1': 1e-5, # 
@@ -45,11 +45,8 @@ leg = sys.argv[1]
 ################################################################################
 # Disturbance
 ################################################################################
-#distType = DistType.ZERO
-
-distType = DistType.UNEVEN_SURFACE
-distDict = {'maxHt'       : 0.1 * 1e-3}
-
+distType = DistType.SLIPPERY_SURFACE
+distDict = {'maxVelocity' : 20}
 distDict['distType'] = distType
 
 ################################################################################
