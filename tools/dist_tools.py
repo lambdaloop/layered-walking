@@ -53,7 +53,7 @@ def get_dists_endeffector_moves(height, leg):
 def get_current_height(angles, fullAngleNames, legIdx):
     ''' Expect angles in degrees, in order specified by anglesTG '''
     try:
-        pose = angles_to_pose_names(angles.reshape(-1, len(anglesTG)), fullAngleNames)
+        pose = angles_to_pose_names(angles.reshape(-1, len(fullAngleNames)), fullAngleNames)
         return pose[0, legIdx, -1, -1]
     except:
         return np.nan
