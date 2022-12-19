@@ -7,7 +7,7 @@ import sys
 
 from tools.ctrl_tools import ControlAndDynamics
 from tools.trajgen_tools import TrajectoryGenerator, WalkingData
-from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
+from tools.angle_functions import legs, anglesTG, anglesCtrl, \
                             ctrl_to_tg, tg_to_ctrl, \
                             offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video
@@ -25,8 +25,8 @@ basename = 'test'
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)

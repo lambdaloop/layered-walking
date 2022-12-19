@@ -19,20 +19,20 @@ anglesCtrl = {1: ['A_abduct', 'A_rot', 'B_flex', 'C_flex'],
              }
 
 # ctrlAngles = tgAngles[mapTG2Ctrl]
-mapTG2Ctrl = {1: [2, 1, 3, 0],
-              2: [3, 4, 0],
-              3: [3, 4, 0]
-             }
+#mapTG2Ctrl = {1: [2, 1, 3, 0],
+#              2: [3, 4, 0],
+#              3: [3, 4, 0]
+#             }
 
 # tgAngles[mapTGIdx] = ctrlAngles[mapCtrl2TG]
-mapCtrl2TG = {1: [3, 1, 0, 2],
-              2: [2, 0, 1],
-              3: [2, 0, 1]
-             }
-mapTGIdx   = {1: [0, 1, 2, 3] ,
-              2: [0, 3, 4],
-              3: [0, 3, 4]
-             }
+#mapCtrl2TG = {1: [3, 1, 0, 2],
+#              2: [2, 0, 1],
+#              3: [2, 0, 1]
+#             }
+#mapTGIdx   = {1: [0, 1, 2, 3] ,
+#              2: [0, 3, 4],
+#              3: [0, 3, 4]
+#             }
 
 
 
