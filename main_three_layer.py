@@ -20,14 +20,14 @@ from tools.dist_tools import *
 
 # basename = 'dist_12mms_uneven'
 # basename = 'compare_8mms'
-basename = 'test'
+basename = 'dist_12mms_slippery_delay_90ms'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -35,7 +35,7 @@ numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.03  # Seconds; typically 0.02-0.04
+actDelay       = 0.09  # Seconds; typically 0.02-0.04
 
 # LQR penalties
 drvPen = {'L1': 1e-5, #
@@ -59,15 +59,15 @@ inputPen       = 1e-8
 
 boutNum  = 0 # Default is 0; change bouts for different random behaviors
 
-distStart = 240
-distEnd   = 600
+distStart = 100
+distEnd   = 500
 # distStart = 120
 # distEnd = 600
 
-distType = DistType.ZERO
+# distType = DistType.ZERO
 
-# distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 5}
+distType = DistType.SLIPPERY_SURFACE
+distDict = {'maxVelocity' : 10}
 
 # distType = DistType.UNEVEN_SURFACE
 # distDict = {'maxHt' : 0.04 * 1e-3}
@@ -83,7 +83,7 @@ nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 ################################################################################
 wd       = WalkingData(filename)
 bout     = wd.get_bout(walkingSettings, offset=boutNum)
-contexts = bout['contexts']
+# contexts = bout['contexts']
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -120,9 +120,10 @@ lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
 for ln, leg in enumerate(legs):
-    fullAngleNames.append([(leg + ang) for ang in anglesTG])
 
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
+
+    fullAngleNames.append(TG[ln]._angle_names)
 
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
     CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
@@ -204,12 +205,22 @@ for ln, leg in enumerate(legs):
 matplotlib.use('Agg')
 # angs           = angle.reshape(-1, angle.shape[-1]).T
 # angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
-angs = np.vstack(angle).T
+angs_sim = np.vstack(angle).T
 angNames = np.hstack(names)
-pose_3d        = angles_to_pose_names(angs, angNames)
+pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
 make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))
 
-angs = np.hstack([bout['angles'][leg] for leg in legs])
-p3d = angles_to_pose_names(angs, angNames)
-make_fly_video(p3d, 'vids/{}_real.mp4'.format(basename))
+angs_real = np.hstack([bout['angles'][leg] for leg in legs])
+p3d = angles_to_pose_names(angs_real, angNames)
+# make_fly_video(p3d, 'vids/{}_real.mp4'.format(basename))
+
+import matplotlib.pyplot as plt
+matplotlib.use('TkAgg')
+ix = np.where(angNames == 'L1C_flex')[0]
+plt.figure(1)
+plt.clf()
+plt.plot(angs_sim[:, ix])
+plt.plot(angs_real[:, ix])
+plt.draw()
+plt.show(block=False)

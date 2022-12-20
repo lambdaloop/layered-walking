@@ -303,7 +303,7 @@ class ControlAndDynamics:
         self._Br  = Ts*BLin
         eigsOL    = np.linalg.eig(self._Ar)[0]
         specRadOL = max(np.abs(eigsOL))
-        print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
+        # print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
 
         # Convert to delayed system
         self._A, self._B = get_augmented_system(self._Ar, self._Br, numDelays)
@@ -311,7 +311,7 @@ class ControlAndDynamics:
         self._Nu = self._B.shape[1]
         eigsDelayOL    = np.linalg.eig(self._A)[0]
         specRadDelayOL = max(np.abs(eigsDelayOL))
-        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
+        # print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
 
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
@@ -335,7 +335,7 @@ class ControlAndDynamics:
         ACL       = self._A - self._B @ self._K
         eigsCL    = np.linalg.eig(ACL)[0]
         specRadCL = max(np.abs(eigsCL))
-        print(f'Closed-loop spectral radius (delayed system): {specRadCL:.3f}')
+        # print(f'Closed-loop spectral radius (delayed system): {specRadCL:.3f}')
     
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
