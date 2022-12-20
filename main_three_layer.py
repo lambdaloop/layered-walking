@@ -7,7 +7,7 @@ import sys
 
 from tools.ctrl_tools import ControlAndDynamics
 from tools.trajgen_tools import TrajectoryGenerator, WalkingData
-from tools.angle_functions import legs, anglesTG, anglesCtrl, mapTG2Ctrl, \
+from tools.angle_functions import legs, anglesTG, anglesCtrl, \
                             ctrl_to_tg, tg_to_ctrl, \
                             offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video
@@ -25,9 +25,9 @@ basename = 'dist_12mms_slippery_delay_90ms'
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -68,6 +68,7 @@ distEnd   = 500
 
 distType = DistType.SLIPPERY_SURFACE
 distDict = {'maxVelocity' : 10}
+
 
 # distType = DistType.UNEVEN_SURFACE
 # distDict = {'maxHt' : 0.04 * 1e-3}
@@ -120,7 +121,6 @@ lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
 for ln, leg in enumerate(legs):
-
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
     fullAngleNames.append(TG[ln]._angle_names)
@@ -128,7 +128,7 @@ for ln, leg in enumerate(legs):
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
     CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
                                 anglePen, drvPen[leg], inputPen, namesTG[ln])
-
+    fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
     numAng = TG[ln]._numAng
 
     angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
