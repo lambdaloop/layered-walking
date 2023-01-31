@@ -3,6 +3,8 @@
 import numpy as np
 from scipy.linalg import block_diag
 
+np.set_printoptions(suppress=True, linewidth=100000)
+
 n = 3
 m = 2
 p = 3
@@ -28,18 +30,18 @@ n4 = n*(dAct+1) # trajectory states
     
 nx = n1 + n2 + n3 + n4
 nu = m + n3 # allow internal compensation to delayed sensors
-    
-A  = np.zeros([nx, nx])
 
 A11  = np.zeros([n1, n1])
 A11h = np.eye(n)
+A12  = np.zeros([n1, n2])
+A12h = BReal
+A14  = np.zeros([n4, n4])
+A14h = np.eye(n)
+
 for i in range(dAct+1):
     A11h = AReal @ A11h
     A11[n*i:n*(i+1), 0:n] = A11h
 
-A12  = np.zeros([n1, n2])
-A12h = BReal
-for i in range(dAct+1):
     for j in range(dAct):
         row = (i+j)*n
         if row + n <= r1:
@@ -47,9 +49,6 @@ for i in range(dAct+1):
             A12[row:row+n, col:col+m] = A12h
     A12h = AReal @ A12h            
 
-A14  = np.zeros([n4, n4])
-A14h = np.eye(n)
-for i in range(dAct+1):
     aux     = np.empty([n*i, 0])
     blkdiag = aux # Be careful, shallow copy
     for j in range(dAct+1-i):
@@ -69,31 +68,24 @@ A33 = block_diag(aux, np.eye(p*(dSense-1)), aux.T)
 
 aux = np.empty([0, n])
 A44 = block_diag(aux, np.eye(n*dAct), aux.T)
-    
-    
-        
-'''    
-    # Middle block of A
-    aux                 = np.empty([0, Nx])
-    A[N1:2*N1, N1:2*N1] = block_diag(aux, np.eye(Nx*numDelays), aux.T)
 
-    # Construct B matrix
-    B                 = np.zeros([NA, Nu])
-    B[N1-Nx:N1,:]     = BReal
-    B[2*N1:2*N1+Nu,:] = np.eye(Nu)
-    
-    return (A, B)
-    
-    #def get_augmented_system(AReal, BReal, CReal, dSense, dAct):
-    Augment system (AReal, BReal, CReal) to include
-       lookahead             (dAct steps)
-       muscle/actuator delay (dAct steps)
-       sensor delay          (dSense steps) 
-      
-       Returns augmented system (A, B, C) 
-'''
+# Put A together row-wise
+A1 = np.concatenate([A11, A12, np.zeros([n1,n3]), A14], axis=1)
+A2 = np.concatenate([np.zeros([n2,n1]), A22, np.zeros([n2,n3+n4])], axis=1)
+A3 = np.concatenate([A31, np.zeros([n3,n2]), A33, np.zeros([n3,n4])], axis=1)
+A4 = np.concatenate([np.zeros([n4,n1+n2+n3]), A44], axis=1)
+A  = np.concatenate([A1, A2, A3, A4]);
 
-# TODO: build function step by step as main
+B  = np.zeros([nx, nu])
+B[n*dAct:n1, 0:m] = BReal
+B[n1:n1+m, 0:m]   = np.eye(m)
+B[n1+n2:n1+n2+n3, m:nu] = np.eye(p*dSense)  
+
+C  = np.zeros([p, nx])
+C[:,n1+n2+p*(dSense-1):n1+n2+n3] = np.eye(p)
+
+
+
 # TODO: test augmented matrices on random matrices, including zero-dimensions
 # TODO: build full function and test again
 # TODO: update control and dynamics, including dist mtx
