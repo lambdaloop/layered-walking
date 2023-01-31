@@ -9,14 +9,18 @@ n = 3
 m = 2
 p = 3
 
-dSense = 2
-dAct   = 3
+dSense = 0
+dAct   = 0
 
 AReal = 1*np.ones([n,n])
 BReal = 2*np.ones([n,m])
 CReal = 3*np.ones([p,n])
 
 # Function starts
+#if dSense == 0 and dAct == 0:
+# Return original A, B, C    
+
+
 # Original dimensions: state, input, sensor
 n = BReal.shape[0]
 m = BReal.shape[1]
@@ -44,7 +48,7 @@ for i in range(dAct+1):
 
     for j in range(dAct):
         row = (i+j)*n
-        if row + n <= r1:
+        if row + n <= n1:
             col = (dAct-j-1)*m
             A12[row:row+n, col:col+m] = A12h
     A12h = AReal @ A12h            
@@ -58,13 +62,18 @@ for i in range(dAct+1):
     A14     += blkdiag
 
 aux = np.empty([m, 0])
-A22 = block_diag(aux, np.eye(m*(dAct-1)), aux.T)
+A22 = np.empty([n2, n2])
+if dAct > 0:
+    A22 = block_diag(aux, np.eye(m*(dAct-1)), aux.T)
 
 A31 = np.zeros([n3, n1])
-A31[0:p,0:n] = CReal
+if dSense > 0:
+    A31[0:p,0:n] = CReal
 
 aux = np.empty([p, 0])
-A33 = block_diag(aux, np.eye(p*(dSense-1)), aux.T)
+A33 = np.empty([n3, n3])
+if dSense > 0:
+    A33 = block_diag(aux, np.eye(p*(dSense-1)), aux.T)
 
 aux = np.empty([0, n])
 A44 = block_diag(aux, np.eye(n*dAct), aux.T)
@@ -82,11 +91,12 @@ B[n1:n1+m, 0:m]   = np.eye(m)
 B[n1+n2:n1+n2+n3, m:nu] = np.eye(p*dSense)  
 
 C  = np.zeros([p, nx])
-C[:,n1+n2+p*(dSense-1):n1+n2+n3] = np.eye(p)
+if dSense > 0: # Access delayed sensor reading
+    C[:,n1+n2+p*(dSense-1):n1+n2+n3] = np.eye(p)
+else: # Access sensor directly; no delay
+    C[:,0:n] = CReal
 
 
-
-# TODO: test augmented matrices on random matrices, including zero-dimensions
 # TODO: build full function and test again
 # TODO: update control and dynamics, including dist mtx
 # TODO: test in 2- and 3-layer
