@@ -414,15 +414,13 @@ class ControlAndDynamics:
         # wTraj(t+dAct)
         wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
-        
-        # Set xNow's wtraj(t+dAct) state appropriately
-        if self._dAct > 0:
-            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+
+        # Update dynamics + estimate with trajectory tracking
+        xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+        xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
             
         # Controller: calculate input        
         uNow = -self._K @ xEst
-        if self._dAct == 0:
-            uNow -= self._Bi @ wTrajAhead
         
         # Controller: advance estimator
         y       = self._C @ xNow # Sensor input (possibly delayed)
@@ -431,8 +429,6 @@ class ControlAndDynamics:
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
-        if self._dAct == 0:
-            xNxt += wTrajAhead
 
         return (uNow, xNxt, xEstNxt)
 

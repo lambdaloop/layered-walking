@@ -24,8 +24,8 @@ numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.0  # Seconds; typically 0.02-0.04
-senseDelay      = 0.0  # Seconds; typically 0.01
+actDelay        = 0.03  # Seconds; typically 0.02-0.04
+senseDelay      = 0.01  # Seconds; typically 0.01
 
 # LQR penalties
 drvPen = {'L1': 1e-5, # 
@@ -47,7 +47,7 @@ leg = sys.argv[1]
 # Disturbance
 ################################################################################
 distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 20}
+distDict = {'maxVelocity' : 5}
 distDict['distType'] = distType
 
 ################################################################################
@@ -134,7 +134,7 @@ locMinWindow      = 2*ctrlSpeedRatio
 nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 lastDetection     = -nonRepeatWindow
 
-for t in range(numSimSteps-1):
+for t in range(numSimSteps-1): 
     k   = int(t / ctrlSpeedRatio)     # Index for TG data
     kn  = int((t+1) / ctrlSpeedRatio) # Next index for TG data
     ang = angleTGDist[:,k] + ctrl_to_tg(xsDist[0:dof,t], legPos, namesTG)
