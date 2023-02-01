@@ -24,8 +24,8 @@ numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
+actDelay        = 0.0  # Seconds; typically 0.02-0.04
+senseDelay      = 0.0  # Seconds; typically 0.01
 
 # LQR penalties
 drvPen = {'L1': 1e-5, # 
@@ -113,7 +113,7 @@ for t in range(numSimSteps-1):
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEst[:,t], anglesAhead, drvsAhead, dist)
+    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
 
 ################################################################################
 # Simulate with disturbances
@@ -162,7 +162,7 @@ for t in range(numSimSteps-1):
                                   drvTGDist[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     
     usDist[:,t], xsDist[:,t+1], xEstsDist[:,t+1] = \
-        CD.step_forward(xsDist[:,t], xEstDist[:,t], anglesAhead, drvsAhead, dist)
+        CD.step_forward(xsDist[:,t], xEstsDist[:,t], anglesAhead, drvsAhead, dist)
 
 ################################################################################
 # Post-processing for plotting

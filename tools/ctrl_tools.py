@@ -329,9 +329,9 @@ class ControlAndDynamics:
             self._namesTG = namesTG
 
         # Zeroth order discretization
-        self._Ar  = np.eye(self._Nr) + ALin*Ts
+        self._Ar  = np.eye(self._Nxr) + ALin*Ts
         self._Br  = Ts*BLin
-        self._Cr  = np.eye(self._Nr) # Perfect sensing
+        self._Cr  = np.eye(self._Nxr) # Perfect sensing
 
         # TODO: Sanity testing only; remove later
         eigsOL    = np.linalg.eig(self._Ar)[0]
@@ -384,7 +384,7 @@ class ControlAndDynamics:
         print(f'Closed-loop spectral radius, controller: {specRadABK:.3f}')
         
         # Generate observer
-        self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0]
+        self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
         ALC        = self._A - self._L @ self._C
         # TODO: Sanity testing only; remove later
         eigsALC    = np.linalg.eig(ALC)[0]
@@ -393,7 +393,7 @@ class ControlAndDynamics:
         
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
-        augDist[0:self._Nr*(self._dAct+1)] = self._distMtx @ dist
+        augDist[0:self._Nxr*(self._dAct+1)] = self._distMtx @ dist
         return augDist
         
     def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
@@ -412,7 +412,7 @@ class ControlAndDynamics:
         trajs  = np.concatenate((angles, drvs))
         
         # wTraj(t+dAct)
-        wTrajAhead = self._A[0:self._Nr, 0:self._Nr] @ (trajs[:,0] - xEqmFlat) + \
+        wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
         
         # Set xNow's wtraj(t+dAct) state appropriately
@@ -420,18 +420,18 @@ class ControlAndDynamics:
             xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
             
         # Controller: calculate input        
-        uNow = -self._K @ xHat
-        if self._dAct == 0: # TODO: fishy; test
+        uNow = -self._K @ xEst
+        if self._dAct == 0:
             uNow -= self._Bi @ wTrajAhead
         
         # Controller: advance estimator
-        y       = self._C * xNow # Sensor input (possibly delayed)
+        y       = self._C @ xNow # Sensor input (possibly delayed)
         xEstNxt = self._A @ xEst + self._B @ uNow + self._L @ (y - self._C @ xEst)
         
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
-        if self._dAct == 0: # TODO: fishy; test
+        if self._dAct == 0:
             xNxt += wTrajAhead
 
         return (uNow, xNxt, xEstNxt)
