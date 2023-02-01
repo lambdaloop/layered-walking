@@ -311,8 +311,6 @@ def get_augmented_dist_mtx(AReal, dAct):
 
 
 
-# TODO: refactor main code that uses ControlAndDynamics
-
 class ControlAndDynamics:
     def __init__(self, leg, Ts, dSense, dAct, futurePenRatio, anglePen, drvPen, inputPen, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
@@ -402,8 +400,8 @@ class ControlAndDynamics:
         ''' 
         xNow       : includes augmented states as well
         xEst       : internal estimation of xNow
-        anglesAhead: angles (TG formatted), numDelay to numDelay+1 steps ahead 
-        drvsAhead  : drvs   (TG formatted), numDelay to numDelay+1 steps ahead
+        anglesAhead: angles (TG formatted), dAct to dAct+1 steps ahead 
+        drvsAhead  : drvs   (TG formatted), dAct to dAct+1 steps ahead
         dist       : size of real system (not including augmented states)
         ''' 
         xEqmFlat = self._xEqm.flatten()

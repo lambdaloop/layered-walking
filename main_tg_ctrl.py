@@ -20,11 +20,12 @@ filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 200   # How many timesteps to run TG for
-Ts             = 1/300 # How fast TG runs
-ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.03  # Seconds; typically 0.02-0.04
+numTGSteps      = 200   # How many timesteps to run TG for
+Ts              = 1/300 # How fast TG runs
+ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
+ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
+actDelay        = 0.03  # Seconds; typically 0.02-0.04
+senseDelay      = 0.01  # Seconds; typically 0.01
 
 # LQR penalties
 drvPen = {'L1': 1e-5, # 
@@ -63,20 +64,22 @@ phaseInit = bout['phases'][leg][0]
 ################################################################################
 # Trajectory generator + ctrl and dynamics, w/o disturbances
 ################################################################################
-numDelays = int(actDelay / Ts * ctrlSpeedRatio)
-print(f'Steps of actuation delay: {numDelays}')
+dAct   = int(actDelay / Ts * ctrlSpeedRatio)
+dSense = int(senseDelay / Ts * ctrlSpeedRatio)
+print(f'Steps of actuation delay: {dAct}')
+print(f'Steps of sensory delay: {dSense}')
 
 legPos  = int(leg[-1])
 TG      = TrajectoryGenerator(filename, leg, numTGSteps)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
-CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
+CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, futurePenRatio,
                              anglePen, drvPen[leg], inputPen, namesTG)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]
-dof            = CD._Nu
+dof            = CD._Nur
 
 numSimSteps   = numTGSteps*ctrlSpeedRatio
 angleTG2      = np.zeros((numAng, numTGSteps))
@@ -84,33 +87,33 @@ drvTG2        = np.zeros((numAng, numTGSteps))
 phaseTG2      = np.zeros(numTGSteps)
 angleTG2[:numAng,0], drvTG2[:numAng,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
-ys    = np.zeros([CD._Nx, numSimSteps])
+xs    = np.zeros([CD._Nx, numSimSteps])
+xEsts = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
-dist  = np.zeros(CD._Nr) # Zero disturbances
+dist  = np.zeros(CD._Nxr) # Zero disturbances
 
-lookahead = math.ceil(numDelays/ctrlSpeedRatio)
+lookahead = math.ceil(dAct/ctrlSpeedRatio)
 
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
-        ang   = angleTG2[:numAng,k] + ctrl_to_tg(ys[0:dof,t], legPos, namesTG)
-        drv   = drvTG2[:numAng,k] + ctrl_to_tg(ys[dof:dof*2,t]*CD._Ts, legPos, namesTG)
+        ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+        drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
         
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
         angleTG2[:numAng,k+1:kEnd+1], drvTG2[:numAng,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
 
-    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
+    k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
     anglesAhead = np.concatenate((angleTG2[:,k1].reshape(numAng,1),
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-        
-    us[:,t], ys[:,t+1] = CD.step_forward(ys[:,t], anglesAhead, drvsAhead, dist)
+    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEst[:,t], anglesAhead, drvsAhead, dist)
 
 ################################################################################
 # Simulate with disturbances
@@ -120,7 +123,8 @@ drvTGDist        = np.zeros((numAng, numTGSteps))
 phaseTGDist      = np.zeros(numTGSteps)
 angleTGDist[:,0], drvTGDist[:,0], phaseTGDist[0] = angInit, drvInit, phaseInit
 
-ysDist    = np.zeros([CD._Nx, numSimSteps])
+xsDist    = np.zeros([CD._Nx, numSimSteps])
+xEstsDist = np.zeros([CD._Nx, numSimSteps])
 usDist    = np.zeros([CD._Nu, numSimSteps])
 
 # Visualize height detection and compare heights
@@ -133,8 +137,8 @@ lastDetection     = -nonRepeatWindow
 for t in range(numSimSteps-1):
     k   = int(t / ctrlSpeedRatio)     # Index for TG data
     kn  = int((t+1) / ctrlSpeedRatio) # Next index for TG data
-    ang = angleTGDist[:,k] + ctrl_to_tg(ysDist[0:dof,t], legPos, namesTG)
-    drv = drvTGDist[:,k] + ctrl_to_tg(ysDist[dof:dof*2,t]*CD._Ts, legPos, namesTG)
+    ang = angleTGDist[:,k] + ctrl_to_tg(xsDist[0:dof,t], legPos, namesTG)
+    drv = drvTGDist[:,k] + ctrl_to_tg(xsDist[dof:dof*2,t]*CD._Ts, legPos, namesTG)
 
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
@@ -149,25 +153,26 @@ for t in range(numSimSteps-1):
         lastDetection        = t
         dist                 = get_dist(distDict, leg)               
 
-    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
+    k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
     anglesAhead = np.concatenate((angleTGDist[:,k1].reshape(numAng,1),
                                   angleTGDist[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTGDist[:,k1].reshape(numAng,1),
                                   drvTGDist[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-        
-    usDist[:,t], ysDist[:,t+1] = CD.step_forward(ysDist[:,t], anglesAhead, drvsAhead, dist)
+    
+    usDist[:,t], xsDist[:,t+1], xEstsDist[:,t+1] = \
+        CD.step_forward(xsDist[:,t], xEstDist[:,t], anglesAhead, drvsAhead, dist)
 
 ################################################################################
 # Post-processing for plotting
 ################################################################################
 # True angle + derivative (sampled at Ts)
 downSamp   = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
-angle2     = angleTG2 + ctrl_to_tg(ys[0:dof,downSamp], legPos, namesTG)
-drv2       = drvTG2 + ctrl_to_tg(ys[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
-angle2Dist = angleTGDist + ctrl_to_tg(ysDist[0:dof,downSamp], legPos, namesTG)
-drv2Dist   = drvTGDist + ctrl_to_tg(ysDist[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
+angle2     = angleTG2 + ctrl_to_tg(xs[0:dof,downSamp], legPos, namesTG)
+drv2       = drvTG2 + ctrl_to_tg(xs[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
+angle2Dist = angleTGDist + ctrl_to_tg(xsDist[0:dof,downSamp], legPos, namesTG)
+drv2Dist   = drvTGDist + ctrl_to_tg(xsDist[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
 
 # Get heights for non-perturbed case as well
 heights       = np.array([None] * numTGSteps)
