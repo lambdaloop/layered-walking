@@ -41,7 +41,10 @@ distDict['distType'] = distType
 ################################################################################
 wd       = WalkingData(filename)
 bout     = wd.get_bout(walkingSettings)
-contexts = bout['contexts']
+
+# Use constant contexts
+context  = np.array(walkingSettings).reshape(1,3)
+contexts = np.repeat(context, numTGSteps, axis=0)
 
 angInit   = bout['angles'][leg][0]
 drvInit   = bout['derivatives'][leg][0]
