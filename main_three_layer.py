@@ -26,9 +26,9 @@ basename = 'test'
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -37,44 +37,21 @@ Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay       = 0.03  # Seconds; typically 0.02-0.04
-couplingDelay = 0.010
+senseDelay     = 0.01  # Seconds; typically 0.01
+couplingDelay  = 0.010
 
-# LQR penalties
-drvPen = {'L1': 1e-5, #
-          'L2': 1e-5, #
-          'L3': 1e-5, # 
-          'R1': 1e-5, # 
-          'R2': 1e-5, # 
-          'R3': 1e-5  #
-         }
 
-futurePenRatio = 1.0 # y_hat(t+1) is penalized (ratio)*pen as much as y(t)
-                     # y_hat(t+2) is penalized (ratio^2)*pen as much as y(t)
-anglePen       = 1e0
-inputPen       = 1e-8
 
 ################################################################################
 # Disturbance
 ################################################################################
-#distType  = DistType.ZERO
-# Will only be applied between t=200 and t=400
-
 boutNum  = 0 # Default is 0; change bouts for different random behaviors
 
 distStart = 100
-distEnd   = 500
-# distStart = 120
-# distEnd = 600
-
-# distType = DistType.ZERO
+distEnd   = 300
 
 distType = DistType.SLIPPERY_SURFACE
 distDict = {'maxVelocity' : 1}
-
-
-# distType = DistType.UNEVEN_SURFACE
-# distDict = {'maxHt' : 0.04 * 1e-3}
-
 distDict['distType'] = distType
 
 # Local minima detection parameters (for applying disturbance)
@@ -86,7 +63,6 @@ nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 ################################################################################
 wd       = WalkingData(filename)
 bout     = wd.get_bout(walkingSettings, offset=boutNum)
-# contexts = bout['contexts']
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -99,9 +75,13 @@ phaseInit = bout['phases']
 ################################################################################
 # Phase coordinator + trajectory generator + ctrl and dynamics
 ################################################################################
-numDelays   = int(actDelay / Ts * ctrlSpeedRatio)
+dAct   = int(actDelay / Ts * ctrlSpeedRatio)
+dSense = int(senseDelay / Ts * ctrlSpeedRatio)
+print(f'Steps of actuation delay: {dAct}')
+print(f'Steps of sensory delay  : {dSense}')
+
 numSimSteps = numTGSteps*ctrlSpeedRatio
-lookahead   = math.ceil(numDelays/ctrlSpeedRatio)
+lookahead   = math.ceil(dAct/ctrlSpeedRatio)
 
 numDelaysCoupling = int(round(couplingDelay / Ts))
 
@@ -115,7 +95,8 @@ angleTG = np.zeros((nLegs, dofTG, numTGSteps))
 drvTG   = np.zeros((nLegs, dofTG, numTGSteps))
 phaseTG = np.zeros((nLegs, numTGSteps))
 
-ys      = [None for i in range(nLegs)]
+xs      = [None for i in range(nLegs)]
+xEsts   = [None for i in range(nLegs)]
 us      = [None for i in range(nLegs)]
 
 # For height detection and visualization
@@ -124,22 +105,22 @@ groundContact  = [None for i in range(nLegs)] # For visualization only
 lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
-for ln, leg in enumerate(legs):
+for ln, leg in enumerate(legs):    
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
     fullAngleNames.append(TG[ln]._angle_names)
 
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
-    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
-                                anglePen, drvPen[leg], inputPen, namesTG[ln])
+    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
     fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
     numAng = TG[ln]._numAng
 
     angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
         angInit[leg][0], drvInit[leg][0], phaseInit[leg][0]
-        
-    ys[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
-    us[ln] = np.zeros([CD[ln]._Nu, numSimSteps])
+    
+    xs[ln]    = np.zeros([CD[ln]._Nx, numSimSteps])
+    xEsts[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
+    us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
     
     heights[ln]       = np.array([None] * numSimSteps)
     groundContact[ln] = np.array([None] * numSimSteps)
@@ -152,8 +133,8 @@ for t in range(numSimSteps-1):
     kc = max(k - numDelaysCoupling, 0)
     
     # Index for future TG data
-    k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
+    k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
 
     # This is only used if TG is updated
     ws = np.zeros(6)
@@ -167,9 +148,9 @@ for t in range(numSimSteps-1):
         legIdx  = legs.index(leg)
         numAng = TG[ln]._numAng
 
-        ang = angleTG[ln,:numAng,k] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,t], legPos, namesTG[ln])
+        ang = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,t], legPos, namesTG[ln])
         drv = drvTG[ln,:numAng,k] + ctrl_to_tg(
-            ys[ln][CD[ln]._Nu:CD[ln]._Nu*2,t]*CD[ln]._Ts, legPos, namesTG[ln])
+            xs[ln][CD[ln]._Nur:CD[ln]._Nur*2,t]*CD[ln]._Ts, legPos, namesTG[ln])
         
         # Communicate to trajectory generator and get future trajectory
         if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
@@ -191,7 +172,8 @@ for t in range(numSimSteps-1):
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                       drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
             
-        us[ln][:,t], ys[ln][:,t+1] = CD[ln].step_forward(ys[ln][:,t], anglesAhead, drvsAhead, dist)
+        us[ln][:,t], xs[ln][:,t+1], xEsts[ln][:,t+1] = \
+            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, dist)
         
 # True angles sampled at Ts
 # angle    = np.zeros((nLegs, dofTG, numTGSteps))
@@ -203,7 +185,7 @@ for ln, leg in enumerate(legs):
     numAng = TG[ln]._numAng
     name = TG[ln]._angle_names
     legPos    = int(leg[-1])
-    x = angleTG[ln,:numAng,:] + ctrl_to_tg(ys[ln][0:CD[ln]._Nu,downSamp], legPos, namesTG[ln])
+    x = angleTG[ln,:numAng,:] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,downSamp], legPos, namesTG[ln])
     angle.append(x)
     names.append(name)
     
