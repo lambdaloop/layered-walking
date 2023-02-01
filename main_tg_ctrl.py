@@ -53,7 +53,7 @@ phaseInit = bout['phases'][leg][0]
 dAct   = int(actDelay / Ts * ctrlSpeedRatio)
 dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {dAct}')
-print(f'Steps of sensory delay: {dSense}')
+print(f'Steps of sensory delay  : {dSense}')
 
 legPos  = int(leg[-1])
 TG      = TrajectoryGenerator(filename, leg, numTGSteps)

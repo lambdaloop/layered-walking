@@ -333,21 +333,11 @@ class ControlAndDynamics:
         self._Br  = Ts*BLin
         self._Cr  = np.eye(self._Nxr) # Perfect sensing
 
-        # TODO: Sanity testing only; remove later
-        eigsOL    = np.linalg.eig(self._Ar)[0]
-        specRadOL = max(np.abs(eigsOL))
-        print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
-
         # Convert to delayed system
         self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
         self._Nx = self._B.shape[0]
         self._Nu = self._B.shape[1]
         
-        # TODO: Sanity testing only; remove later. Should match real system.
-        eigsDelayOL    = np.linalg.eig(self._A)[0]
-        specRadDelayOL = max(np.abs(eigsDelayOL))
-        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
-
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
 
@@ -356,21 +346,11 @@ class ControlAndDynamics:
         # Get penalty matrices
         Q, R, W, V = self.get_penalty_matrices()
         
-        # Generate controller
-        self._K    = control.dlqr(self._A, self._B, Q, R)[0]
-        ABK        = self._A - self._B @ self._K
-        # TODO: Sanity testing only; remove later
-        eigsABK    = np.linalg.eig(ABK)[0]
-        specRadABK = max(np.abs(eigsABK))        
-        print(f'Closed-loop spectral radius, controller: {specRadABK:.3f}')
-        
-        # Generate observer
+        # Generate controller and observer
+        self._K    = control.dlqr(self._A, self._B, Q, R)[0]        
         self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
-        ALC        = self._A - self._L @ self._C
-        # TODO: Sanity testing only; remove later
-        eigsALC    = np.linalg.eig(ALC)[0]
-        specRadALC = max(np.abs(eigsALC))
-        print(f'Closed-loop spectral radius, observer: {specRadALC:.3f}')
+        
+        self.print_sanity_check()
      
      
     def get_augmented_dist(self, dist):
@@ -413,6 +393,28 @@ class ControlAndDynamics:
         V = NOISE_SIZE * np.eye(self._Nxr)
         
         return(Q, R, W, V)
+
+
+    def print_sanity_check(self):
+        eigsOL       = np.linalg.eig(self._Ar)[0]
+        eigsAugOL    = np.linalg.eig(self._A)[0]
+        specRadOL    = max(np.abs(eigsOL))
+        specRadAugOL = max(np.abs(eigsAugOL))
+
+        print(f'Open loop spectral radii (should be the same):')
+        print(f'Original : {specRadOL:.3f}')
+        print(f'Augmented: {specRadAugOL:.3f}')
+        
+        ABK        = self._A - self._B @ self._K
+        ALC        = self._A - self._L @ self._C
+        eigsABK    = np.linalg.eig(ABK)[0]
+        eigsALC    = np.linalg.eig(ALC)[0]
+        specRadABK = max(np.abs(eigsABK))        
+        specRadALC = max(np.abs(eigsALC))
+        
+        print(f'Closed loop spectral radii (should be less than 1):')
+        print(f'Controller: {specRadABK:.3f}')
+        print(f'Observer  : {specRadALC:.3f}')
 
 
     def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
