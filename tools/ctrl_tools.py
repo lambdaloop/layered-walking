@@ -300,27 +300,30 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct):
 
 
 
-def get_augmented_dist_mtx(AReal, numDelays):
+def get_augmented_dist_mtx(AReal, dAct):
     Nx   = AReal.shape[0]
     ANow = np.eye(Nx)
     mtx  = np.eye(Nx)
-    for i in range(numDelays):
+    for i in range(dAct):
         ANow = AReal @ ANow
         mtx  = np.concatenate((mtx, ANow))
-    return mtx       
+    return mtx
 
 
-# TODO: update control and dynamics
+
+# TODO: refactor main code that uses ControlAndDynamics
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, numDelays, futurePenRatio, anglePen, drvPen, inputPen, namesTG=None):
+    def __init__(self, leg, Ts, dSense, dAct, futurePenRatio, anglePen, drvPen, inputPen, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
         self._leg       = leg
         self._legPos    = int(leg[-1])
-        self._numDelays = numDelays
-        self._Nr        = ALin.shape[0] # Number of 'real' states
+        self._dSense    = dSense
+        self._dAct      = dAct
+        self._Nxr       = ALin.shape[0] # Number of 'real' states
+        self._Nur       = BLin.shape[1] # Number of 'real' inputs
 
         if namesTG is None:
             self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
@@ -330,82 +333,108 @@ class ControlAndDynamics:
         # Zeroth order discretization
         self._Ar  = np.eye(self._Nr) + ALin*Ts
         self._Br  = Ts*BLin
+        self._Cr  = np.eye(self._Nr) # Perfect sensing
+
+        # TODO: Sanity testing only; remove later
         eigsOL    = np.linalg.eig(self._Ar)[0]
         specRadOL = max(np.abs(eigsOL))
-        # print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
+        print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
 
         # Convert to delayed system
-        self._A, self._B = get_augmented_system(self._Ar, self._Br, numDelays)
+        self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
         self._Nx = self._B.shape[0]
         self._Nu = self._B.shape[1]
+        
+        # TODO: Sanity testing only; remove later. Should match real system.
         eigsDelayOL    = np.linalg.eig(self._A)[0]
         specRadDelayOL = max(np.abs(eigsDelayOL))
-        # print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
+        print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
 
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
 
-        self._distMtx = get_augmented_dist_mtx(self._Ar, numDelays)
+        self._distMtx = get_augmented_dist_mtx(self._Ar, dAct)
         
         # State and input penalty matrices        
-        QAngle = anglePen * np.eye(self._Nu)
-        QDrv   = drvPen * np.eye(self._Nu)
+        QAngle = anglePen * np.eye(self._Nur)
+        QDrv   = drvPen * np.eye(self._Nur)
         QState = block_diag(QAngle, QDrv)
         
         Q = np.zeros([self._Nx, self._Nx])
-        for i in range(numDelays+1): # Penalize state and predicted states
-            start = i*self._Nr
-            end   = (i+1)*self._Nr
-            Q[start:end, start:end] = QState*pow(futurePenRatio,i)        
-        R = inputPen * np.eye(self._Nu)
+        for i in range(dAct+1): # Penalize state and predicted states
+            start = i*self._Nxr
+            end   = (i+1)*self._Nxr
+            Q[start:end, start:end] = QState*pow(futurePenRatio,i)
+        
+        eps  = 1e-8 # Default value for "no" penalty
+        RAct = inputPen * np.eye(self._Nur)   # penalty on true actuation
+        RIfp = eps * np.eye(dSense*self._Nxr) # compensatory feedback; no penalty
+        R    = block_diag(RAct, RIfp)
+        
+        # Anticipated perturbation magnitude
+        W = np.zeros([self._Nx, self._Nx])
+        W[0:self._Nxr*(dAct+1),0:self._Nxr*(dAct+1)] = np.eye(self._Nxr*(dAct+1))
+        W[self._Nx-self._Nxr:self._Nx,self._Nx-self._Nxr:self._Nx] = np.eye(self._Nxr)
+        V = eps * np.eye(self._Nxr) # No anticipated sensor noise
         
         # Generate controller
-        self._K   = control.dlqr(self._A, self._B, Q, R)[0]
-        ACL       = self._A - self._B @ self._K
-        eigsCL    = np.linalg.eig(ACL)[0]
-        specRadCL = max(np.abs(eigsCL))
-        # print(f'Closed-loop spectral radius (delayed system): {specRadCL:.3f}')
-    
+        self._K    = control.dlqr(self._A, self._B, Q, R)[0]
+        ABK        = self._A - self._B @ self._K
+        # TODO: Sanity testing only; remove later
+        eigsABK    = np.linalg.eig(ABK)[0]
+        specRadABK = max(np.abs(eigsABK))        
+        print(f'Closed-loop spectral radius, controller: {specRadABK:.3f}')
+        
+        # Generate observer
+        self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0]
+        ALC        = self._A - self._L @ self._C
+        # TODO: Sanity testing only; remove later
+        eigsALC    = np.linalg.eig(ALC)[0]
+        specRadALC = max(np.abs(eigsALC))
+        print(f'Closed-loop spectral radius, observer: {specRadALC:.3f}')
+        
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
-        N1            = self._Nr*(self._numDelays+1)
-        augDist[0:N1] = self._distMtx @ dist
+        augDist[0:self._Nr*(self._dAct+1)] = self._distMtx @ dist
         return augDist
-    
-    def step_forward(self, yNow, anglesAhead, drvsAhead, dist):
+        
+    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
         ''' 
-        yNow       : includes augmented states as well
+        xNow       : includes augmented states as well
+        xEst       : internal estimation of xNow
         anglesAhead: angles (TG formatted), numDelay to numDelay+1 steps ahead 
         drvsAhead  : drvs   (TG formatted), numDelay to numDelay+1 steps ahead
         dist       : size of real system (not including augmented states)
         ''' 
-        N1       = self._Nr*(self._numDelays+1)
         xEqmFlat = self._xEqm.flatten()
         
-        # Synthesize wtraj for t up to t+numDelay
+        # Synthesize wTraj for t up to t+dAct
         angles = tg_to_ctrl(anglesAhead, self._legPos, self._namesTG)
         drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
         
-        # wTraj(t+numDelay)
+        # wTraj(t+dAct)
         wTrajAhead = self._A[0:self._Nr, 0:self._Nr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
         
-        # Set yNow's wtraj(t+numDelay) state appropriately
-        if self._numDelays > 0:
-            yNow[2*N1-self._Nr:2*N1] = wTrajAhead
-        
-        # Calculate input
-        uNow = -self._K @ yNow
-        if self._numDelays == 0:
+        # Set xNow's wtraj(t+dAct) state appropriately
+        if self._dAct > 0:
+            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+            
+        # Controller: calculate input        
+        uNow = -self._K @ xHat
+        if self._dAct == 0: # TODO: fishy; test
             uNow -= self._Bi @ wTrajAhead
         
-        # Advance dynamics
+        # Controller: advance estimator
+        y       = self._C * xNow # Sensor input (possibly delayed)
+        xEstNxt = self._A @ xEst + self._B @ uNow + self._L @ (y - self._C @ xEst)
+        
+        # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
-        yNxt    = self._A @ yNow + self._B @ uNow + augDist
-        if self._numDelays == 0:
-            yNxt += wTrajAhead
+        xNxt    = self._A @ xNow + self._B @ uNow + augDist
+        if self._dAct == 0: # TODO: fishy; test
+            xNxt += wTrajAhead
 
-        return (uNow, yNxt)
-
+        return (uNow, xNxt, xEstNxt)
 
