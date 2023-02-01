@@ -27,20 +27,6 @@ ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple 
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 senseDelay      = 0.01  # Seconds; typically 0.01
 
-# LQR penalties
-drvPen = {'L1': 1e-5, # 
-          'L2': 1e-5, # 
-          'L3': 1e-5, # 
-          'R1': 1e-5, # 
-          'R2': 1e-5, # 
-          'R3': 1e-5  #
-         }
-
-futurePenRatio = 1.0 # y_hat(t+1) is penalized (ratio)*pen as much as y(t)
-                     # y_hat(t+2) is penalized (ratio^2)*pen as much as y(t)
-anglePen       = 1e0
-inputPen       = 1e-8
-
 leg = sys.argv[1]
 
 ################################################################################
@@ -74,8 +60,7 @@ TG      = TrajectoryGenerator(filename, leg, numTGSteps)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
-CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, futurePenRatio,
-                             anglePen, drvPen[leg], inputPen, namesTG)
+CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]

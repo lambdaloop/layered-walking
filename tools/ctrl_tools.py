@@ -307,12 +307,12 @@ def get_augmented_dist_mtx(AReal, dAct):
     for i in range(dAct):
         ANow = AReal @ ANow
         mtx  = np.concatenate((mtx, ANow))
-    return mtx
-
+    return mtx        
+        
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, dSense, dAct, futurePenRatio, anglePen, drvPen, inputPen, namesTG=None):
+    def __init__(self, leg, Ts, dSense, dAct, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
@@ -353,27 +353,8 @@ class ControlAndDynamics:
 
         self._distMtx = get_augmented_dist_mtx(self._Ar, dAct)
         
-        # State and input penalty matrices        
-        QAngle = anglePen * np.eye(self._Nur)
-        QDrv   = drvPen * np.eye(self._Nur)
-        QState = block_diag(QAngle, QDrv)
-        
-        Q = np.zeros([self._Nx, self._Nx])
-        for i in range(dAct+1): # Penalize state and predicted states
-            start = i*self._Nxr
-            end   = (i+1)*self._Nxr
-            Q[start:end, start:end] = QState*pow(futurePenRatio,i)
-        
-        eps  = 1e-8 # Default value for "no" penalty
-        RAct = inputPen * np.eye(self._Nur)   # penalty on true actuation
-        RIfp = eps * np.eye(dSense*self._Nxr) # compensatory feedback; no penalty
-        R    = block_diag(RAct, RIfp)
-        
-        # Anticipated perturbation magnitude
-        W = np.zeros([self._Nx, self._Nx])
-        W[0:self._Nxr*(dAct+1),0:self._Nxr*(dAct+1)] = np.eye(self._Nxr*(dAct+1))
-        W[self._Nx-self._Nxr:self._Nx,self._Nx-self._Nxr:self._Nx] = np.eye(self._Nxr)
-        V = eps * np.eye(self._Nxr) # No anticipated sensor noise
+        # Get penalty matrices
+        Q, R, W, V = self.get_penalty_matrices()
         
         # Generate controller
         self._K    = control.dlqr(self._A, self._B, Q, R)[0]
@@ -390,12 +371,50 @@ class ControlAndDynamics:
         eigsALC    = np.linalg.eig(ALC)[0]
         specRadALC = max(np.abs(eigsALC))
         print(f'Closed-loop spectral radius, observer: {specRadALC:.3f}')
-        
+     
+     
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
         augDist[0:self._Nxr*(self._dAct+1)] = self._distMtx @ dist
         return augDist
+    
+    
+    def get_penalty_matrices(self):
+        ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
+        ANGLE_PEN = 1e0
+        DERIV_PEN = 1e-5
+        INPUT_PEN = 1e-8
+        FDBK_PEN  = 1e-8
+        FUTURE_RATIO = 1.0 # error(t+1) is penalized (ratio)*pen as much as error(t)
+                           # error(t+2) is penalized (ratio^2)*pen as much as error(t)
+        DIST_SIZE  = 1e0
+        NOISE_SIZE = 1e-8
         
+        dAct = self._dAct; dSense = self._dSense
+        
+        QAngle = ANGLE_PEN * np.eye(self._Nur)
+        QDrv   = DERIV_PEN * np.eye(self._Nur)
+        QState = block_diag(QAngle, QDrv)
+        
+        Q = np.zeros([self._Nx, self._Nx])
+        for i in range(dAct+1): # Penalize state and predicted states
+            start = i*self._Nxr
+            end   = (i+1)*self._Nxr
+            Q[start:end, start:end] = QState*pow(FUTURE_RATIO, i)
+            
+        eps  = 1e-8 # Default value for "no" penalty
+        RAct = INPUT_PEN * np.eye(self._Nur)   # penalty on true actuation
+        RIfp = FDBK_PEN * np.eye(dSense*self._Nxr) # compensatory feedback; no penalty
+        R    = block_diag(RAct, RIfp)
+            
+        W = np.zeros([self._Nx, self._Nx])
+        W[0:self._Nxr*(dAct+1),0:self._Nxr*(dAct+1)] = DIST_SIZE * np.eye(self._Nxr*(dAct+1))
+        W[self._Nx-self._Nxr:self._Nx,self._Nx-self._Nxr:self._Nx] = np.eye(self._Nxr)
+        V = NOISE_SIZE * np.eye(self._Nxr)
+        
+        return(Q, R, W, V)
+
+
     def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
         ''' 
         xNow       : includes augmented states as well
