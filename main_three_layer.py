@@ -20,14 +20,15 @@ from tools.dist_tools import *
 
 # basename = 'dist_12mms_uneven'
 # basename = 'compare_8mms'
-basename = 'dist_12mms_slippery_delay_90ms'
+# basename = 'dist_12mms_slippery_delay_30ms'
+basename = 'test'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -35,7 +36,8 @@ numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.09  # Seconds; typically 0.02-0.04
+actDelay       = 0.03  # Seconds; typically 0.02-0.04
+couplingDelay = 0.010
 
 # LQR penalties
 drvPen = {'L1': 1e-5, #
@@ -67,7 +69,7 @@ distEnd   = 500
 # distType = DistType.ZERO
 
 distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 10}
+distDict = {'maxVelocity' : 1}
 
 
 # distType = DistType.UNEVEN_SURFACE
@@ -100,6 +102,8 @@ phaseInit = bout['phases']
 numDelays   = int(actDelay / Ts * ctrlSpeedRatio)
 numSimSteps = numTGSteps*ctrlSpeedRatio
 lookahead   = math.ceil(numDelays/ctrlSpeedRatio)
+
+numDelaysCoupling = int(round(couplingDelay / Ts))
 
 nLegs   = len(legs)
 dofTG   = len(anglesTG)
@@ -145,6 +149,7 @@ for ln, leg in enumerate(legs):
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
+    kc = max(k - numDelaysCoupling, 0)
     
     # Index for future TG data
     k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
@@ -152,10 +157,10 @@ for t in range(numSimSteps-1):
 
     # This is only used if TG is updated
     ws = np.zeros(6)
-    px = phaseTG[:,k]
+    px = phaseTG[:,kc]
     px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*8
-    px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
-    phaseTG[:,k] = px
+    phaseTG[:,k] = phaseTG[:,k] + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
+    # phaseTG[:,k] = pxk
 
     for ln, leg in enumerate(legs):
         legPos  = int(leg[-1])
@@ -215,12 +220,18 @@ angs_real = np.hstack([bout['angles'][leg] for leg in legs])
 p3d = angles_to_pose_names(angs_real, angNames)
 # make_fly_video(p3d, 'vids/{}_real.mp4'.format(basename))
 
+wanted_angles = ['L1C_flex', 'L2B_rot', 'L3C_flex', 'R1C_flex', 'R2B_rot', 'R3C_flex']
+ixs = []
+for name in wanted_angles:
+    ix = np.where(angNames == name)[0][0]
+    ixs.append(ix)
+
 import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')
-ix = np.where(angNames == 'L1C_flex')[0]
+# ix = np.where(angNames == 'L1C_flex')[0]
 plt.figure(1)
 plt.clf()
-plt.plot(angs_sim[:, ix])
-plt.plot(angs_real[:, ix])
+plt.plot(angs_sim[:, ixs])
+# plt.plot(angs_real[:, ix])
 plt.draw()
 plt.show(block=False)

@@ -101,6 +101,41 @@ offsets = np.array([
 
 alphas = np.ones((6,6))*4.0
 
+def get_coupling_weights(coupling_type='all', coupling_strength=8):
+    if coupling_type == 'all':
+        weights = np.array([
+            [0, 1, 1, 1, 1, 1],
+            [1, 0, 1, 1, 1, 1],
+            [1, 1, 0, 1, 1, 1],
+            [1, 1, 1, 0, 1, 1],
+            [1, 1, 1, 1, 0, 1],
+            [1, 1, 1, 1, 1, 0],
+        ])
+    elif coupling_type == 'diag':
+        weights = np.array([
+            [0, 1, 0, 1, 1, 0],
+            [1, 0, 1, 1, 1, 1],
+            [0, 1, 0, 0, 1, 1],
+            [1, 1, 0, 0, 1, 0],
+            [1, 1, 1, 1, 0, 1],
+            [0, 1, 1, 0, 1, 0],
+        ])
+    elif coupling_type == 'neighbors':
+        weights = np.array([
+            [0, 1, 0, 1, 0, 0],
+            [1, 0, 1, 0, 1, 0],
+            [0, 1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1, 0],
+            [0, 1, 0, 1, 0, 1],
+            [0, 0, 1, 0, 1, 0],
+        ])
+    elif coupling_type == 'none':
+        weights = np.zeros((6,6))
+    else:
+        raise ValueError("invalid coupling type: {}".format(coupling_type))
+
+    return weights.astype('float') * coupling_strength
+
 
 
 def kuramato_deriv(px, alphas, offsets, ws):
