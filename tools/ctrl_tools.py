@@ -361,12 +361,10 @@ class ControlAndDynamics:
     
     def get_penalty_matrices(self):
         ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
-        ANGLE_PEN = 1e0
-        DERIV_PEN = 1e-5
-        INPUT_PEN = 1e-8
-        FDBK_PEN  = 1e-8
-        FUTURE_RATIO = 1.0 # error(t+1) is penalized (ratio)*pen as much as error(t)
-                           # error(t+2) is penalized (ratio^2)*pen as much as error(t)
+        ANGLE_PEN  = 1e0
+        DERIV_PEN  = 1e-5
+        INPUT_PEN  = 1e-8
+        FDBK_PEN   = 1e-8
         DIST_SIZE  = 1e0
         NOISE_SIZE = 1e-8
         
@@ -380,7 +378,7 @@ class ControlAndDynamics:
         for i in range(dAct+1): # Penalize state and predicted states
             start = i*self._Nxr
             end   = (i+1)*self._Nxr
-            Q[start:end, start:end] = QState*pow(FUTURE_RATIO, i)
+            Q[start:end, start:end] = QState
             
         eps  = 1e-8 # Default value for "no" penalty
         RAct = INPUT_PEN * np.eye(self._Nur)   # penalty on true actuation
