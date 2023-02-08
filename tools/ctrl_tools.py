@@ -214,10 +214,10 @@ def get_linearized_system(DHTable, linkMasses, inertias, frics, xEqm, leg):
 
 
 
-def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
+def get_augmented_system(AReal, BReal, CReal, dSense, dAct):
     ''' Augment system (AReal, BReal, CReal) to (A, B, C)
-        to include delayed sensing, delayed actuation, and dForward '''
-        
+        to include delayed sensing, delayed actuation, and lookahead '''
+    
     if dSense == 0 and dAct == 0:
         return (AReal, BReal, CReal)
     
@@ -227,10 +227,10 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
     p = CReal.shape[0]
         
     # Block dimensions of augmented A
-    n1 = n*(dForward+1) # real state + dForward states
-    n2 = m*dAct          # act delay states
-    n3 = p*dSense        # sense delay states
-    n4 = n*(dForward+1) # trajectory states
+    n1 = n*(dAct+1) # real state + lookahead states
+    n2 = m*dAct     # act delay states
+    n3 = p*dSense   # sense delay states
+    n4 = n*(dAct+1) # trajectory states
         
     nx = n1 + n2 + n3 + n4
     nu = m + n3 # allow internal compensation to delayed sensors
@@ -242,7 +242,7 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
     A14  = np.zeros([n4, n4])
     A14h = np.eye(n)
 
-    for i in range(dForward+1):
+    for i in range(dAct+1):
         A11h = AReal @ A11h
         A11[n*i:n*(i+1), 0:n] = A11h
 
@@ -255,7 +255,7 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
 
         aux     = np.empty([n*i, 0])
         blkdiag = aux # Be careful, shallow copy
-        for j in range(dForward+1-i):
+        for j in range(dAct+1-i):
             blkdiag = block_diag(blkdiag, A14h)
         blkdiag = block_diag(blkdiag, aux.T)
         A14h    = AReal @ A14h
@@ -276,7 +276,7 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
         A33 = block_diag(aux, np.eye(p*(dSense-1)), aux.T)
 
     aux = np.empty([0, n])
-    A44 = block_diag(aux, np.eye(n*dForward), aux.T)
+    A44 = block_diag(aux, np.eye(n*dAct), aux.T)
 
     # Put A together row-wise
     A1 = np.concatenate([A11, A12, np.zeros([n1,n3]), A14], axis=1)
@@ -286,11 +286,8 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
     A  = np.concatenate([A1, A2, A3, A4]);
 
     B  = np.zeros([nx, nu])
-    
-    if dForward == dAct:
-        B[n*dAct:n1, 0:m] = BReal
-    
-    B[n1:n1+m, 0:m]         = np.eye(m)
+    B[n*dAct:n1, 0:m] = BReal
+    B[n1:n1+m, 0:m]   = np.eye(m)
     B[n1+n2:n1+n2+n3, m:nu] = np.eye(p*dSense)  
 
     C  = np.zeros([p, nx])
@@ -303,11 +300,11 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct, dForward):
 
 
 
-def get_augmented_dist_mtx(AReal, dForward):
+def get_augmented_dist_mtx(AReal, dAct):
     Nx   = AReal.shape[0]
     ANow = np.eye(Nx)
     mtx  = np.eye(Nx)
-    for i in range(dForward):
+    for i in range(dAct):
         ANow = AReal @ ANow
         mtx  = np.concatenate((mtx, ANow))
     return mtx        
@@ -315,7 +312,7 @@ def get_augmented_dist_mtx(AReal, dForward):
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, dSense, dAct, namesTG=None, dForward=None):
+    def __init__(self, leg, Ts, dSense, dAct, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
@@ -330,13 +327,6 @@ class ControlAndDynamics:
             self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
         else:
             self._namesTG = namesTG
-        
-        if dForward is None:
-            self._dForward = dAct
-        else:
-            if dForward > dAct:
-                raise ValueError('dForward value cannot be greater than actuation delay!')        
-            self._dForward = dForward
 
         # Zeroth order discretization
         self._Ar  = np.eye(self._Nxr) + ALin*Ts
@@ -344,15 +334,14 @@ class ControlAndDynamics:
         self._Cr  = np.eye(self._Nxr) # Perfect sensing
 
         # Convert to delayed system
-        self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, 
-                                        dSense, dAct, self._dForward)
+        self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
         self._Nx = self._B.shape[0]
         self._Nu = self._B.shape[1]
         
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
 
-        self._distMtx = get_augmented_dist_mtx(self._Ar, dForward)
+        self._distMtx = get_augmented_dist_mtx(self._Ar, dAct)
         
         # Get penalty matrices
         Q, R, W, V = self.get_penalty_matrices()
@@ -366,7 +355,7 @@ class ControlAndDynamics:
      
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
-        augDist[0:self._Nxr*(self._dForward+1)] = self._distMtx @ dist
+        augDist[0:self._Nxr*(self._dAct+1)] = self._distMtx @ dist
         return augDist
     
     
@@ -379,7 +368,7 @@ class ControlAndDynamics:
         DIST_SIZE  = 1e0
         NOISE_SIZE = 1e-8
         
-        dAct = self._dAct; dSense = self._dSense; dForward = self._dForward
+        dAct = self._dAct; dSense = self._dSense
         
         QAngle = ANGLE_PEN * np.eye(self._Nur)
         QDrv   = DERIV_PEN * np.eye(self._Nur)
@@ -394,7 +383,7 @@ class ControlAndDynamics:
         R    = block_diag(RAct, RIfp)
             
         W = np.zeros([self._Nx, self._Nx])
-        W[0:self._Nxr*(dForward+1),0:self._Nxr*(dForward+1)] = DIST_SIZE * np.eye(self._Nxr*(dForward+1))
+        W[0:self._Nxr*(dAct+1),0:self._Nxr*(dAct+1)] = DIST_SIZE * np.eye(self._Nxr*(dAct+1))
         W[self._Nx-self._Nxr:self._Nx,self._Nx-self._Nxr:self._Nx] = np.eye(self._Nxr)
         V = NOISE_SIZE * np.eye(self._Nxr)
         
@@ -427,18 +416,18 @@ class ControlAndDynamics:
         ''' 
         xNow       : includes augmented states as well
         xEst       : internal estimation of xNow
-        anglesAhead: angles (TG formatted), dForward to dForward+1 steps ahead 
-        drvsAhead  : drvs   (TG formatted), dForward to dForward+1 steps ahead
+        anglesAhead: angles (TG formatted), dAct to dAct+1 steps ahead 
+        drvsAhead  : drvs   (TG formatted), dAct to dAct+1 steps ahead
         dist       : size of real system (not including augmented states)
         ''' 
         xEqmFlat = self._xEqm.flatten()
         
-        # Synthesize wTraj for t up to t+dForward
+        # Synthesize wTraj for t up to t+dAct
         angles = tg_to_ctrl(anglesAhead, self._legPos, self._namesTG)
         drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
         
-        # wTraj(t+dForward)
+        # wTraj(t+dAct)
         wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
 

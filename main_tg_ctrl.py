@@ -20,13 +20,12 @@ filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps      = 500   # How many timesteps to run TG for
+numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 senseDelay      = 0.01  # Seconds; typically 0.01
-lookahead       = 0.027  # Typically equal to actuation delay
 
 leg = sys.argv[1]
 
@@ -54,21 +53,17 @@ phaseInit = bout['phases'][leg][0]
 ################################################################################
 # Trajectory generator + ctrl and dynamics, w/o disturbances
 ################################################################################
-dAct     = int(actDelay / Ts * ctrlSpeedRatio)
-dSense   = int(senseDelay / Ts * ctrlSpeedRatio)
-dForward = int(lookahead / Ts * ctrlSpeedRatio)
-
+dAct   = int(actDelay / Ts * ctrlSpeedRatio)
+dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {dAct}')
 print(f'Steps of sensory delay  : {dSense}')
-print(f'Steps of lookahead      : {dForward}')
 
 legPos  = int(leg[-1])
 TG      = TrajectoryGenerator(filename, leg, numTGSteps)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
-CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, 
-                             namesTG=namesTG, dForward=dForward)
+CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]
@@ -85,7 +80,8 @@ xEsts = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
 dist  = np.zeros(CD._Nxr) # Zero disturbances
 
-predLength = math.ceil(dForward/ctrlSpeedRatio)
+lookahead = math.ceil(dAct/ctrlSpeedRatio)
+
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
@@ -94,12 +90,12 @@ for t in range(numSimSteps-1):
         ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
         drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
         
-        kEnd = min(k+ctrlCommRatio+predLength, numTGSteps-1)
+        kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
         angleTG2[:numAng,k+1:kEnd+1], drvTG2[:numAng,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
 
-    k1 = min(int((t+dForward) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+dForward+1) / ctrlSpeedRatio), numTGSteps-1)
+    k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
     anglesAhead = np.concatenate((angleTG2[:,k1].reshape(numAng,1),
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
@@ -133,7 +129,7 @@ for t in range(numSimSteps-1):
     drv = drvTGDist[:,k] + ctrl_to_tg(xsDist[dof:dof*2,t]*CD._Ts, legPos, namesTG)
 
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
-        kEnd = min(k+ctrlCommRatio+predLength, numTGSteps-1)
+        kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
         angleTGDist[:,k+1:kEnd+1], drvTGDist[:,k+1:kEnd+1], phaseTGDist[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTGDist[k], contexts)
     
@@ -145,8 +141,8 @@ for t in range(numSimSteps-1):
         lastDetection        = t
         dist                 = get_dist(distDict, leg)               
 
-    k1 = min(int((t+dForward) / ctrlSpeedRatio), numTGSteps-1)
-    k2 = min(int((t+dForward+1) / ctrlSpeedRatio), numTGSteps-1)
+    k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
+    k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
     anglesAhead = np.concatenate((angleTGDist[:,k1].reshape(numAng,1),
                                   angleTGDist[:,k2].reshape(numAng,1)), axis=1)
