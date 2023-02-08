@@ -33,7 +33,7 @@ leg = sys.argv[1]
 # Disturbance
 ################################################################################
 distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 5}
+distDict = {'maxVelocity' : 1}
 distDict['distType'] = distType
 
 ################################################################################

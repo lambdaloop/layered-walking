@@ -375,10 +375,7 @@ class ControlAndDynamics:
         QState = block_diag(QAngle, QDrv)
         
         Q = np.zeros([self._Nx, self._Nx])
-        for i in range(dAct+1): # Penalize state and predicted states
-            start = i*self._Nxr
-            end   = (i+1)*self._Nxr
-            Q[start:end, start:end] = QState
+        Q[0:self._Nxr, 0:self._Nxr] = QState
             
         eps  = 1e-8 # Default value for "no" penalty
         RAct = INPUT_PEN * np.eye(self._Nur)   # penalty on true actuation
