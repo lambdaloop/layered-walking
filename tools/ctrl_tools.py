@@ -312,7 +312,7 @@ def get_augmented_dist_mtx(AReal, dAct):
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, dSense, dAct, namesTG=None):
+    def __init__(self, leg, Ts, dSense, dAct, namesTG=None, lookaheadSTD=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
@@ -322,6 +322,11 @@ class ControlAndDynamics:
         self._dAct      = dAct
         self._Nxr       = ALin.shape[0] # Number of 'real' states
         self._Nur       = BLin.shape[1] # Number of 'real' inputs
+
+        if lookaheadSTD is None:
+            self._lookaheadSTD = 0
+        else:
+            self._lookaheadSTD = lookaheadSTD
 
         if namesTG is None:
             self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
@@ -430,6 +435,9 @@ class ControlAndDynamics:
         # wTraj(t+dAct)
         wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
+    
+        # Add noise
+        wTrajAhead += np.random.normal(loc=0, scale=self._lookaheadSTD)
 
         # Update dynamics + estimate with trajectory tracking
         xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead

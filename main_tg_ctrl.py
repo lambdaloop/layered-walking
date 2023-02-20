@@ -27,6 +27,7 @@ ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple 
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 senseDelay      = 0.01  # Seconds; typically 0.01
 
+lookaheadSTD = 0.02 # Standard deviation of gaussian noise
 leg = sys.argv[1]
 
 ################################################################################
@@ -63,7 +64,8 @@ TG      = TrajectoryGenerator(filename, leg, numTGSteps)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
-CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG)
+CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, 
+                             namesTG=namesTG, lookaheadSTD = lookaheadSTD)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]
