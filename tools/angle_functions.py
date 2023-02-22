@@ -226,6 +226,8 @@ all_lengths = np.array(
      [0.2173799 , 0.55001682, 0.43837038, 0.45235905],
      [0.21181969, 0.54009662, 0.4996887 , 0.55621912]])
 
+leg_lengths = dict(zip(legs, all_lengths))
+
 # median_angles = np.array([
 #     146.00028984,   13.3342075 ,   63.11484802,  -89.15836873,
 #     132.20974607, -125.00788515,  162.99637495,  164.38310523,
@@ -255,8 +257,10 @@ median_angles = np.array([
     141.80029384,   40.77934321,  163.10740062,  122.12763573])
 
 default_angles = dict(zip(full_names, median_angles))
-
 name_to_index = dict(zip(full_names, range(len(full_names))))
+
+
+
 
 def angles_to_pose_multirow(rows, lengths=None, offsets=None, progress=False):
     if lengths is None:
@@ -283,6 +287,11 @@ def angles_to_pose_names(angs, angnames,
         ix_dest = name_to_index[name]
         new_angs[:, ix_dest] = angs[:, ix_source]
     return angles_to_pose_multirow(new_angs, lengths, offsets, progress)
+
+positions_arr = angles_to_pose_names(median_angles[None], full_names).reshape(-1, 3)
+positions_names = [a + b for a in legs for b in 'ABCDE']
+default_positions = dict(zip(positions_names, positions_arr))
+
 
 def make_fly_video(pose_3d, outname):
     writer = skvideo.io.FFmpegWriter(outname, inputdict={
