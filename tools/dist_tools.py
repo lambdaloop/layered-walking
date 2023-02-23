@@ -5,7 +5,8 @@ from enum import Enum
 from scipy.optimize import fsolve
 from tools.angle_functions import all_lengths, angles_to_pose_names, \
                                   anglesCtrl, anglesTG, \
-                                  get_avg_angles, get_leg_lengths, legs
+                                  get_avg_angles, get_leg_lengths, legs, \
+                                  default_angles, run_forward_leg_names
 
 
 ################################################################################
@@ -50,15 +51,24 @@ def get_dists_endeffector_moves(height, leg):
 ################################################################################
 # Ground contact functions for users
 ################################################################################
+# def get_current_height(angles, fullAngleNames, legIdx):
+#     ''' Expect angles in degrees, in order specified by anglesTG '''
+#     try:
+#         pose = angles_to_pose_names(angles.reshape(-1, len(fullAngleNames)), fullAngleNames)
+#         return pose[0, legIdx, -1, -1]
+#     except:
+#         return np.nan
+
+
+def get_current_height_dict(leg, angles):
+    xyz = run_forward_leg_names(leg, angles)
+    return xyz[-1, 2]
+
 def get_current_height(angles, fullAngleNames, legIdx):
-    ''' Expect angles in degrees, in order specified by anglesTG '''
-    try:
-        pose = angles_to_pose_names(angles.reshape(-1, len(fullAngleNames)), fullAngleNames)
-        return pose[0, legIdx, -1, -1]
-    except:
-        return np.nan
-
-
+    names = [x[2:] for x in fullAngleNames]
+    angles_dict = dict(zip(names, angles))
+    leg = fullAngleNames[0][:2]
+    return get_current_height_dict(leg, angles_dict)
 
 def loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heights, t):
     ''' Returns boolean of whether heights[center] is a local minimum '''

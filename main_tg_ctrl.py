@@ -10,7 +10,7 @@ from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, \
                                   ctrl_to_tg, tg_to_ctrl, legs
 from tools.dist_tools import *
-# from tools.ground_model import GroundModel
+from tools.ground_model import GroundModel
 
 # Usage: python3 main_tg_ctrl_dist.py <leg>
 ################################################################################
@@ -42,7 +42,7 @@ distDict['distType'] = distType
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings)
+bout     = wd.get_bout(walkingSettings, offset=2)
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -84,19 +84,23 @@ dist  = np.zeros(CD._Nxr) # Zero disturbances
 
 lookahead = math.ceil(dAct/ctrlSpeedRatio)
 
-ground = GroundModel(height=0.8, incline=0)
+ground = GroundModel(height=0.85, incline=0)
 
 positions = np.zeros([5, 3, numSimSteps])
+positions2 = np.zeros([5, 3, numSimSteps])
 
 for t in range(numSimSteps-1):
     print(t)
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
+    ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+    positions[:, :, t] = ground.get_positions[leg](ang)
+
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
-        ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG) # why add??
+        ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
         drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
-        
+
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
         angleTG2[:numAng,k+1:kEnd+1], drvTG2[:numAng,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
@@ -109,6 +113,9 @@ for t in range(numSimSteps-1):
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
+
+    ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+    positions2[:, :, t] = ground.get_positions[leg](ang)
 
     # update the model step by a bit here
     # i think we could update just the latest one and it could be okay here
@@ -124,23 +131,36 @@ for t in range(numSimSteps-1):
     ang_next = ang_new_dict[leg]
     drv_next = drv_new_dict[leg]
 
-    positions[:, :, t] = ground.get_positions[leg](ang_next)
+    # positions[:, :, t] = ground.get_positions[leg](ang_next)
 
     # update xs
-    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,k], legPos, namesTG)
-    xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,k])/CD._Ts, legPos, namesTG)
+    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+    xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
 
     print(ang_next - ang)
 
 
+downSamp   = list(range(0, numSimSteps, ctrlSpeedRatio))
+angle2     = angleTG2 + ctrl_to_tg(xs[0:dof,downSamp], legPos, namesTG)
+drv2       = drvTG2 + ctrl_to_tg(xs[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
+# angle2Dist = angleTGDist + ctrl_to_tg(xsDist[0:dof,downSamp], legPos, namesTG)
+# drv2Dist   = drvTGDist + ctrl_to_tg(xsDist[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
+
+# Get heights for non-perturbed case as well
+# heights       = np.array([None] * numTGSteps)
+heights = np.zeros(numTGSteps)
+for t in range(numTGSteps):
+    heights[t] = ground.get_positions[leg](angle2[:,t])[-1, 2]
+
+
+
 plt.figure(1)
 plt.clf()
-plt.plot(positions[-1, 2, :])
+plt.plot(positions[-1, 2, ::2])
+plt.plot(positions2[-1, 2, ::2])
+# plt.plot(heights)
 plt.draw()
 plt.show(block=False)
-
-
-
 
 
 ################################################################################
@@ -203,16 +223,18 @@ plt.show(block=False)
 # Post-processing for plotting
 ################################################################################
 # True angle + derivative (sampled at Ts)
-downSamp   = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
+downSamp   = list(range(0, numSimSteps, ctrlSpeedRatio))
 angle2     = angleTG2 + ctrl_to_tg(xs[0:dof,downSamp], legPos, namesTG)
 drv2       = drvTG2 + ctrl_to_tg(xs[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
 angle2Dist = angleTGDist + ctrl_to_tg(xsDist[0:dof,downSamp], legPos, namesTG)
 drv2Dist   = drvTGDist + ctrl_to_tg(xsDist[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
 
 # Get heights for non-perturbed case as well
-heights       = np.array([None] * numTGSteps)
-for t in range(numTGSteps-1):
-    heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
+# heights       = np.array([None] * numTGSteps)
+heights = np.zeros(numTGSteps)
+for t in range(numTGSteps):
+    heights[t] = ground.get_positions[leg](angle2[:,t])[-1, 2]
+    # heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
 
 time  = np.array(range(numTGSteps))
 time2 = np.array(range(numSimSteps)) / ctrlSpeedRatio
@@ -243,13 +265,14 @@ for i in range(dof):
     plt.plot(time, drvTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
         
-    plt.subplot(3,dof,i+2*dof+1)
-    plt.title('Disturbance injected')
+    plt.subplot(3,1,3)
+    plt.title('Height')
     plt.plot(time, heights, 'g', label=f'2Layer')
     plt.plot(time2, heightsDist, 'm', label=f'2Layer-Dist')
     
     plt.plot(time2, groundContactDist, 'r*', markersize=10)
 
+plt.draw()
 plt.show(block=False)
 
 

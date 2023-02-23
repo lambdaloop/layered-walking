@@ -178,6 +178,30 @@ def forward_chain(angles, lengths):
     return xyz
 
 
+def run_forward(angles, lengths):
+    # A_abduct, A_flex, B_flex, C_flex, D_flex, A_rot, B_rot, C_rot
+    x = angles
+    chain_angles = [
+        x[0], # shoulder
+        180-np.array([180-x[1], x[2], -x[3], x[4]]), # flexion
+        np.array([x[5], 180+x[6], 180+x[7], 0]) # rotation
+    ]
+
+    xyz = forward_chain(chain_angles, lengths)
+    return xyz
+
+def run_forward_leg_names(leg, angles, offset=None):
+    # angles is a dict
+    if offset is None:
+        offset = default_positions[leg + 'A']
+    full = np.array([default_angles[leg + a] for a in angnames])
+    for k, v in angles.items():
+        ix = angnames.index(k)
+        full[ix] = v
+    lengths = leg_lengths[leg]
+    return run_forward(full, lengths) + offset
+
+
 # row array is in the form:
 # A_abduct, A_flex, B_flex, C_flex, D_flex, A_rot, B_rot, C_rot * 6 legs
 # 8 * 6 = 40 angles

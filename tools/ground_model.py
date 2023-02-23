@@ -2,21 +2,9 @@
 
 from tools.angle_functions import anglesCtrl
 from tools.angle_functions import angles_chain, forward_chain, default_angles, \
-    angnames, leg_lengths, default_positions
+    angnames, leg_lengths, default_positions, run_forward
 import numpy as np
 from scipy import optimize
-
-def run_forward(angles, lengths):
-    # A_abduct, A_flex, B_flex, C_flex, D_flex, A_rot, B_rot, C_rot
-    x = angles
-    chain_angles = [
-        x[0], # shoulder
-        180-np.array([180-x[1], x[2], -x[3], x[4]]), # flexion
-        np.array([x[5], 180+x[6], 180+x[7], 0]) # rotation
-    ]
-
-    xyz = forward_chain(chain_angles, lengths)
-    return xyz
 
 def make_optimizer_fun(leg, names, offset=None):
     full = np.array([default_angles[leg + a] for a in angnames])
