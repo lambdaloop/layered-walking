@@ -427,13 +427,14 @@ class ControlAndDynamics:
         drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
         
-        # wTraj(t+dAct)
-        wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
-                     xEqmFlat - trajs[:,1]
 
         # Update dynamics + estimate with trajectory tracking
-        xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
-        xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+        if self._dAct > 0:
+            # wTraj(t+dAct)
+            wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
+                     xEqmFlat - trajs[:,1]
+            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+            xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
             
         # Controller: calculate input        
         uNow = -self._K @ xEst
@@ -445,6 +446,8 @@ class ControlAndDynamics:
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
+
+        # add ground here
 
         return (uNow, xNxt, xEstNxt)
 
