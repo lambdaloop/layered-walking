@@ -10,13 +10,14 @@ from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import anglesTG, anglesCtrl, \
                                   ctrl_to_tg, tg_to_ctrl, legs
 from tools.dist_tools import *
+# from tools.ground_model import GroundModel
 
 # Usage: python3 main_tg_ctrl_dist.py <leg>
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -24,10 +25,11 @@ numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
+actDelay        = 0.00  # Seconds; typically 0.02-0.04
+senseDelay      = 0.00  # Seconds; typically 0.01
 
-leg = sys.argv[1]
+# leg = sys.argv[1]
+leg = 'L1'
 
 ################################################################################
 # Disturbance
@@ -82,12 +84,17 @@ dist  = np.zeros(CD._Nxr) # Zero disturbances
 
 lookahead = math.ceil(dAct/ctrlSpeedRatio)
 
+ground = GroundModel(height=0.8, incline=0)
+
+positions = np.zeros([5, 3, numSimSteps])
+
 for t in range(numSimSteps-1):
+    print(t)
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
-        ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+        ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG) # why add??
         drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
         
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
@@ -102,6 +109,39 @@ for t in range(numSimSteps-1):
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
+
+    # update the model step by a bit here
+    # i think we could update just the latest one and it could be okay here
+
+    # get the current angles
+    ang_prev = angleTG2[:numAng,max(k-1, 0)] + ctrl_to_tg(xs[0:dof,k*ctrlSpeedRatio], legPos, namesTG)
+    ang = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
+    drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
+
+    # update the angles
+    ang_new_dict, drv_new_dict = ground.step_forward(
+        {leg: ang_prev}, {leg: ang}, {leg: drv})
+    ang_next = ang_new_dict[leg]
+    drv_next = drv_new_dict[leg]
+
+    positions[:, :, t] = ground.get_positions[leg](ang_next)
+
+    # update xs
+    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,k], legPos, namesTG)
+    xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,k])/CD._Ts, legPos, namesTG)
+
+    print(ang_next - ang)
+
+
+plt.figure(1)
+plt.clf()
+plt.plot(positions[-1, 2, :])
+plt.draw()
+plt.show(block=False)
+
+
+
+
 
 ################################################################################
 # Simulate with disturbances
@@ -152,6 +192,13 @@ for t in range(numSimSteps-1):
     usDist[:,t], xsDist[:,t+1], xEstsDist[:,t+1] = \
         CD.step_forward(xsDist[:,t], xEstsDist[:,t], anglesAhead, drvsAhead, dist)
 
+plt.figure(1)
+plt.clf()
+plt.plot(np.degrees(xsDist[1, :]))
+plt.draw()
+plt.show(block=False)
+
+
 ################################################################################
 # Post-processing for plotting
 ################################################################################
@@ -184,6 +231,7 @@ for i in range(dof):
     plt.plot(time, angle2[idx,:], 'g--', label=f'2Layer')
     plt.plot(time, angleTGDist[idx,:], 'r', label=f'2LayerTG-Dist')
     plt.plot(time, angle2Dist[idx,:], 'm--', label=f'2Layer-Dist')
+    plt.ylim(-180, 180)
 
     if i==0:
         plt.legend()
@@ -202,5 +250,11 @@ for i in range(dof):
     
     plt.plot(time2, groundContactDist, 'r*', markersize=10)
 
-plt.show()
+plt.show(block=False)
 
+
+# plt.figure(2)
+# plt.clf()
+# plt.imshow(CD._A, norm='log')
+# plt.draw()
+# plt.show(block=False)

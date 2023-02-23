@@ -1,8 +1,10 @@
 #!/usr/bin/env ipython
 
-from angle_functions import anglesCtrl
-from angle_functions import angles_chain, forward_chain, default_angles, \
+from tools.angle_functions import anglesCtrl
+from tools.angle_functions import angles_chain, forward_chain, default_angles, \
     angnames, leg_lengths, default_positions
+import numpy as np
+from scipy import optimize
 
 def run_forward(angles, lengths):
     # A_abduct, A_flex, B_flex, C_flex, D_flex, A_rot, B_rot, C_rot
@@ -64,32 +66,32 @@ class GroundModel:
         # unit of velocity is rad/s * sampling_time
 
         pos_curr = dict()
+        pos_prev = dict()
         delta = dict()
         ground_legs = []
 
         # estimate deltas
         for leg in legs:
-            pos_curr[leg] = self.get_positions(angles_curr[leg])
-            pos_prev[leg] = self.get_positions(angles_prev[leg])
-            delta[leg] = pos_curr[leg] - pos_prev[leg]
+            xyz = pos_curr[leg] = self.get_positions[leg](angles_curr[leg])
+            pos_prev[leg] = self.get_positions[leg](angles_prev[leg])
+            delta[leg] = pos_curr[leg][-1] - pos_prev[leg][-1]
             if xyz[-1, 2] < -1 * self._height:
                 ground_legs.append(leg)
 
-        average_delta = np.mean([delta[leg] for leg in ground_legs], axis=0)
 
+        average_delta = np.mean([delta[leg] for leg in ground_legs], axis=0)
 
         angles_next = dict(angles_curr)
         velocities_next = dict(velocities)
         # apply height and delta correction to ground connected legs
         for leg in ground_legs:
             xyz = pos_curr[leg]
-            ground_legs.append(leg)
             target = np.copy(xyz[-1])
-            target[:, 0] = average_delta[0] + pos_prev[leg][-1, 0]
-            target[:, 1] = average_delta[1] + pos_prev[leg][-1, 1]
-            target[:, 2] = -self._height
+            target[0] = average_delta[0] + pos_prev[leg][-1, 0]
+            target[1] = average_delta[1] + pos_prev[leg][-1, 1]
+            target[2] = -self._height
             opt = optimize.least_squares(
-                self.optimizers[leg], angles[leg],
+                self.optimizers[leg], angles_curr[leg],
                 args=(target,))
             angles_next[leg] = opt.x
             velocities_next[leg] = angles_next[leg] - angles_prev[leg] # delta t
