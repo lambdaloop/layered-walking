@@ -85,7 +85,7 @@ class GroundModel:
             velocities_next[leg] = angles_next[leg] - angles_prev[leg] # delta t
 
 
-        return angles_next, velocities_next
+        return angles_next, velocities_next, ground_legs
 
         # for each leg in connection with ground
         # - estimate its delta compared to previous timepoint
