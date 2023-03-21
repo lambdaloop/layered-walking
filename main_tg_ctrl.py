@@ -16,8 +16,8 @@ from tools.ground_model import GroundModel
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -28,16 +28,9 @@ ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple 
 actDelay        = 0.04  # Seconds; typically 0.02-0.04
 senseDelay      = 0.00  # Seconds; typically 0.01
 
-# leg = sys.argv[1]
-leg = 'L1'
+leg     = 'L1'
+slipVel = 0
 
-################################################################################
-# Disturbance
-################################################################################
-# distType = DistType.SLIPPERY_SURFACE
-distType = DistType.ZERO
-distDict = {'maxVelocity' : 0.5}
-distDict['distType'] = distType
 
 ################################################################################
 # Get walking data
@@ -132,7 +125,7 @@ for t in range(numSimSteps-1):
     drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
 
     # update the angles
-    ang_new_dict, drv_new_dict = ground.step_forward(
+    ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(
         {leg: ang_prev}, {leg: ang}, {leg: drv})
     ang_next = ang_new_dict[leg]
     drv_next = drv_new_dict[leg]
@@ -143,6 +136,14 @@ for t in range(numSimSteps-1):
     xs[0:dof,t] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
     # xs[dof:dof*2,t] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
 
+    if leg in ground_legs:
+        dist = get_dists_slippery(slipVel)[leg]
+    else:
+        dist = np.zeros(CD._Nxr)
+        
+    print('dist:')
+    print(dist)
+    
     print(ang_next - ang)
 
 
@@ -187,6 +188,8 @@ groundContactDist = np.array([None] * numSimSteps)
 locMinWindow      = 2*ctrlSpeedRatio
 nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 lastDetection     = -nonRepeatWindow
+dist  = np.zeros(CD._Nxr) # Zero disturbances
+
 
 for t in range(numSimSteps-1): 
     k   = int(t / ctrlSpeedRatio)     # Index for TG data
@@ -199,13 +202,11 @@ for t in range(numSimSteps-1):
         angleTGDist[:,k+1:kEnd+1], drvTGDist[:,k+1:kEnd+1], phaseTGDist[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTGDist[k], contexts)
     
-    dist           = get_zero_dists()[leg]    
     heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
     
     if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsDist, t):
         groundContactDist[t] = heightsDist[t] # Visualize height minimum detection
         lastDetection        = t
-        dist                 = get_dist(distDict, leg)               
 
     k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
@@ -282,7 +283,7 @@ for i in range(dof):
     # plt.plot(time2, groundContactDist, 'r*', markersize=10)
 
 plt.draw()
-plt.show(block=False)
+plt.show()
 
 
 # plt.figure(2)
