@@ -24,7 +24,7 @@ ANGLE_NAMES_DEFAULT = {
 
 
 class TrajectoryGenerator:
-    def __init__(self, filename, leg, numSimSteps):
+    def __init__(self, filename, leg, numSimSteps, groundModel=None):
         self._filename  = filename
         self._leg       = leg
 
@@ -41,6 +41,9 @@ class TrajectoryGenerator:
 
         # Walking model
         self._model     = MLPScaledXY.from_full(allmodels[leg]['model_walk'])
+
+        # Ground model
+        self._groundModel = groundModel
 
         # Set up values from training data         
         xy_w, bnums = allmodels[self._leg]['train'] # xy_w is a real trajectory
@@ -79,16 +82,43 @@ class TrajectoryGenerator:
 
     def get_future_traj(self, t1, t2, ang, drv, phase, contexts):
         ''' Given values at time t1, returns values from t1+1 to t2, inclusive '''
+        leg = self._leg
+
         numVals = t2 - t1
         angs    = np.zeros([len(ang), numVals])
         drvs    = np.zeros([len(drv), numVals])
         phases  = np.zeros(numVals)
-        
-        angs[:,0], drvs[:,0], phases[0] = self.step_forward(ang, drv, 
-                                          phase, contexts[t1])
-        for i in range(1, numVals):
-            angs[:,i], drvs[:,i], phases[i] = self.step_forward(angs[:,i-1], drvs[:,i-1], 
-                                              phases[i-1], contexts[t1+i])
+
+        ang_prev = ang
+        drv_prev = drv
+        phase_prev = phase
+
+        for i in range(numVals):
+            ang, drv, phase = self.step_forward(
+                ang_prev, drv_prev, phase_prev, contexts[t1 + i])
+
+
+            #     angs[:,0], drvs[:,0], phases[0] = self.step_forward(
+            #         ang, drv, phase, contexts[t1])
+            # else:
+            #     angs[:,i], drvs[:,i], phases[i] = self.step_forward(
+            #         angs[:,i-1], drvs[:,i-1], phases[i-1], contexts[t1+i])
+
+            # correct with ground model
+            if self._groundModel is not None:
+                ang_next, drv_next = self._groundModel.step_forward(
+                    {leg: ang_prev}, {leg: ang}, {leg: drv})
+                ang = ang_next[leg]
+                drv = drv_next[leg]
+
+            angs[:, i] = ang
+            drvs[:, i] = drv
+            phases[i] = phase
+
+            ang_prev = ang
+            drv_prev = drv
+            phase_prev = phase
+
         return angs, drvs, phases            
 
 

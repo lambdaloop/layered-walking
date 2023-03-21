@@ -25,10 +25,11 @@ def make_optimizer_fun(leg, names, offset=None):
     return optimizer, init, get_positions
 
 class GroundModel:
-    def __init__(self, height, incline):
+    def __init__(self, height, incline=0):
         # get angle definition
         # set up inverse kinematics model
         # it should be across all the legs in order to update velocity as well
+        # TODO: take in names from trajgen angles
 
         self._height = height # measured from L1A
         self._incline = incline # in degrees

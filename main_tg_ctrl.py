@@ -19,13 +19,13 @@ from tools.ground_model import GroundModel
 # filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
 filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.00  # Seconds; typically 0.02-0.04
+actDelay        = 0.04  # Seconds; typically 0.02-0.04
 senseDelay      = 0.00  # Seconds; typically 0.01
 
 # leg = sys.argv[1]
@@ -34,8 +34,9 @@ leg = 'L1'
 ################################################################################
 # Disturbance
 ################################################################################
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 1}
+# distType = DistType.SLIPPERY_SURFACE
+distType = DistType.ZERO
+distDict = {'maxVelocity' : 0.5}
 distDict['distType'] = distType
 
 ################################################################################
@@ -61,7 +62,10 @@ print(f'Steps of actuation delay: {dAct}')
 print(f'Steps of sensory delay  : {dSense}')
 
 legPos  = int(leg[-1])
-TG      = TrajectoryGenerator(filename, leg, numTGSteps)
+
+ground = GroundModel(height=0.85)
+
+TG      = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=None)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
@@ -84,10 +88,9 @@ dist  = np.zeros(CD._Nxr) # Zero disturbances
 
 lookahead = math.ceil(dAct/ctrlSpeedRatio)
 
-ground = GroundModel(height=0.85, incline=0)
 
 positions = np.zeros([5, 3, numSimSteps])
-positions2 = np.zeros([5, 3, numSimSteps])
+# positions2 = np.zeros([5, 3, numSimSteps])
 
 for t in range(numSimSteps-1):
     print(t)
@@ -105,6 +108,9 @@ for t in range(numSimSteps-1):
         angleTG2[:numAng,k+1:kEnd+1], drvTG2[:numAng,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
 
+        # add ground model here
+        # the array angleTG2 should be updated
+
     k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
@@ -114,8 +120,8 @@ for t in range(numSimSteps-1):
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
 
-    ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
-    positions2[:, :, t] = ground.get_positions[leg](ang)
+    # ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+    # positions2[:, :, t] = ground.get_positions[leg](ang)
 
     # update the model step by a bit here
     # i think we could update just the latest one and it could be okay here
@@ -134,8 +140,8 @@ for t in range(numSimSteps-1):
     # positions[:, :, t] = ground.get_positions[leg](ang_next)
 
     # update xs
-    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
-    xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
+    xs[0:dof,t] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+    # xs[dof:dof*2,t] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
 
     print(ang_next - ang)
 
@@ -157,7 +163,7 @@ for t in range(numTGSteps):
 plt.figure(1)
 plt.clf()
 plt.plot(positions[-1, 2, ::2])
-plt.plot(positions2[-1, 2, ::2])
+# plt.plot(positions2[-1, 2, ::2])
 # plt.plot(heights)
 plt.draw()
 plt.show(block=False)
@@ -232,9 +238,12 @@ drv2Dist   = drvTGDist + ctrl_to_tg(xsDist[dof:dof*2,downSamp]*CD._Ts, legPos, n
 # Get heights for non-perturbed case as well
 # heights       = np.array([None] * numTGSteps)
 heights = np.zeros(numTGSteps)
+heightsDist = np.zeros(numTGSteps)
 for t in range(numTGSteps):
     heights[t] = ground.get_positions[leg](angle2[:,t])[-1, 2]
     # heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
+    heightsDist[t] = ground.get_positions[leg](angle2Dist[:,t])[-1, 2]
+
 
 time  = np.array(range(numTGSteps))
 time2 = np.array(range(numSimSteps)) / ctrlSpeedRatio
@@ -268,9 +277,9 @@ for i in range(dof):
     plt.subplot(3,1,3)
     plt.title('Height')
     plt.plot(time, heights, 'g', label=f'2Layer')
-    plt.plot(time2, heightsDist, 'm', label=f'2Layer-Dist')
+    plt.plot(time, heightsDist, 'm', label=f'2Layer-Dist')
     
-    plt.plot(time2, groundContactDist, 'r*', markersize=10)
+    # plt.plot(time2, groundContactDist, 'r*', markersize=10)
 
 plt.draw()
 plt.show(block=False)
