@@ -25,7 +25,7 @@ from tools.ground_model import GroundModel
 # basename = 'dist_12mms_uneven'
 # basename = 'compare_8mms'
 # basename = 'dist_12mms_slippery_delay_30ms'
-basename = 'test_ground'
+basename = 'test_ground_optim'
 
 ################################################################################
 # User-defined parameters
@@ -34,14 +34,14 @@ basename = 'test_ground'
 # filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [16, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 600   # How many timesteps to run TG for
+numTGSteps     = 60   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.03  # Seconds; typically 0.02-0.04
-senseDelay     = 0.01  # Seconds; typically 0.01
+actDelay       = 0.00  # Seconds; typically 0.02-0.04
+senseDelay     = 0.00  # Seconds; typically 0.01
 couplingDelay  = 0.010
 
 
@@ -68,6 +68,7 @@ nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 ################################################################################
 wd       = WalkingData(filename)
 bout     = wd.get_bout(walkingSettings, offset=boutNum)
+print(bout['angles'])
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -111,6 +112,7 @@ lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
 ground = GroundModel(height=0.55)
+# ground = None
 
 for ln, leg in enumerate(legs):    
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
@@ -185,27 +187,31 @@ for t in trange(numSimSteps-1, ncols=70):
 
 
     ## simulate the ground
-    # get the current angles
-    ang_prev_dict = dict()
-    ang_dict = dict()
-    drv_dict = dict()
-    for ln, leg in enumerate(legs):
-        legPos    = int(leg[-1])
-        dofCD = CD[ln]._Nur
-        numAng = TG[ln]._numAng
-        ang_prev_dict[leg] = angleTG[ln,:numAng,max(k-1, 0)] + ctrl_to_tg(xs[ln][0:dofCD,k*ctrlSpeedRatio], legPos, namesTG[ln])
-        ang_dict[leg] = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:dofCD,t+1], legPos, namesTG[ln])
-        drv_dict[leg] = drvTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][dofCD:dofCD*2,t+1]*CD[ln]._Ts, legPos, namesTG[ln])
+    if ground is not None:
+        # get the current angles
+        ang_prev_dict = dict()
+        ang_dict = dict()
+        drv_dict = dict()
+        for ln, leg in enumerate(legs):
+            legPos    = int(leg[-1])
+            dofCD = CD[ln]._Nur
+            numAng = TG[ln]._numAng
+            ang_prev_dict[leg] = angleTG[ln,:numAng,max(k-1, 0)] + ctrl_to_tg(xs[ln][0:dofCD,k*ctrlSpeedRatio], legPos, namesTG[ln])
+            ang_dict[leg] = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:dofCD,t+1], legPos, namesTG[ln])
+            drv_dict[leg] = drvTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][dofCD:dofCD*2,t+1]*CD[ln]._Ts, legPos, namesTG[ln])
 
-    # update the angles
-    ang_new_dict, drv_new_dict = ground.step_forward(ang_prev_dict, ang_dict, drv_dict)
+        # update the angles
+        ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(ang_prev_dict, ang_dict, drv_dict)
 
-    # update xs
-    for ln, leg in enumerate(legs):
-        legPos    = int(leg[-1])
-        dofCD = CD[ln]._Nur
-        numAng = TG[ln]._numAng
-        xs[ln][0:dofCD,t] = tg_to_ctrl(ang_new_dict[leg] - angleTG[ln,:numAng,kn], legPos, namesTG[ln])
+        print(t, ground_legs)
+
+        # update xs
+        for ln, leg in enumerate(legs):
+            legPos    = int(leg[-1])
+            dofCD = CD[ln]._Nur
+            numAng = TG[ln]._numAng
+            xs[ln][0:dofCD,t+1] = tg_to_ctrl(
+                ang_new_dict[leg] - angleTG[ln,:numAng,kn], legPos, namesTG[ln])
 
 # True angles sampled at Ts
 # angle    = np.zeros((nLegs, dofTG, numTGSteps))
@@ -229,7 +235,8 @@ angs_sim = np.vstack(angle).T
 angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
-make_fly_video(pose_3d, 'vids/{}_h{:02d}.mp4'.format(basename, int(ground._height*100)))
+# make_fly_video(pose_3d, 'vids/{}_h{:02d}.mp4'.format(basename, int(ground._height*100)))
+make_fly_video(pose_3d, 'vids/{}.mp4'.format(basename), height=None)
 
 angs_real = np.hstack([bout['angles'][leg] for leg in legs])
 p3d = angles_to_pose_names(angs_real, angNames)
