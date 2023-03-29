@@ -106,7 +106,7 @@ class TrajectoryGenerator:
 
             # correct with ground model
             if self._groundModel is not None:
-                ang_next, drv_next = self._groundModel.step_forward(
+                ang_next, drv_next, grounded_legs = self._groundModel.step_forward(
                     {leg: ang_prev}, {leg: ang}, {leg: drv})
                 ang = ang_next[leg]
                 drv = drv_next[leg]

@@ -6,7 +6,10 @@ from tools.angle_functions import angles_chain, forward_chain, default_angles, \
 import numpy as np
 from scipy import optimize
 
-def make_optimizer_fun(leg, names, offset=None):
+def rmse(x, y):
+    return np.sqrt(np.mean(np.square(x - y)))
+
+def make_optimizer_fun(leg, names, height, offset=None):
     full = np.array([default_angles[leg + a] for a in angnames])
     sub_ixs = [angnames.index(n) for n in names]
     init = full[sub_ixs]
@@ -19,9 +22,24 @@ def make_optimizer_fun(leg, names, offset=None):
         full[sub_ixs] = angles
         xyz = run_forward(full, lengths)
         return xyz + offset
-    def optimizer(angles, target):
+    def optimizer(angles, target, start=None):
+        # import IPython; IPython.embed()
         xyz = get_positions(angles)
-        return np.linalg.norm(xyz[-1] - target)
+        test_heights = xyz[:, -1] + height
+        penalty_height = np.sum(np.abs(test_heights) * (test_heights < 0))
+        error = np.linalg.norm(xyz[-1] - target)
+        # penalty_init = rmse(angles, init) * 0.1
+        if start is not None:
+            rad_angle = np.deg2rad(angles)
+            rad_start = np.deg2rad(init)
+            penalty_init = 0
+            penalty_init += rmse(np.cos(rad_angle), np.cos(rad_start))
+            penalty_init += rmse(np.sin(rad_angle), np.sin(rad_start))
+            penalty_init *= 0.05
+        else:
+            penalty_init = 0
+        return error # + penalty_init #+ penalty_height
+
     return optimizer, init, get_positions
 
 class GroundModel:
@@ -40,7 +58,8 @@ class GroundModel:
         self.get_positions = dict()
         for leg in legs:
             names = anglesCtrl[int(leg[1])]
-            opt, _, pos = make_optimizer_fun(leg, names, offset=default_positions[leg + 'A'])
+            opt, _, pos = make_optimizer_fun(leg, names, offset=default_positions[leg + 'A'],
+                                             height=height)
             self.optimizers[leg] = opt
             self.get_positions[leg] = pos
 
@@ -76,12 +95,14 @@ class GroundModel:
         for leg in ground_legs:
             xyz = pos_curr[leg]
             target = np.copy(xyz[-1])
-            target[0] = average_delta[0] + pos_prev[leg][-1, 0]
-            target[1] = average_delta[1] + pos_prev[leg][-1, 1]
+            # should only apply this if we want average and
+            # if previous positions were also on ground
+            # target[0] = average_delta[0] + pos_prev[leg][-1, 0]
+            # target[1] = average_delta[1] + pos_prev[leg][-1, 1]
             target[2] = -self._height
             opt = optimize.least_squares(
                 self.optimizers[leg], angles_curr[leg],
-                args=(target,))
+                args=(target, angles_curr[leg]))
             angles_next[leg] = opt.x
             velocities_next[leg] = angles_next[leg] - angles_prev[leg] # delta t
 
