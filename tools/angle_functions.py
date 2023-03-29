@@ -183,7 +183,7 @@ def run_forward(angles, lengths):
     x = angles
     chain_angles = [
         x[0], # shoulder
-        180-np.array([180-x[1], x[2], -x[3], x[4]]), # flexion
+        180-np.array([180-x[1], x[2], -np.abs(x[3]), x[4]]), # flexion
         np.array([x[5], 180+x[6], 180+x[7], 0]) # rotation
     ]
 
@@ -317,7 +317,7 @@ positions_names = [a + b for a in legs for b in 'ABCDE']
 default_positions = dict(zip(positions_names, positions_arr))
 
 
-def make_fly_video(pose_3d, outname):
+def make_fly_video(pose_3d, outname, height=None):
     writer = skvideo.io.FFmpegWriter(outname, inputdict={
         '-framerate': str(30.0),
     }, outputdict={
@@ -336,6 +336,7 @@ def make_fly_video(pose_3d, outname):
 
     fig = plt.figure(figsize=(4, 4), dpi=200)
     ax = fig.add_subplot(1, 1, 1, projection='3d')
+    ax.view_init(0, 0, 0)
     for i in trange(pose_3d.shape[0]):
         ax.cla()
         X_p = pose_3d[i]
@@ -343,6 +344,12 @@ def make_fly_video(pose_3d, outname):
             ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o',
                     markersize=7, linewidth=2,
                     color=colors[il % 2])
+            if height is not None and \
+               xyz[-1, 2] <= -1*height-offset[-1]+0.01:
+                ax.plot(xyz[-1, 0], xyz[-1, 1], xyz[-1, 2],
+                        marker='o', markersize=7,
+                        color='red')
+
         ax.set_xlim(-0.8, 0.8)
         ax.set_ylim(-0.8, 0.8)
         ax.set_zlim(-0.8, 0.8)
