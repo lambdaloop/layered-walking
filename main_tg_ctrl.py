@@ -26,10 +26,10 @@ Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
+senseDelay      = 0.00  # Seconds; typically 0.01
 
 leg     = 'R1'
-slipVel = 1
+slipVel = 0
 
 
 ################################################################################
@@ -56,7 +56,8 @@ print(f'Steps of sensory delay  : {dSense}')
 
 legPos  = int(leg[-1])
 
-ground = GroundModel(height=0.75)
+# ground = GroundModel(height=0.75)
+ground = GroundModel(offset=[0, 0, -0.85], phi=0, theta=0)
 
 TG      = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=None)
 numAng  = TG._numAng
@@ -121,8 +122,8 @@ for t in range(numSimSteps-1):
 
     # get the current angles
     ang_prev = angleTG2[:numAng,max(k-1, 0)] + ctrl_to_tg(xs[0:dof,k*ctrlSpeedRatio], legPos, namesTG)
-    ang = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
-    drv   = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
+    ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
+    drv   = drvTG2[:numAng,kn] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
 
     # update the angles
     ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(
@@ -133,8 +134,8 @@ for t in range(numSimSteps-1):
     # positions[:, :, t] = ground.get_positions[leg](ang_next)
 
     # update xs
-    xs[0:dof,t] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
-    # xs[dof:dof*2,t] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
+    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+    # xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
 
     if leg in ground_legs:
         dist = get_dists_slippery(slipVel)[leg]
@@ -283,7 +284,7 @@ for i in range(dof):
     # plt.plot(time2, groundContactDist, 'r*', markersize=10)
 
 plt.draw()
-plt.show()
+plt.show(block=False)
 
 
 # plt.figure(2)
