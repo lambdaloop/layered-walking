@@ -9,7 +9,7 @@ from scipy import optimize
 def rmse(x, y):
     return np.sqrt(np.mean(np.square(x - y)))
 
-def make_optimizer_fun(leg, names, height, offset=None):
+def make_optimizer_fun(leg, names, offset=None):
     full = np.array([default_angles[leg + a] for a in angnames])
     sub_ixs = [angnames.index(n) for n in names]
     init = full[sub_ixs]
@@ -25,8 +25,6 @@ def make_optimizer_fun(leg, names, height, offset=None):
     def optimizer(angles, target, start=None):
         # import IPython; IPython.embed()
         xyz = get_positions(angles)
-        test_heights = xyz[:, -1] + height
-        penalty_height = np.sum(np.abs(test_heights) * (test_heights < 0))
         error = np.linalg.norm(xyz[-1] - target)
         # penalty_init = rmse(angles, init) * 0.1
         if start is not None:
@@ -43,14 +41,13 @@ def make_optimizer_fun(leg, names, height, offset=None):
     return optimizer, init, get_positions
 
 class GroundModel:
-    def __init__(self, height, incline=0):
+    def __init__(self, offset, theta=0, phi=0):
         # get angle definition
         # set up inverse kinematics model
         # it should be across all the legs in order to update velocity as well
         # TODO: take in names from trajgen angles
 
-        self._height = height # measured from L1A
-        self._incline = incline # in degrees
+        self.offset = offset
 
         # set up IK models for each leg, based on angle definitions
         legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']
@@ -58,10 +55,18 @@ class GroundModel:
         self.get_positions = dict()
         for leg in legs:
             names = anglesCtrl[int(leg[1])]
-            opt, _, pos = make_optimizer_fun(leg, names, offset=default_positions[leg + 'A'],
-                                             height=height)
+            opt, _, pos = make_optimizer_fun(leg, names, offset=default_positions[leg + 'A'])
             self.optimizers[leg] = opt
             self.get_positions[leg] = pos
+
+        self._theta_rad = np.deg2rad(theta)
+        self._phi_rad = np.deg2rad(phi)
+
+    def get_height(self, x, y):
+        return np.tan(self._theta_rad) * (x - self.offset[0]) + \
+            np.tan(self._phi_rad) * (y - self.offset[1]) + \
+            self.offset[2]
+
 
     def step_forward(self, angles_prev, angles_curr, velocities):
         # takes angles as input and outputs new angles, corrected for ground collisions
@@ -83,7 +88,8 @@ class GroundModel:
             xyz = pos_curr[leg] = self.get_positions[leg](angles_curr[leg])
             pos_prev[leg] = self.get_positions[leg](angles_prev[leg])
             delta[leg] = pos_curr[leg][-1] - pos_prev[leg][-1]
-            if xyz[-1, 2] < -1 * self._height:
+            # if xyz[-1, 2] < -1 * self._height:
+            if xyz[-1, 2] < self.get_height(xyz[-1, 0], xyz[-1, 1]):
                 ground_legs.append(leg)
 
 
@@ -99,7 +105,7 @@ class GroundModel:
             # if previous positions were also on ground
             # target[0] = average_delta[0] + pos_prev[leg][-1, 0]
             # target[1] = average_delta[1] + pos_prev[leg][-1, 1]
-            target[2] = -self._height
+            target[2] = self.get_height(xyz[-1, 0], xyz[-1, 1])
             opt = optimize.least_squares(
                 self.optimizers[leg], angles_curr[leg],
                 args=(target, angles_curr[leg]))

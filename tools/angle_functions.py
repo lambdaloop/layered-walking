@@ -317,7 +317,7 @@ positions_names = [a + b for a in legs for b in 'ABCDE']
 default_positions = dict(zip(positions_names, positions_arr))
 
 
-def make_fly_video(pose_3d, outname, height=None):
+def make_fly_video(pose_3d, outname, ground=None):
     writer = skvideo.io.FFmpegWriter(outname, inputdict={
         '-framerate': str(30.0),
     }, outputdict={
@@ -331,24 +331,46 @@ def make_fly_video(pose_3d, outname, height=None):
     offset = np.array([ 0.18773997, -0.4277914 , -0.30195438]) # precomputed
     pose_3d  = pose_3d - offset
 
+
     # colors = ['#1E88E5', '#D81B60']
     colors = ['#5D3A9B', '#E68F00']
+
+    if ground is not None:
+        x = y = np.arange(-2, 2, 0.1)
+        x, y = np.meshgrid(x, y)
+        z = ground.get_height(x, y)
+        x -= offset[0]
+        y -= offset[1]
+        z -= offset[2]
 
     fig = plt.figure(figsize=(4, 4), dpi=200)
     ax = fig.add_subplot(1, 1, 1, projection='3d')
     ax.view_init(0, 0, 0)
+    cmap = plt.get_cmap('tab10')
+
     for i in trange(pose_3d.shape[0]):
         ax.cla()
+
+        if ground is not None:
+            ax.plot(x.ravel(), y.ravel(), z.ravel(),
+                    color='black', marker='o', linewidth=0, markersize=0.5, alpha=1)
+
         X_p = pose_3d[i]
-        for il, xyz in enumerate(X_p):
+        # for il, xyz in enumerate(X_p):
+        for il in [3, 4, 5, 0, 1, 2]:
+            xyz = X_p[il]
+            xyz_s = xyz + offset
             ax.plot(xyz[:, 0], xyz[:, 1], xyz[:, 2], marker='o',
                     markersize=7, linewidth=2,
-                    color=colors[il % 2])
-            if height is not None and \
-               xyz[-1, 2] <= -1*height-offset[-1]+0.01:
+                    color=colors[il // 3])
+                    # color=cmap(il))
+            if ground is not None and \
+               xyz_s[-1, 2] <= ground.get_height(xyz_s[-1, 0], xyz_s[-1, 1])+0.02:
                 ax.plot(xyz[-1, 0], xyz[-1, 1], xyz[-1, 2],
                         marker='o', markersize=7,
                         color='red')
+
+
 
         ax.set_xlim(-0.8, 0.8)
         ax.set_ylim(-0.8, 0.8)

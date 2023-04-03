@@ -34,9 +34,9 @@ basename = 'test_ground_optim'
 # filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [16, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [14, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 60   # How many timesteps to run TG for
+numTGSteps     = 120   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
@@ -49,7 +49,7 @@ couplingDelay  = 0.010
 ################################################################################
 # Disturbance
 ################################################################################
-boutNum  = 0 # Default is 0; change bouts for different random behaviors
+boutNum  = 4 # Default is 0; change bouts for different random behaviors
 
 distStart = 100
 distEnd   = 300
@@ -111,11 +111,14 @@ groundContact  = [None for i in range(nLegs)] # For visualization only
 lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
-ground = GroundModel(height=0.55)
-# ground = None
+# ground = GroundModel(offset=[0, 0, -0.7], phi=-18, theta=0)
+ground = None
+
+# groundTG = ground
+groundTG = None
 
 for ln, leg in enumerate(legs):    
-    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
+    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=groundTG)
 
     fullAngleNames.append(TG[ln]._angle_names)
 
@@ -203,7 +206,7 @@ for t in trange(numSimSteps-1, ncols=70):
         # update the angles
         ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(ang_prev_dict, ang_dict, drv_dict)
 
-        print(t, ground_legs)
+        # print(t, ground_legs)
 
         # update xs
         for ln, leg in enumerate(legs):
@@ -236,7 +239,7 @@ angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
 # make_fly_video(pose_3d, 'vids/{}_h{:02d}.mp4'.format(basename, int(ground._height*100)))
-make_fly_video(pose_3d, 'vids/{}.mp4'.format(basename), height=None)
+make_fly_video(pose_3d, 'vids/{}.mp4'.format(basename), ground=ground)
 
 angs_real = np.hstack([bout['angles'][leg] for leg in legs])
 p3d = angles_to_pose_names(angs_real, angNames)
@@ -258,3 +261,4 @@ plt.clf()
 plt.plot(pose_3d[:, :, -1, -1])
 plt.draw()
 plt.show(block=False)
+
