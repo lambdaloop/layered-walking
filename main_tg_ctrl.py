@@ -24,9 +24,9 @@ walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
+ctrlCommRatio   = 60     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.00  # Seconds; typically 0.01
+senseDelay      = 0.01  # Seconds; typically 0.01
 
 leg     = 'R1'
 slipVel = 0
@@ -36,15 +36,15 @@ slipVel = 0
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings, offset=2)
+bout     = wd.get_bout(walkingSettings, offset=4)
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
 contexts = np.repeat(context, numTGSteps, axis=0)
 
-angInit   = bout['angles'][leg][0]
-drvInit   = bout['derivatives'][leg][0]
-phaseInit = bout['phases'][leg][0]
+angInit   = bout['angles'][leg][30]
+drvInit   = bout['derivatives'][leg][30]
+phaseInit = bout['phases'][leg][30]
 
 ################################################################################
 # Trajectory generator + ctrl and dynamics, w/o disturbances
@@ -57,9 +57,9 @@ print(f'Steps of sensory delay  : {dSense}')
 legPos  = int(leg[-1])
 
 # ground = GroundModel(height=0.75)
-ground = GroundModel(offset=[0, 0, -0.85], phi=0, theta=0)
+ground = GroundModel(offset=[0, 0, -0.8], phi=0, theta=0)
 
-TG      = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=None)
+TG      = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
@@ -86,8 +86,10 @@ lookahead = math.ceil(dAct/ctrlSpeedRatio)
 positions = np.zeros([5, 3, numSimSteps])
 # positions2 = np.zeros([5, 3, numSimSteps])
 
+
+
 for t in range(numSimSteps-1):
-    print(t)
+    # print(t)
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
@@ -121,7 +123,7 @@ for t in range(numSimSteps-1):
     # i think we could update just the latest one and it could be okay here
 
     # get the current angles
-    ang_prev = angleTG2[:numAng,max(k-1, 0)] + ctrl_to_tg(xs[0:dof,k*ctrlSpeedRatio], legPos, namesTG)
+    ang_prev = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,k*ctrlSpeedRatio], legPos, namesTG)
     ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
     drv   = drvTG2[:numAng,kn] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
 
@@ -134,18 +136,25 @@ for t in range(numSimSteps-1):
     # positions[:, :, t] = ground.get_positions[leg](ang_next)
 
     # update xs
-    xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
-    # xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
+    if leg in ground_legs:
+        a = np.copy(xs[0:dof,t+1])
+        xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+        b = np.copy(xs[0:dof,t+1])
+        print(b - a)
+        # xs[0:dof,t+1] = 0
+        # xs[dof:dof*2, t+1] = 0
+        # xs[dof:dof*2,t+1] = tg_to_ctrl((drv_next - drvTG2[:numAng,kn])/CD._Ts, legPos, namesTG)
 
     if leg in ground_legs:
         dist = get_dists_slippery(slipVel)[leg]
+        print(k, leg)
     else:
         dist = np.zeros(CD._Nxr)
         
-    print('dist:')
-    print(dist)
-    
-    print(ang_next - ang)
+    # print('dist:')
+    # print(dist)
+
+    # print(ang_next - ang)
 
 
 downSamp   = list(range(0, numSimSteps, ctrlSpeedRatio))
@@ -162,13 +171,16 @@ for t in range(numTGSteps):
 
 
 
-plt.figure(1)
-plt.clf()
-plt.plot(positions[-1, 2, ::2])
-# plt.plot(positions2[-1, 2, ::2])
-# plt.plot(heights)
-plt.draw()
-plt.show(block=False)
+# plt.figure(1)
+# plt.clf()
+# plt.plot(positions[-1, 2, ::2])
+# # plt.plot(positions2[-1, 2, ::2])
+# # plt.plot(heights)
+# plt.draw()
+# plt.show(block=False)
+
+
+
 
 
 ################################################################################
@@ -220,11 +232,11 @@ for t in range(numSimSteps-1):
     usDist[:,t], xsDist[:,t+1], xEstsDist[:,t+1] = \
         CD.step_forward(xsDist[:,t], xEstsDist[:,t], anglesAhead, drvsAhead, dist)
 
-plt.figure(1)
-plt.clf()
-plt.plot(np.degrees(xsDist[1, :]))
-plt.draw()
-plt.show(block=False)
+# plt.figure(1)
+# plt.clf()
+# plt.plot(np.degrees(xsDist[1, :]))
+# plt.draw()
+# plt.show(block=False)
 
 
 ################################################################################
@@ -250,7 +262,7 @@ for t in range(numTGSteps):
 time  = np.array(range(numTGSteps))
 time2 = np.array(range(numSimSteps)) / ctrlSpeedRatio
 
-plt.figure(1)
+plt.figure(2)
 plt.clf()
 
 mapIx = [namesTG.index(n) for n in anglesCtrl[legPos]]
