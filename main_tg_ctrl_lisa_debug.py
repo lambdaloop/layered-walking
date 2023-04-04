@@ -99,8 +99,6 @@ dist = np.zeros(CD._Nxr)
 for t in range(numSimSteps-1):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
-
-    ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
     
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
         ang = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
@@ -131,7 +129,7 @@ for t in range(numSimSteps-1):
     drv_next = drv_new_dict[leg]
     
     if leg in ground_legs:
-        angleChange = ang_next - angleTG[:numAng,kn]
+        angleChange = ang_next - angleTG2[:numAng,kn]
         print(f'time: {k}, angle change (deg): {angleChange}')
         xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)   
     
