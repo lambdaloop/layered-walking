@@ -129,10 +129,16 @@ for t in range(numSimSteps-1):
     drv_next = drv_new_dict[leg]
     
     if leg in ground_legs:
-        angleChange = ang_next - angleTG2[:numAng,kn]
-        print(f'time: {k}, angle change (deg): {angleChange}')
-        xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)   
-    
+        # Treat the ground interaction as a disturbance
+        angNxt            = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+        groundDist        = np.zeros(numAng*2)
+        groundDist[0:dof] = angNxt - xs[0:dof,t+1]
+        augDist           = CD.get_augmented_dist(groundDist) 
+        xs[:,t+1]         += augDist
+
+        print(f'time: {k}, ground dist (rad): {groundDist[0:dof]}')       
+            
+                
 ################################################################################
 # Postprocessing and plotting
 ################################################################################
