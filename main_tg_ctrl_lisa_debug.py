@@ -130,14 +130,16 @@ for t in range(numSimSteps-1):
     
     if leg in ground_legs:
         # Treat the ground interaction as a disturbance
-        angNxt            = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
-        groundDist        = np.zeros(numAng*2)
-        groundDist[0:dof] = angNxt - xs[0:dof,t+1]
-        augDist           = CD.get_augmented_dist(groundDist) 
-        xs[:,t+1]         += augDist
-
-        print(f'time: {k}, ground dist (rad): {groundDist[0:dof]}')       
-            
+        angNxt                = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
+        drvNxt                = xs[dof:2*dof,t+1] # No change
+        groundDist            = np.zeros(numAng*2)
+        groundDist[0:dof]     = angNxt - xs[0:dof,t+1]
+        groundDist[dof:2*dof] = drvNxt - xs[dof:2*dof,t+1]
+        augDist               = CD.get_augmented_dist(groundDist)
+        
+        distProportion = np.linalg.norm(groundDist) / np.linalg.norm(xs[0:2*dof,t+1])
+        print(f'time: {k}, ground dist proportion: {distProportion}')     
+        xs[:,t+1] += augDist
                 
 ################################################################################
 # Postprocessing and plotting
