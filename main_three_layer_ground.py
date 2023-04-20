@@ -111,8 +111,8 @@ groundContact  = [None for i in range(nLegs)] # For visualization only
 lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
-# ground = GroundModel(offset=[0, 0, -0.7], phi=-18, theta=0)
-ground = None
+ground = GroundModel(offset=[0, 0, -0.8], phi=-18, theta=0)
+# ground = None
 
 # groundTG = ground
 groundTG = None
@@ -172,14 +172,14 @@ for t in trange(numSimSteps-1, ncols=70):
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
         
         # Apply disturbance if in contact with ground
-        dist           = get_zero_dists()[leg]    
-        heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
-        if k > distStart and k <= distEnd and \
-           loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-            groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
-            lastDetection[ln]    = t
-            dist                 = get_dist(distDict, leg)               
-        
+        dist           = get_zero_dists()[leg]
+        # heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
+        # if k > distStart and k <= distEnd and \
+        #    loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
+        #     groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
+        #     lastDetection[ln]    = t
+        #     dist                 = get_dist(distDict, leg)
+
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
@@ -199,9 +199,9 @@ for t in trange(numSimSteps-1, ncols=70):
             legPos    = int(leg[-1])
             dofCD = CD[ln]._Nur
             numAng = TG[ln]._numAng
-            ang_prev_dict[leg] = angleTG[ln,:numAng,max(k-1, 0)] + ctrl_to_tg(xs[ln][0:dofCD,k*ctrlSpeedRatio], legPos, namesTG[ln])
-            ang_dict[leg] = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:dofCD,t+1], legPos, namesTG[ln])
-            drv_dict[leg] = drvTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][dofCD:dofCD*2,t+1]*CD[ln]._Ts, legPos, namesTG[ln])
+            ang_prev_dict[leg] = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:dofCD,t], legPos, namesTG[ln])
+            ang_dict[leg] = angleTG[ln,:numAng,kn] + ctrl_to_tg(xs[ln][0:dofCD,t+1], legPos, namesTG[ln])
+            drv_dict[leg] = drvTG[ln,:numAng,kn] + ctrl_to_tg(xs[ln][dofCD:dofCD*2,t+1]*CD[ln]._Ts, legPos, namesTG[ln])
 
         # update the angles
         ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(ang_prev_dict, ang_dict, drv_dict)

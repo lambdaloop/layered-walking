@@ -110,6 +110,7 @@ class TrajectoryGenerator:
                     {leg: ang_prev}, {leg: ang}, {leg: drv})
                 ang = ang_next[leg]
                 drv = drv_next[leg]
+                # should be an update here
 
             angs[:, i] = ang
             drvs[:, i] = drv

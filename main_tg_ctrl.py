@@ -24,7 +24,7 @@ walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio   = 60     # Controller communicates to TG this often (as multiple of Ts)
+ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 senseDelay      = 0.01  # Seconds; typically 0.01
 
@@ -57,7 +57,7 @@ print(f'Steps of sensory delay  : {dSense}')
 legPos  = int(leg[-1])
 
 # ground = GroundModel(height=0.75)
-ground = GroundModel(offset=[0, 0, -0.8], phi=0, theta=0)
+ground = GroundModel(offset=[0, 0, -0.85], phi=0, theta=0)
 
 TG      = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
 numAng  = TG._numAng

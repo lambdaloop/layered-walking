@@ -362,7 +362,7 @@ class ControlAndDynamics:
     def get_penalty_matrices(self):
         ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
         ANGLE_PEN  = 1e0
-        DERIV_PEN  = 1e-5
+        DERIV_PEN  = 0 # 1e-10
         INPUT_PEN  = 1e-8
         FDBK_PEN   = 1e-8
         DIST_SIZE  = 1e0
@@ -430,7 +430,7 @@ class ControlAndDynamics:
 
         # Update dynamics + estimate with trajectory tracking
         if self._dAct > 0:
-            # wTraj(t+dAct)
+            # wTraj(t+dAct)n
             wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
             xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
