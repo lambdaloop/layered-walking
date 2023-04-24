@@ -362,7 +362,7 @@ class ControlAndDynamics:
     def get_penalty_matrices(self):
         ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
         ANGLE_PEN  = 1e0
-        DERIV_PEN  = 1e-5
+        DERIV_PEN  = 0
         INPUT_PEN  = 1e-8
         FDBK_PEN   = 1e-8
         DIST_SIZE  = 1e0
@@ -412,7 +412,7 @@ class ControlAndDynamics:
         print(f'Observer  : {specRadALC:.3f}')
 
 
-    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
+    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist, groundAdjust=0):
         ''' 
         xNow       : includes augmented states as well
         xEst       : internal estimation of xNow
@@ -426,15 +426,14 @@ class ControlAndDynamics:
         angles = tg_to_ctrl(anglesAhead, self._legPos, self._namesTG)
         drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
-        
-
+                
         # Update dynamics + estimate with trajectory tracking
         if self._dAct > 0:
             # wTraj(t+dAct)
             wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
-            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
-            xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead + groundAdjust
+            xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead + groundAdjust
             
         # Controller: calculate input        
         uNow = -self._K @ xEst
