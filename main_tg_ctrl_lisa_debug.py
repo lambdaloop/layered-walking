@@ -16,16 +16,17 @@ from tools.ground_model import GroundModel
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [14, 0, 0] # walking, turning, flipping speeds (mm/s)
 
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
+senseDelay      = 0.00  # Seconds; typically 0.01
 
 leg = 'R1'
 
@@ -47,7 +48,7 @@ phaseInit = bout['phases'][leg][30]
 # Ground model
 ################################################################################
 # Assuming flat ground
-gndHeight = -0.85
+gndHeight = -0.8
 ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 
 ################################################################################
@@ -56,10 +57,10 @@ ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 TGNoGround = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=None)
 TG         = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
 
-angleTGng, drvTGng, phaseTGng = TGNoGround.get_future_traj(0, numTGSteps, 
+angleTGng, drvTGng, phaseTGng = TGNoGround.get_future_traj(0, numTGSteps,
                                     angInit, drvInit, phaseInit, contexts)
 
-angleTG, drvTG, phaseTG = TG.get_future_traj(0, numTGSteps, 
+angleTG, drvTG, phaseTG = TG.get_future_traj(0, numTGSteps,
                               angInit, drvInit, phaseInit, contexts)
 
 ################################################################################
@@ -101,7 +102,7 @@ for t in range(numSimSteps-1):
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
     ang   = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
-    
+
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
         ang = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
         drv = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
@@ -112,7 +113,7 @@ for t in range(numSimSteps-1):
 
     k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
-    
+
     anglesAhead = np.concatenate((angleTG2[:,k1].reshape(numAng,1),
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
@@ -126,15 +127,15 @@ for t in range(numSimSteps-1):
 
     ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(
         {leg: ang_prev}, {leg: ang}, {leg: drv})
-        
+
     ang_next = ang_new_dict[leg]
     drv_next = drv_new_dict[leg]
-    
+
     if leg in ground_legs:
         angleChange = ang_next - angleTG[:numAng,kn]
         print(f'time: {k}, angle change (deg): {angleChange}')
-        xs[0:dof,t+1] = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)   
-    
+        xs[0:dof,t+1] = tg_to_ctrl((ang_next - angleTG2[:numAng,kn])*0.1, legPos, namesTG)
+
 ################################################################################
 # Postprocessing and plotting
 ################################################################################
@@ -157,7 +158,7 @@ for t in range(numTGSteps):
     heightsTG[t]   = ground.get_positions[leg](angleTG[:,t])[-1, 2]
     heightsTG2[t]  = ground.get_positions[leg](angleTG2[:,t])[-1, 2]
     heights2[t]    = ground.get_positions[leg](angle2[:,t])[-1, 2]
- 
+
     if heightsTGng[t] <= gndHeight:
         gContactTGng[t] = heightsTGng[t]
     if heightsTG[t] <= gndHeight:
@@ -177,11 +178,11 @@ for i in range(dof):
     plt.subplot(3,dof,i+1)
     plt.title(anglesCtrl[legPos][i])
     idx = mapIx[i]
-        
+
     plt.plot(time, angleTGng[idx,:], 'b', label=f'TG No Ground')
-    plt.plot(time, angleTG[idx,:], 'g', label=f'TG Ground')    
-    plt.plot(time, angleTG2[idx,:], 'r', label=f'2Layer TG')    
-    plt.plot(time, angle2[idx,:], 'k--', label=f'2Layer')    
+    plt.plot(time, angleTG[idx,:], 'g', label=f'TG Ground')
+    plt.plot(time, angleTG2[idx,:], 'r', label=f'2Layer TG')
+    plt.plot(time, angle2[idx,:], 'k--', label=f'2Layer')
     plt.ylim(-180, 180)
 
     if i==0:
@@ -191,21 +192,20 @@ for i in range(dof):
     plt.title('Velocity')
     plt.plot(time, drvTGng[idx,:], 'b')
     plt.plot(time, drvTG[idx,:], 'g')
-    plt.plot(time, drvTG2[idx,:], 'r')    
-    plt.plot(time, drv2[idx,:], 'k--')    
-            
+    plt.plot(time, drvTG2[idx,:], 'r')
+    plt.plot(time, drv2[idx,:], 'k--')
+
     plt.subplot(3,1,3)
     plt.title('Height')
     plt.plot(time, heightsTGng, 'b')
     plt.plot(time, heightsTG, 'g')
-    plt.plot(time, heightsTG2, 'r')    
-    plt.plot(time, heights2, 'k--')    
+    plt.plot(time, heightsTG2, 'r')
+    plt.plot(time, heights2, 'k--')
 
     plt.plot(time, gContactTGng, 'b*', markersize=6)
     plt.plot(time, gContactTG, 'g*', markersize=6)
-    plt.plot(time, gContactTG2, 'r*', markersize=6)    
-    plt.plot(time, gContact2, 'k*', markersize=6)    
+    plt.plot(time, gContactTG2, 'r*', markersize=6)
+    plt.plot(time, gContact2, 'k*', markersize=6)
 
 plt.draw()
 plt.show()
-

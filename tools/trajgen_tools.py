@@ -24,7 +24,7 @@ ANGLE_NAMES_DEFAULT = {
 
 
 class TrajectoryGenerator:
-    def __init__(self, filename, leg, numSimSteps, groundModel=None):
+    def __init__(self, filename, leg, numSimSteps, groundModel=None, tarsus_ratio=0.05):
         self._filename  = filename
         self._leg       = leg
 
@@ -60,7 +60,8 @@ class TrajectoryGenerator:
         rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
         self._phaseReal = np.arctan2(rsin, rcos)
         self._context   = xy_w[0][cc, -5:-2]
-    
+
+        self._tarsus_ratio = tarsus_ratio
     
     def get_initial_vals(self):
         return self._angReal[0], self._drvReal[0], self._phaseReal[0]
@@ -80,12 +81,16 @@ class TrajectoryGenerator:
         return ang, drv, phase
 
 
-    def get_future_traj(self, t1, t2, ang, drv, phase, contexts):
+    def get_future_traj(self, t1, t2, ang, drv, phase, contexts, tarsus=None):
         ''' Given values at time t1, returns values from t1+1 to t2, inclusive '''
         leg = self._leg
 
+        numAng = len(ang)
         numVals = t2 - t1
-        angs    = np.zeros([len(ang), numVals])
+        if tarsus is None:
+            angs    = np.zeros([numAng, numVals])
+        else:
+            angs    = np.zeros([numAng+1, numVals])
         drvs    = np.zeros([len(drv), numVals])
         phases  = np.zeros(numVals)
 
@@ -93,24 +98,28 @@ class TrajectoryGenerator:
         drv_prev = drv
         phase_prev = phase
 
+        med_tarsus = default_angles[self._leg + 'D_flex']
+
         for i in range(numVals):
             ang, drv, phase = self.step_forward(
-                ang_prev, drv_prev, phase_prev, contexts[t1 + i])
+                ang_prev[:numAng], drv_prev, phase_prev, contexts[t1 + i])
 
-
-            #     angs[:,0], drvs[:,0], phases[0] = self.step_forward(
-            #         ang, drv, phase, contexts[t1])
-            # else:
-            #     angs[:,i], drvs[:,i], phases[i] = self.step_forward(
-            #         angs[:,i-1], drvs[:,i-1], phases[i-1], contexts[t1+i])
 
             # correct with ground model
             if self._groundModel is not None:
+                if tarsus is not None:
+                    ang_prev = np.append(ang_prev[:numAng], tarsus)
+                    tarsus = tarsus + (med_tarsus - tarsus) * self._tarsus_ratio
+                    ang = np.append(ang, tarsus)
                 ang_next, drv_next, grounded_legs = self._groundModel.step_forward(
                     {leg: ang_prev}, {leg: ang}, {leg: drv})
-                ang = ang_next[leg]
-                drv = drv_next[leg]
-                # should be an update here
+                if tarsus is not None:
+                    ang = ang_next[leg]
+                    # drv = drv_next[leg][:-1]
+                    tarsus = ang_next[leg][-1]
+                else:
+                    ang = ang_next[leg]
+                    # drv = drv_next[leg]
 
             angs[:, i] = ang
             drvs[:, i] = drv

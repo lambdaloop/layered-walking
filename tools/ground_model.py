@@ -14,6 +14,7 @@ def make_optimizer_fun(leg, names, offset=None):
     sub_ixs = [angnames.index(n) for n in names]
     init = full[sub_ixs]
     lengths = leg_lengths[leg]
+    includes_tarsus = names[-1][-6:] == 'D_flex'
     if offset is None:
         offset = np.zeros(3)
     else:
@@ -30,10 +31,13 @@ def make_optimizer_fun(leg, names, offset=None):
         if start is not None:
             rad_angle = np.deg2rad(angles)
             rad_start = np.deg2rad(init)
+            if includes_tarsus:
+                rad_angle = rad_angle[:-1]
+                rad_start = rad_start[:-1]
             penalty_init = 0
             penalty_init += rmse(np.cos(rad_angle), np.cos(rad_start))
             penalty_init += rmse(np.sin(rad_angle), np.sin(rad_start))
-            penalty_init *= 0.05
+            penalty_init *= 0.5
         else:
             penalty_init = 0
         return error # + penalty_init #+ penalty_height
@@ -41,7 +45,7 @@ def make_optimizer_fun(leg, names, offset=None):
     return optimizer, init, get_positions
 
 class GroundModel:
-    def __init__(self, offset, theta=0, phi=0):
+    def __init__(self, offset, theta=0, phi=0, tarsus=False):
         # get angle definition
         # set up inverse kinematics model
         # it should be across all the legs in order to update velocity as well
@@ -55,6 +59,8 @@ class GroundModel:
         self.get_positions = dict()
         for leg in legs:
             names = anglesCtrl[int(leg[1])]
+            if tarsus:
+                names = names + ['D_flex']
             opt, _, pos = make_optimizer_fun(leg, names, offset=default_positions[leg + 'A'])
             self.optimizers[leg] = opt
             self.get_positions[leg] = pos
@@ -73,6 +79,8 @@ class GroundModel:
         # (also velocities)
         # format is dictionary of (leg, angnames)
         # this will go through all the legs present in the angles dictionary
+        # format of ang_tarsus is a dictionary of (leg, value)
+
         legs = sorted(angles_curr.keys())
 
         # convert angles from rad -> deg -> rad
