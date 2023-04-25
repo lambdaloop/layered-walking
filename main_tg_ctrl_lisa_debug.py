@@ -33,15 +33,16 @@ leg = 'R1'
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings, offset=4)
+bout     = wd.get_bout(walkingSettings, offset=3)
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
 contexts = np.repeat(context, numTGSteps, axis=0)
 
-angInit   = bout['angles'][leg][30]
-drvInit   = bout['derivatives'][leg][30]
-phaseInit = bout['phases'][leg][30]
+startIdx  = 20
+angInit   = bout['angles'][leg][startIdx]
+drvInit   = bout['derivatives'][leg][startIdx]
+phaseInit = bout['phases'][leg][startIdx]
 
 ################################################################################
 # Ground model
@@ -115,32 +116,35 @@ for t in range(numSimSteps-1):
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist)
-
-    # Ground model
-    ang_prev = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
-    ang      = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
-    drv      = drvTG2[:numAng,kn] + ctrl_to_tg(xs[dof:dof*2,t+1]*CD._Ts, legPos, namesTG)
-
-    ang_new_dict, drv_new_dict, ground_legs = ground.step_forward(
-        {leg: ang_prev}, {leg: ang}, {leg: drv})
-        
-    ang_next = ang_new_dict[leg]
-    drv_next = drv_new_dict[leg]
     
-    if leg in ground_legs:
+    # Ground model, future
+    ang = angleTG2[:numAng, k2] + \
+        ctrl_to_tg(xs[CD._Nxr*dAct:CD._Nxr*dAct+numAng, t], legPos, namesTG)
+        
+    # Slightly hacky: don't use ground model velocity output
+    angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+
+    gndAdjust = 0
+    if leg in groundLegs:
+        gndAdjust = tg_to_ctrl(angNew[leg] - ang, legPos, namesTG)
+        gndAdjust = np.concatenate((gndAdjust, np.zeros(numAng)))
+    
+    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist, gndAdjust)
+
+    # Ground model, current
+    # Slightly hacky: don't use ground model velocity output
+    ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
+    angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+    
+    if leg in groundLegs:
         # Treat the ground interaction as a disturbance
-        angNxt                = tg_to_ctrl(ang_next - angleTG2[:numAng,kn], legPos, namesTG)
-        drvNxt                = xs[dof:2*dof,t+1] # No change
+        angNxt                = tg_to_ctrl(angNew[leg] - angleTG2[:numAng,kn], legPos, namesTG)
         groundDist            = np.zeros(numAng*2)
         groundDist[0:dof]     = angNxt - xs[0:dof,t+1]
-        groundDist[dof:2*dof] = drvNxt - xs[dof:2*dof,t+1]
         augDist               = CD.get_augmented_dist(groundDist)
-        
-        distProportion = np.linalg.norm(groundDist) / np.linalg.norm(xs[0:2*dof,t+1])
-        print(f'time: {k}, ground dist proportion: {distProportion}')     
-        xs[:,t+1] += augDist
-                
+        xs[:,t+1]             += augDist
+
+
 ################################################################################
 # Postprocessing and plotting
 ################################################################################
