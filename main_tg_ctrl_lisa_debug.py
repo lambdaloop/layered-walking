@@ -23,7 +23,7 @@ walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
+ctrlCommRatio   = 800     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 senseDelay      = 0.01  # Seconds; typically 0.01
 
@@ -118,16 +118,33 @@ for t in range(numSimSteps-1):
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     
     # Ground model, future
-    ang = angleTG2[:numAng, k2] + \
-        ctrl_to_tg(xs[CD._Nxr*dAct:CD._Nxr*dAct+numAng, t], legPos, namesTG)
-        
-    # Slightly hacky: don't use ground model velocity output
-    angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+    n1 = CD._Nxr*(dAct+1)
+    n2 = n1 + CD._Nur*(dAct) 
 
-    gndAdjust = 0
-    if leg in groundLegs:
-        gndAdjust = tg_to_ctrl(angNew[leg] - ang, legPos, namesTG)
-        gndAdjust = np.concatenate((gndAdjust, np.zeros(numAng)))
+    xf1 = xs[n1-CD._Nxr:n1, t]
+    xf2 = CD._Ar @ xf1 + CD._Br @ xs[n2-CD._Nur:n2, t] + xs[CD._Nx-CD._Nxr:CD._Nx, t]
+        
+    ang1 = angleTG2[:numAng, k2] + ctrl_to_tg(xf1[0:numAng], legPos, namesTG)
+    ang2 = angleTG2[:numAng, k2] + ctrl_to_tg(xf2[0:numAng], legPos, namesTG)
+            
+    # Slightly hacky: don't use ground model velocity output
+    angNew1, junk, groundLegs1 = ground.step_forward({leg: ang1}, {leg: ang1}, {leg: ang1})
+    angNew2, junk, groundLegs2 = ground.step_forward({leg: ang2}, {leg: ang2}, {leg: ang2})
+
+    gndAdjust1 = 0
+    if leg in groundLegs1:
+        gndAdjust1 = tg_to_ctrl(angNew1[leg] - ang1, legPos, namesTG)
+        gndAdjust1 = np.concatenate((gndAdjust1, np.zeros(numAng)))
+    
+    gndAdjust2 = 0
+    if leg in groundLegs2:
+        gndAdjust2 = tg_to_ctrl(angNew2[leg] - ang2, legPos, namesTG)
+        gndAdjust2 = np.concatenate((gndAdjust2, np.zeros(numAng)))
+    
+    gndAdjust = 5*gndAdjust1
+    
+    if np.linalg.norm(gndAdjust) > 0:
+        print(f'gndAdjust: {np.linalg.norm(gndAdjust)}')
     
     us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist, gndAdjust)
 
