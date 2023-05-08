@@ -214,89 +214,62 @@ def get_linearized_system(DHTable, linkMasses, inertias, frics, xEqm, leg):
 
 
 
-def get_augmented_system(AReal, BReal, CReal, dSense, dAct):
-    ''' Augment system (AReal, BReal, CReal) to (A, B, C)
-        to include delayed sensing, delayed actuation, and lookahead '''
-    
-    if dSense == 0 and dAct == 0:
-        return (AReal, BReal, CReal)
-    
-    # Original dimensions: state, input, sensor
-    n = BReal.shape[0]
-    m = BReal.shape[1]
-    p = CReal.shape[0]
+def get_augmented_system(AReal, BReal, dAct):
+    ''' Augment system to include delayed actuation and lookahead '''
+    if dAct == 0:
+        return (AReal, BReal)
+    Nx = BReal.shape[0]
+    Nu = BReal.shape[1]
         
-    # Block dimensions of augmented A
-    n1 = n*(dAct+1) # real state + lookahead states
-    n2 = m*dAct     # act delay states
-    n3 = p*dSense   # sense delay states
-    n4 = n*(dAct+1) # trajectory states
+    # Dimensions of blocks
+    N1 = Nx*(dAct+1)
+    N2 = Nu*dAct
+    NA = 2*N1 + N2
         
-    nx = n1 + n2 + n3 + n4
-    nu = m + n3 # allow internal compensation to delayed sensors
-
-    A11  = np.zeros([n1, n1])
-    A11h = np.eye(n)
-    A12  = np.zeros([n1, n2])
-    A12h = BReal
-    A14  = np.zeros([n4, n4])
-    A14h = np.eye(n)
-
+    A     = np.zeros([NA, NA])
+    ANow1 = np.eye(Nx) # Powers of A for upper left block of A
+    ANow2 = np.eye(Nx) # Powers of A for upper middle block of A
+    ABNow = BReal      # Powers of A*B for upper right block of A
+        
     for i in range(dAct+1):
-        A11h = AReal @ A11h
-        A11[n*i:n*(i+1), 0:n] = A11h
-
-        for j in range(dAct):
-            row = (i+j)*n
-            if row + n <= n1:
-                col = (dAct-j-1)*m
-                A12[row:row+n, col:col+m] = A12h
-        A12h = AReal @ A12h            
-
-        aux     = np.empty([n*i, 0])
+        # Upper left block of A
+        ANow1 = AReal @ ANow1
+        A[Nx*i:Nx*(i+1), 0:Nx] = ANow1
+        
+        # Upper middle block of A
+        aux     = np.empty([Nx*i, 0])
         blkdiag = aux # Be careful, shallow copy
         for j in range(dAct+1-i):
-            blkdiag = block_diag(blkdiag, A14h)
+            blkdiag = block_diag(blkdiag, ANow2)
         blkdiag = block_diag(blkdiag, aux.T)
-        A14h    = AReal @ A14h
-        A14     += blkdiag
+        ANow2   = AReal @ ANow2
+        A[0:N1, N1:2*N1] += blkdiag
+        
+        # Upper right block of A
+        for j in range(dAct):
+            rowStart = (i+j)*Nx
+            rowEnd   = rowStart + Nx
+            if rowEnd <= N1:
+                colStart = 2*N1+(dAct-j-1)*Nu
+                colEnd   = colStart + Nu            
+                A[rowStart:rowEnd, colStart:colEnd] = ABNow
+        ABNow = AReal @ ABNow            
 
-    aux = np.empty([m, 0])
-    A22 = np.empty([n2, n2])
-    if dAct > 0:
-        A22 = block_diag(aux, np.eye(m*(dAct-1)), aux.T)
+    # Middle block of A
+    aux                 = np.empty([0, Nx])
+    A[N1:2*N1, N1:2*N1] = block_diag(aux, np.eye(Nx*dAct), aux.T)
 
-    A31 = np.zeros([n3, n1])
-    if dSense > 0:
-        A31[0:p,0:n] = CReal
+    # Bottom right block of A
+    aux                 = np.empty([Nu, 0])
+    A[2*N1:NA, 2*N1:NA] = block_diag(aux, np.eye(Nu*(dAct-1)), aux.T)
 
-    aux = np.empty([p, 0])
-    A33 = np.empty([n3, n3])
-    if dSense > 0:
-        A33 = block_diag(aux, np.eye(p*(dSense-1)), aux.T)
+    # Construct B matrix
+    B                 = np.zeros([NA, Nu])
+    B[N1-Nx:N1,:]     = BReal
+    B[2*N1:2*N1+Nu,:] = np.eye(Nu)
+    
+    return (A, B)
 
-    aux = np.empty([0, n])
-    A44 = block_diag(aux, np.eye(n*dAct), aux.T)
-
-    # Put A together row-wise
-    A1 = np.concatenate([A11, A12, np.zeros([n1,n3]), A14], axis=1)
-    A2 = np.concatenate([np.zeros([n2,n1]), A22, np.zeros([n2,n3+n4])], axis=1)
-    A3 = np.concatenate([A31, np.zeros([n3,n2]), A33, np.zeros([n3,n4])], axis=1)
-    A4 = np.concatenate([np.zeros([n4,n1+n2+n3]), A44], axis=1)
-    A  = np.concatenate([A1, A2, A3, A4]);
-
-    B  = np.zeros([nx, nu])
-    B[n*dAct:n1, 0:m] = BReal
-    B[n1:n1+m, 0:m]   = np.eye(m)
-    B[n1+n2:n1+n2+n3, m:nu] = np.eye(p*dSense)  
-
-    C  = np.zeros([p, nx])
-    if dSense > 0: # Access delayed sensor reading
-        C[:,n1+n2+p*(dSense-1):n1+n2+n3] = np.eye(p)
-    else: # Access sensor directly; no delay
-        C[:,0:n] = CReal
-
-    return (A, B, C)
 
 
 
@@ -307,22 +280,21 @@ def get_augmented_dist_mtx(AReal, dAct):
     for i in range(dAct):
         ANow = AReal @ ANow
         mtx  = np.concatenate((mtx, ANow))
-    return mtx        
+    return mtx            
         
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, dSense, dAct, namesTG=None):
+    def __init__(self, leg, Ts, dAct, namesTG=None):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
         self._leg       = leg
         self._legPos    = int(leg[-1])
-        self._dSense    = dSense
         self._dAct      = dAct
         self._Nxr       = ALin.shape[0] # Number of 'real' states
         self._Nur       = BLin.shape[1] # Number of 'real' inputs
-
+        
         if namesTG is None:
             self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
         else:
@@ -331,45 +303,47 @@ class ControlAndDynamics:
         # Zeroth order discretization
         self._Ar  = np.eye(self._Nxr) + ALin*Ts
         self._Br  = Ts*BLin
-        self._Cr  = np.eye(self._Nxr) # Perfect sensing
+        eigsOL    = np.linalg.eig(self._Ar)[0]
+        specRadOL = max(np.abs(eigsOL))
+        # print(f'Open-loop spectral radius (real system): {specRadOL:.3f}')
 
         # Convert to delayed system
-        self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
+        self._A, self._B = get_augmented_system(self._Ar, self._Br, dAct)
         self._Nx = self._B.shape[0]
         self._Nu = self._B.shape[1]
-        
+        eigsDelayOL    = np.linalg.eig(self._A)[0]
+        specRadDelayOL = max(np.abs(eigsDelayOL))
+        # print(f'Open-loop spectral radius (delayed system): {specRadDelayOL:.3f}')
+
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
 
         self._distMtx = get_augmented_dist_mtx(self._Ar, dAct)
         
-        # Get penalty matrices
-        Q, R, W, V = self.get_penalty_matrices()
+        # State and input penalty matrices
+        Q, R = self.get_penalty_matrices()
         
-        # Generate controller and observer
-        self._K    = control.dlqr(self._A, self._B, Q, R)[0]        
-        self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
-        
-        self.print_sanity_check()
-     
-     
+        # Generate controller
+        self._K   = control.dlqr(self._A, self._B, Q, R)[0]
+        ACL       = self._A - self._B @ self._K
+        eigsCL    = np.linalg.eig(ACL)[0]
+        specRadCL = max(np.abs(eigsCL))
+        # print(f'Closed-loop spectral radius (delayed system): {specRadCL:.3f}')
+    
     def get_augmented_dist(self, dist):
         augDist       = np.zeros(self._Nx)
-        augDist[0:self._Nxr*(self._dAct+1)] = self._distMtx @ dist
+        N1            = self._Nxr*(self._dAct+1)
+        augDist[0:N1] = self._distMtx @ dist
         return augDist
     
-    
     def get_penalty_matrices(self):
-        ''' Get LQG penalty matrices. Relative weighting is hard-coded '''
+        ''' Get LQR penalty matrices. Relative weighting is hard-coded '''
         ANGLE_PEN  = 1e0
         DERIV_PEN  = 0
         INPUT_PEN  = 1e-8
-        FDBK_PEN   = 1e-8
-        DIST_SIZE  = 1e0
-        NOISE_SIZE = 1e-8
         
-        dAct = self._dAct; dSense = self._dSense
-        
+        dAct = self._dAct;
+         
         QAngle = ANGLE_PEN * np.eye(self._Nur)
         QDrv   = DERIV_PEN * np.eye(self._Nur)
         QState = block_diag(QAngle, QDrv)
@@ -378,75 +352,44 @@ class ControlAndDynamics:
         Q[0:self._Nxr, 0:self._Nxr] = QState
             
         eps  = 1e-8 # Default value for "no" penalty
-        RAct = INPUT_PEN * np.eye(self._Nur)   # penalty on true actuation
-        RIfp = FDBK_PEN * np.eye(dSense*self._Nxr) # compensatory feedback; no penalty
-        R    = block_diag(RAct, RIfp)
-            
-        W = np.zeros([self._Nx, self._Nx])
-        W[0:self._Nxr*(dAct+1),0:self._Nxr*(dAct+1)] = DIST_SIZE * np.eye(self._Nxr*(dAct+1))
-        W[self._Nx-self._Nxr:self._Nx,self._Nx-self._Nxr:self._Nx] = np.eye(self._Nxr)
-        V = NOISE_SIZE * np.eye(self._Nxr)
+        R    = INPUT_PEN * np.eye(self._Nur)   # penalty on true actuation
         
-        return(Q, R, W, V)
+        return(Q, R)
 
-
-    def print_sanity_check(self):
-        eigsOL       = np.linalg.eig(self._Ar)[0]
-        eigsAugOL    = np.linalg.eig(self._A)[0]
-        specRadOL    = max(np.abs(eigsOL))
-        specRadAugOL = max(np.abs(eigsAugOL))
-
-        print(f'Open loop spectral radii (should be the same):')
-        print(f'Original : {specRadOL:.3f}')
-        print(f'Augmented: {specRadAugOL:.3f}')
-        
-        ABK        = self._A - self._B @ self._K
-        ALC        = self._A - self._L @ self._C
-        eigsABK    = np.linalg.eig(ABK)[0]
-        eigsALC    = np.linalg.eig(ALC)[0]
-        specRadABK = max(np.abs(eigsABK))        
-        specRadALC = max(np.abs(eigsALC))
-        
-        print(f'Closed loop spectral radii (should be less than 1):')
-        print(f'Controller: {specRadABK:.3f}')
-        print(f'Observer  : {specRadALC:.3f}')
-
-
-    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist, groundAdjust=0):
+    def step_forward(self, yNow, anglesAhead, drvsAhead, dist):
         ''' 
-        xNow       : includes augmented states as well
-        xEst       : internal estimation of xNow
-        anglesAhead: angles (TG formatted), dAct to dAct+1 steps ahead 
-        drvsAhead  : drvs   (TG formatted), dAct to dAct+1 steps ahead
+        yNow       : includes augmented states as well
+        anglesAhead: angles (TG formatted), numDelay to numDelay+1 steps ahead 
+        drvsAhead  : drvs   (TG formatted), numDelay to numDelay+1 steps ahead
         dist       : size of real system (not including augmented states)
         ''' 
+        N1       = self._Nxr*(self._dAct+1)
         xEqmFlat = self._xEqm.flatten()
         
-        # Synthesize wTraj for t up to t+dAct
+        # Synthesize wtraj for t up to t+numDelay
         angles = tg_to_ctrl(anglesAhead, self._legPos, self._namesTG)
         drvs   = tg_to_ctrl(drvsAhead, self._legPos, self._namesTG)/self._Ts
         trajs  = np.concatenate((angles, drvs))
-                
-        # Update dynamics + estimate with trajectory tracking
-        if self._dAct > 0:
-            # wTraj(t+dAct)
-            wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
+        
+        # wTraj(t+numDelay)
+        wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
-            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead + groundAdjust
-            xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead + groundAdjust
-            
-        # Controller: calculate input        
-        uNow = -self._K @ xEst
         
-        # Controller: advance estimator
-        y       = self._C @ xNow # Sensor input (possibly delayed)
-        xEstNxt = self._A @ xEst + self._B @ uNow + self._L @ (y - self._C @ xEst)
+        # Set yNow's wtraj(t+numDelay) state appropriately
+        if self._dAct > 0:
+            yNow[2*N1-self._Nxr:2*N1] = wTrajAhead
         
-        # System: advance dynamics
+        # Calculate input
+        uNow = -self._K @ yNow
+        if self._dAct == 0:
+            uNow -= self._Bi @ wTrajAhead
+        
+        # Advance dynamics
         augDist = self.get_augmented_dist(dist)
-        xNxt    = self._A @ xNow + self._B @ uNow + augDist
+        yNxt    = self._A @ yNow + self._B @ uNow + augDist
+        if self._dAct == 0:
+            yNxt += wTrajAhead
 
-        # add ground here
+        return (uNow, yNxt)
 
-        return (uNow, xNxt, xEstNxt)
 

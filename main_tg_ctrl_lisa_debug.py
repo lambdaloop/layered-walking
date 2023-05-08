@@ -25,7 +25,6 @@ Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 800     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
 
 leg = 'R1'
 
@@ -67,15 +66,13 @@ angleTG, drvTG, phaseTG = TG.get_future_traj(0, numTGSteps,
 # TG plus controller and dynamics
 ################################################################################
 dAct   = int(actDelay / Ts * ctrlSpeedRatio)
-dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {dAct}')
-print(f'Steps of sensory delay  : {dSense}')
 
 legPos  = int(leg[-1])
 numAng  = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
-CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG)
+CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dAct, namesTG)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]
@@ -88,7 +85,6 @@ phaseTG2      = np.zeros(numTGSteps)
 angleTG2[:numAng,0], drvTG2[:numAng,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
 xs    = np.zeros([CD._Nx, numSimSteps])
-xEsts = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
 
 lookahead = math.ceil(dAct/ctrlSpeedRatio)
@@ -117,37 +113,8 @@ for t in range(numSimSteps-1):
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
     
-    # Ground model, future
-    n1 = CD._Nxr*(dAct+1)
-    n2 = n1 + CD._Nur*(dAct) 
-
-    xf1 = xs[n1-CD._Nxr:n1, t]
-    xf2 = CD._Ar @ xf1 + CD._Br @ xs[n2-CD._Nur:n2, t] + xs[CD._Nx-CD._Nxr:CD._Nx, t]
-        
-    ang1 = angleTG2[:numAng, k2] + ctrl_to_tg(xf1[0:numAng], legPos, namesTG)
-    ang2 = angleTG2[:numAng, k2] + ctrl_to_tg(xf2[0:numAng], legPos, namesTG)
-            
-    # Slightly hacky: don't use ground model velocity output
-    angNew1, junk, groundLegs1 = ground.step_forward({leg: ang1}, {leg: ang1}, {leg: ang1})
-    angNew2, junk, groundLegs2 = ground.step_forward({leg: ang2}, {leg: ang2}, {leg: ang2})
-
-    gndAdjust1 = 0
-    if leg in groundLegs1:
-        gndAdjust1 = tg_to_ctrl(angNew1[leg] - ang1, legPos, namesTG)
-        gndAdjust1 = np.concatenate((gndAdjust1, np.zeros(numAng)))
+    us[:,t], xs[:,t+1] = CD.step_forward(xs[:,t], anglesAhead, drvsAhead, dist)
     
-    gndAdjust2 = 0
-    if leg in groundLegs2:
-        gndAdjust2 = tg_to_ctrl(angNew2[leg] - ang2, legPos, namesTG)
-        gndAdjust2 = np.concatenate((gndAdjust2, np.zeros(numAng)))
-    
-    gndAdjust = 5*gndAdjust1
-    
-    if np.linalg.norm(gndAdjust) > 0:
-        print(f'gndAdjust: {np.linalg.norm(gndAdjust)}')
-    
-    us[:,t], xs[:,t+1], xEsts[:,t+1] = CD.step_forward(xs[:,t], xEsts[:,t], anglesAhead, drvsAhead, dist, gndAdjust)
-
     # Ground model, current
     # Slightly hacky: don't use ground model velocity output
     ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
