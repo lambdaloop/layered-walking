@@ -23,22 +23,25 @@ walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio   = 800     # Controller communicates to TG this often (as multiple of Ts)
+ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
 
-leg = 'R1'
+leg = 'L2'
+
+offset    = 4
+startIdx  = 15
+gndHeight = -0.65
 
 ################################################################################
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings, offset=3)
+bout     = wd.get_bout(walkingSettings, offset=offset)
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
 contexts = np.repeat(context, numTGSteps, axis=0)
 
-startIdx  = 20
 angInit   = bout['angles'][leg][startIdx]
 drvInit   = bout['derivatives'][leg][startIdx]
 phaseInit = bout['phases'][leg][startIdx]
@@ -47,7 +50,6 @@ phaseInit = bout['phases'][leg][startIdx]
 # Ground model
 ################################################################################
 # Assuming flat ground
-gndHeight = -0.85
 ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 
 ################################################################################
@@ -112,9 +114,21 @@ for t in range(numSimSteps-1):
                                   angleTG2[:,k2].reshape(numAng,1)), axis=1)
     drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
                                   drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
-    
-    us[:,t], xs[:,t+1] = CD.step_forward(xs[:,t], anglesAhead, drvsAhead, dist)
-    
+        
+    n1  = CD._Nxr*(dAct+1) # number rows before delayed actuation states
+    xf  = xs[n1-CD._Nxr:n1, t]
+    ang = angleTG2[:numAng, k2] + ctrl_to_tg(xf[0:numAng], legPos, namesTG)
+
+    # Slightly hacky: don't use ground model velocity output
+    angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+
+    gndAdjust = 0
+    if leg in groundLegs:
+        gndAdjust = tg_to_ctrl(angNew[leg] - ang, legPos, namesTG)
+        gndAdjust = np.concatenate((gndAdjust, np.zeros(numAng)))    
+
+    us[:,t], xs[:,t+1] = CD.step_forward(xs[:,t], anglesAhead, drvsAhead, dist, gndAdjust)
+
     # Ground model, current
     # Slightly hacky: don't use ground model velocity output
     ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
@@ -176,7 +190,6 @@ for i in range(dof):
     plt.plot(time, angleTG[idx,:], 'g', label=f'TG Ground')    
     plt.plot(time, angleTG2[idx,:], 'r', label=f'2Layer TG')    
     plt.plot(time, angle2[idx,:], 'k--', label=f'2Layer')    
-    plt.ylim(-180, 180)
 
     if i==0:
         plt.legend()

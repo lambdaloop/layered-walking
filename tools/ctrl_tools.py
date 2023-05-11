@@ -356,7 +356,7 @@ class ControlAndDynamics:
         
         return(Q, R)
 
-    def step_forward(self, yNow, anglesAhead, drvsAhead, dist):
+    def step_forward(self, yNow, anglesAhead, drvsAhead, dist, gndAdjust=0):
         ''' 
         yNow       : includes augmented states as well
         anglesAhead: angles (TG formatted), numDelay to numDelay+1 steps ahead 
@@ -377,17 +377,17 @@ class ControlAndDynamics:
         
         # Set yNow's wtraj(t+numDelay) state appropriately
         if self._dAct > 0:
-            yNow[2*N1-self._Nxr:2*N1] = wTrajAhead
+            yNow[2*N1-self._Nxr:2*N1] = wTrajAhead + gndAdjust
         
         # Calculate input
         uNow = -self._K @ yNow
-        if self._dAct == 0:
+        if self._dAct == 0: # TODO: not doing gndAdjust for 0 delay
             uNow -= self._Bi @ wTrajAhead
         
         # Advance dynamics
         augDist = self.get_augmented_dist(dist)
         yNxt    = self._A @ yNow + self._B @ uNow + augDist
-        if self._dAct == 0:
+        if self._dAct == 0: # TODO: not doing gndAdjust for 0 delay
             yNxt += wTrajAhead
 
         return (uNow, yNxt)
