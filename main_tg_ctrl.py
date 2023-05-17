@@ -31,7 +31,7 @@ leg = 'R1'
 ################################################################################
 # Ground model
 ################################################################################
-offset    = 3
+boutNum   = 3
 startIdx  = 19
 gndHeight = -0.85
 ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
@@ -40,7 +40,7 @@ ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 # Get walking data
 ################################################################################
 wd       = WalkingData(filename)
-bout     = wd.get_bout(walkingSettings, offset=offset)
+bout     = wd.get_bout(walkingSettings, offset=boutNum)
 
 # Use constant contexts
 context  = np.array(walkingSettings).reshape(1,3)
@@ -57,21 +57,20 @@ TG     = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
 dAct   = int(actDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {dAct}')
 
-legPos  = int(leg[-1])
-numAng  = TG._numAng
+legPos = int(leg[-1])
+dof    = TG._numAng
 
 namesTG = [x[2:] for x in TG._angle_names]
 CD      = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dAct, namesTG)
 
 legIdx         = legs.index(leg)
 fullAngleNames = [(leg + ang) for ang in namesTG]
-dof            = CD._Nur
 
 numSimSteps   = numTGSteps*ctrlSpeedRatio
-angleTG2      = np.zeros((numAng, numTGSteps))
-drvTG2        = np.zeros((numAng, numTGSteps))
+angleTG2      = np.zeros((dof, numTGSteps))
+drvTG2        = np.zeros((dof, numTGSteps))
 phaseTG2      = np.zeros(numTGSteps)
-angleTG2[:numAng,0], drvTG2[:numAng,0], phaseTG2[0] = angInit, drvInit, phaseInit
+angleTG2[:dof,0], drvTG2[:dof,0], phaseTG2[0] = angInit, drvInit, phaseInit
 
 xs    = np.zeros([CD._Nx, numSimSteps])
 us    = np.zeros([CD._Nu, numSimSteps])
@@ -87,24 +86,24 @@ for t in range(numSimSteps-1):
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
     
     if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
-        ang = angleTG2[:numAng,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
-        drv = drvTG2[:numAng,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
+        ang = angleTG2[:dof,k] + ctrl_to_tg(xs[0:dof,t], legPos, namesTG)
+        drv = drvTG2[:dof,k] + ctrl_to_tg(xs[dof:dof*2,t]*CD._Ts, legPos, namesTG)
 
         kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
-        angleTG2[:numAng,k+1:kEnd+1], drvTG2[:numAng,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
+        angleTG2[:dof,k+1:kEnd+1], drvTG2[:dof,k+1:kEnd+1], phaseTG2[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTG2[k], contexts)
 
     k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
-    anglesAhead = np.concatenate((angleTG2[:,k1].reshape(numAng,1),
-                                  angleTG2[:,k2].reshape(numAng,1)), axis=1)
-    drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(numAng,1),
-                                  drvTG2[:,k2].reshape(numAng,1)), axis=1)/ctrlSpeedRatio
+    anglesAhead = np.concatenate((angleTG2[:,k1].reshape(dof,1),
+                                  angleTG2[:,k2].reshape(dof,1)), axis=1)
+    drvsAhead   = np.concatenate((drvTG2[:,k1].reshape(dof,1),
+                                  drvTG2[:,k2].reshape(dof,1)), axis=1)/ctrlSpeedRatio
         
     n1  = CD._Nxr*(dAct+1) # number rows before delayed actuation states
     xf  = xs[n1-CD._Nxr:n1, t]
-    ang = angleTG2[:numAng, k2] + ctrl_to_tg(xf[0:numAng], legPos, namesTG)
+    ang = angleTG2[:dof, k2] + ctrl_to_tg(xf[0:dof], legPos, namesTG)
 
     # Use ground model on future predicted trajectory, to check if it hits ground
     # Slightly hacky: don't use ground model velocity output
@@ -113,20 +112,20 @@ for t in range(numSimSteps-1):
     gndAdjust = 0
     if leg in groundLegs: # Future is predicted to hit ground; account for this
         gndAdjust = tg_to_ctrl(angNew[leg] - ang, legPos, namesTG)
-        gndAdjust = np.concatenate((gndAdjust, np.zeros(numAng)))    
+        gndAdjust = np.concatenate((gndAdjust, np.zeros(dof)))    
 
     # Propagate dynamics
     us[:,t], xs[:,t+1] = CD.step_forward(xs[:,t], anglesAhead, drvsAhead, dist, gndAdjust)
 
     # Apply ground interaction to dynamics
     # Slightly hacky: don't use ground model velocity output
-    ang = angleTG2[:numAng,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
+    ang = angleTG2[:dof,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
     angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
     
     if leg in groundLegs:
         # Treat the ground interaction as a disturbance
-        angNxt                = tg_to_ctrl(angNew[leg] - angleTG2[:numAng,kn], legPos, namesTG)
-        groundDist            = np.zeros(numAng*2)
+        angNxt                = tg_to_ctrl(angNew[leg] - angleTG2[:dof,kn], legPos, namesTG)
+        groundDist            = np.zeros(dof*2)
         groundDist[0:dof]     = angNxt - xs[0:dof,t+1]
         augDist               = CD.get_augmented_dist(groundDist)
         xs[:,t+1]             += augDist
