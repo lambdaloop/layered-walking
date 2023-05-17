@@ -5,6 +5,8 @@ import matplotlib
 import numpy as np
 import sys
 
+from tqdm import tqdm, trange
+
 from tools.ctrl_tools import ControlAndDynamics
 from tools.trajgen_tools import TrajectoryGenerator, WalkingData
 from tools.angle_functions import legs, anglesTG, anglesCtrl, \
@@ -12,51 +14,37 @@ from tools.angle_functions import legs, anglesTG, anglesCtrl, \
                             offsets, alphas, kuramato_deriv, \
                             angles_to_pose_names, make_fly_video
 from tools.dist_tools import *
+from tools.ground_model import GroundModel
 
 # python3 main_three_layer.py [optional: output file name]
 # outfilename = 'vids/multileg_3layer.mp4' # default
 # if len(sys.argv) > 1:
     # outfilename = sys.argv[1]
 
-# basename = 'dist_12mms_uneven'
-# basename = 'compare_8mms'
-# basename = 'dist_12mms_slippery_delay_30ms'
-basename = 'test'
+basename = 'test_ground'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
 filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
-walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 600   # How many timesteps to run TG for
-Ts             = 1/300 # How fast TG runs
-ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
-ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.03  # Seconds; typically 0.02-0.04
-senseDelay     = 0.01  # Seconds; typically 0.01
-couplingDelay  = 0.010
-
-
+numTGSteps      = 200   # How many timesteps to run TG for
+Ts              = 1/300 # How fast TG runs
+ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
+ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
+actDelay        = 0.03  # Seconds; typically 0.02-0.04
+couplingDelay   = 0.010
 
 ################################################################################
-# Disturbance
+# Ground model
 ################################################################################
-boutNum  = 0 # Default is 0; change bouts for different random behaviors
-
-distStart = 100
-distEnd   = 300
-
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 1}
-distDict['distType'] = distType
-
-# Local minima detection parameters (for applying disturbance)
-locMinWindow      = 2*ctrlSpeedRatio
-nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
+# TODO: Should we allow this to differ from leg to leg?
+boutNum   = 0
+startIdx  = 0
+gndHeight = -0.85
+ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 
 ################################################################################
 # Get walking data
@@ -73,12 +61,10 @@ drvInit   = bout['derivatives']
 phaseInit = bout['phases']
 
 ################################################################################
-# Phase coordinator + trajectory generator + ctrl and dynamics
+# Setup
 ################################################################################
 dAct   = int(actDelay / Ts * ctrlSpeedRatio)
-dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 print(f'Steps of actuation delay: {dAct}')
-print(f'Steps of sensory delay  : {dSense}')
 
 numSimSteps = numTGSteps*ctrlSpeedRatio
 lookahead   = math.ceil(dAct/ctrlSpeedRatio)
@@ -96,38 +82,30 @@ drvTG   = np.zeros((nLegs, dofTG, numTGSteps))
 phaseTG = np.zeros((nLegs, numTGSteps))
 
 xs      = [None for i in range(nLegs)]
-xEsts   = [None for i in range(nLegs)]
 us      = [None for i in range(nLegs)]
 
-# For height detection and visualization
-heights        = [None for i in range(nLegs)]
-groundContact  = [None for i in range(nLegs)] # For visualization only
-lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 fullAngleNames = []
 
 for ln, leg in enumerate(legs):    
-    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
+    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps, groundModel=ground)
 
     fullAngleNames.append(TG[ln]._angle_names)
 
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
-    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
+    CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dAct, namesTG[ln])
     fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
-    numAng = TG[ln]._numAng
+    dof = TG[ln]._numAng
 
-    angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
-        angInit[leg][0], drvInit[leg][0], phaseInit[leg][0]
+    angleTG[ln,:dof,0], drvTG[ln,:dof,0], phaseTG[ln,0] = \
+        angInit[leg][startIdx], drvInit[leg][startIdx], phaseInit[leg][startIdx]
     
     xs[ln]    = np.zeros([CD[ln]._Nx, numSimSteps])
-    xEsts[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
     us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
-    
-    heights[ln]       = np.array([None] * numSimSteps)
-    groundContact[ln] = np.array([None] * numSimSteps)
 
-
+################################################################################
 # Simulation
-for t in range(numSimSteps-1):
+################################################################################
+for t in trange(numSimSteps-1, ncols=70):
     k  = int(t / ctrlSpeedRatio)     # Index for TG data
     kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
     kc = max(k - numDelaysCoupling, 0)
@@ -146,37 +124,55 @@ for t in range(numSimSteps-1):
     for ln, leg in enumerate(legs):
         legPos  = int(leg[-1])
         legIdx  = legs.index(leg)
-        numAng = TG[ln]._numAng
+        dof     = TG[ln]._numAng
+        
+        if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:
+            ang = angleTG[ln,:dof,k] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,t], legPos, namesTG[ln])
+            drv = drvTG[ln,:dof,k] + ctrl_to_tg(xs[ln][CD[ln]._Nur:CD[ln]._Nur*2,t]*CD[ln]._Ts,
+                  legPos, namesTG[ln])
 
-        ang = angleTG[ln,:numAng,k] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,t], legPos, namesTG[ln])
-        drv = drvTG[ln,:numAng,k] + ctrl_to_tg(
-            xs[ln][CD[ln]._Nur:CD[ln]._Nur*2,t]*CD[ln]._Ts, legPos, namesTG[ln])
-        
-        # Communicate to trajectory generator and get future trajectory
-        if not (k % ctrlCommRatio) and k != kn and k < numTGSteps-1:        
             kEnd = min(k+ctrlCommRatio+lookahead, numTGSteps-1)
-            angleTG[ln,:numAng,k+1:kEnd+1], drvTG[ln,:numAng,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
+            angleTG[ln,:dof,k+1:kEnd+1], drvTG[ln,:dof,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
-        
-        # Apply disturbance if in contact with ground
-        dist           = get_zero_dists()[leg]    
-        heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
-        if k > distStart and k <= distEnd and \
-           loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-            groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
-            lastDetection[ln]    = t
-            dist                 = get_dist(distDict, leg)               
-        
+                
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                       drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
-            
-        us[ln][:,t], xs[ln][:,t+1], xEsts[ln][:,t+1] = \
-            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, dist)
         
-# True angles sampled at Ts
-# angle    = np.zeros((nLegs, dofTG, numTGSteps))
+        n1  = CD[ln]._Nxr*(dAct+1)
+        xf  = xs[ln][n1-CD[ln]._Nxr:n1, t]
+        ang = angleTG[ln,:dof, k2] + ctrl_to_tg(xf[0:dof], legPos, namesTG[ln])
+        
+        # Use ground model on future predicted trajectory, to check if it hits ground
+        # Slightly hacky: don't use ground model velocity output
+        angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+
+        gndAdjust = 0
+        if leg in groundLegs: # Future is predicted to hit ground; account for this
+            gndAdjust = tg_to_ctrl(angNew[leg] - ang, legPos, namesTG[ln])
+            gndAdjust = np.concatenate((gndAdjust, np.zeros(dof)))    
+        
+        # Zero disturbance for now
+        dist = np.zeros(CD[ln]._Nxr)
+        us[ln][:,t], xs[ln][:,t+1] = CD[ln].step_forward(
+            xs[ln][:,t], anglesAhead, drvsAhead, dist, gndAdjust)
+
+        # Apply ground interaction to dynamics
+        # Slightly hacky: don't use ground model velocity output
+        ang = angleTG[ln,:dof,kn] + ctrl_to_tg(xs[ln][0:dof,t+1], legPos, namesTG[ln])
+        angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
+        
+        if leg in groundLegs: # Treat the ground interaction as a disturbance
+            angNxt                = tg_to_ctrl(angNew[leg] - angleTG[ln,:dof,kn], legPos, namesTG[ln])
+            groundDist            = np.zeros(dof*2)
+            groundDist[0:dof]     = angNxt - xs[ln][0:dof,t+1]
+            augDist               = CD[ln].get_augmented_dist(groundDist)
+            xs[ln][:,t+1]         += augDist
+
+################################################################################
+# Postprocessing and plotting
+################################################################################
 downSamp = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
 angle = []
 names = []
@@ -188,7 +184,7 @@ for ln, leg in enumerate(legs):
     x = angleTG[ln,:numAng,:] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,downSamp], legPos, namesTG[ln])
     angle.append(x)
     names.append(name)
-    
+
 matplotlib.use('Agg')
 # angs           = angle.reshape(-1, angle.shape[-1]).T
 # angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
@@ -196,7 +192,8 @@ angs_sim = np.vstack(angle).T
 angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
-make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))
+# make_fly_video(pose_3d, 'vids/{}_h{:02d}.mp4'.format(basename, int(ground._height*100)))
+make_fly_video(pose_3d, 'vids/{}.mp4'.format(basename), ground=ground)
 
 angs_real = np.hstack([bout['angles'][leg] for leg in legs])
 p3d = angles_to_pose_names(angs_real, angNames)
@@ -213,7 +210,8 @@ matplotlib.use('TkAgg')
 # ix = np.where(angNames == 'L1C_flex')[0]
 plt.figure(1)
 plt.clf()
-plt.plot(angs_sim[:, ixs])
+# plt.plot(angs_sim[:, ixs])
 # plt.plot(angs_real[:, ix])
+plt.plot(pose_3d[:, :, -1, -1])
 plt.draw()
 plt.show(block=False)

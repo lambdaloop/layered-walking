@@ -122,8 +122,7 @@ for t in range(numSimSteps-1):
     ang = angleTG2[:dof,kn] + ctrl_to_tg(xs[0:dof,t+1], legPos, namesTG)
     angNew, junk, groundLegs = ground.step_forward({leg: ang}, {leg: ang}, {leg: ang})
     
-    if leg in groundLegs:
-        # Treat the ground interaction as a disturbance
+    if leg in groundLegs: # Treat the ground interaction as a disturbance
         angNxt                = tg_to_ctrl(angNew[leg] - angleTG2[:dof,kn], legPos, namesTG)
         groundDist            = np.zeros(dof*2)
         groundDist[0:dof]     = angNxt - xs[0:dof,t+1]
