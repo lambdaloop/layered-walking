@@ -81,7 +81,8 @@ class DistType(Enum):
     BUMP_ON_SURFACE  = 3
     SLOPED_SURFACE   = 4
     MISSING_LEG      = 5
-
+    POISSON_GAUSSIAN = 6
+    IMPULSE          = 7
 
 
 def get_dist(distDict, leg):
@@ -98,6 +99,10 @@ def get_dist(distDict, leg):
         return get_dists_incline_or_decline(distDict['angle'])[leg]
     elif distType == DistType.MISSING_LEG:
         return get_dists_missing_leg(distDict['missingLeg'])[leg]
+    elif distType == DistType.POISSON_GAUSSIAN:
+        return get_dists_poisson_gaussian(distDict['maxVelocity'], distDict['rate'])[leg]
+    elif distType == DistType.IMPULSE:
+        return get_dists_impulse(distDict['maxVelocity'])[leg]
     else: # Default to zero
         return get_zero_dists()[leg]
 
@@ -220,3 +225,50 @@ def get_dists_missing_leg(missingLeg):
             distDict[leg] = get_dists_endeffector_moves(height, leg)
     return distDict
 
+
+def get_dists_impulse(impulse):
+    distDict = {}
+    distAngles = {1: np.array([3]),    # femur-tibia flexion
+                  2: np.array([1, 2]), # femur rotation, femur-tibia flexion
+                  3: np.array([1, 2])} # femur rotation, femur-tibia flexion
+    for leg in legs:
+        legPos        = int(leg[-1])
+        numAngles     = len(anglesCtrl[legPos])
+        distDict[leg] = np.zeros(numAngles*2)
+
+        # Normal distribution about maxVelocity
+        dists = np.random.normal(impulse, impulse/10, len(distAngles[legPos]))
+        for i in range(len(dists)):
+            # Flip a coin to decide whether perturbation is negative or positive
+            if np.random.randint(2) == 0:
+                dists[i] = -dists[i]
+
+        distDict[leg][numAngles+distAngles[legPos]] = dists
+    return distDict
+
+def get_dists_poisson_gaussian(maxVelocity, rate):
+    ''' Gives disturbances corresponding to a poisson-triggered gaussian
+       Similar to walking on a slippery surface, but more random.
+        maxVelocity: maximum velocity induced by slip '''
+    distDict = {}
+    distAngles = {1: np.array([3]),    # femur-tibia flexion
+                  2: np.array([1, 2]), # femur rotation, femur-tibia flexion
+                  3: np.array([1, 2])} # femur rotation, femur-tibia flexion
+    for leg in legs:
+        legPos        = int(leg[-1])
+        numAngles     = len(anglesCtrl[legPos])
+        distDict[leg] = np.zeros(numAngles*2)
+
+        occur = np.random.poisson(rate)
+        if occur == 0:
+            continue
+
+        # Normal distribution about maxVelocity
+        dists = np.random.normal(maxVelocity, maxVelocity/10, len(distAngles[legPos]))
+        for i in range(len(dists)):
+            # Flip a coin to decide whether perturbation is negative or positive
+            if np.random.randint(2) == 0:
+                dists[i] = -dists[i]
+
+        distDict[leg][numAngles+distAngles[legPos]] = dists
+    return distDict
