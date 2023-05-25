@@ -21,14 +21,14 @@ from tools.dist_tools import *
 # basename = 'dist_12mms_uneven'
 # basename = 'compare_8mms'
 # basename = 'dist_12mms_slippery_delay_30ms'
-basename = 'test'
+basename = 'poisson_sensedelay_5ms'
 
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-# filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -36,8 +36,8 @@ numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.03  # Seconds; typically 0.02-0.04
-senseDelay     = 0.01  # Seconds; typically 0.01
+actDelay       = 0.030  # Seconds; typically 0.02-0.04
+senseDelay     = 0.005  # Seconds; typically 0.01
 couplingDelay  = 0.010
 
 
@@ -47,11 +47,22 @@ couplingDelay  = 0.010
 ################################################################################
 boutNum  = 0 # Default is 0; change bouts for different random behaviors
 
-distStart = 100
-distEnd   = 300
+distStart = 200
+distEnd   = 400
 
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 1}
+# distType = DistType.SLIPPERY_SURFACE
+# distType = DistType.IMPULSE
+# distDict = {
+#     'maxVelocity' : 10,
+#     'rate': 30 * Ts / ctrlSpeedRatio # about 15 Hz
+# }
+
+distType = DistType.POISSON_GAUSSIAN
+distDict = {
+    'maxVelocity' : 5,
+    'rate': 20 * Ts / ctrlSpeedRatio # about 20 Hz
+}
+
 distDict['distType'] = distType
 
 # Local minima detection parameters (for applying disturbance)
@@ -160,13 +171,15 @@ for t in range(numSimSteps-1):
         
         # Apply disturbance if in contact with ground
         dist           = get_zero_dists()[leg]    
-        heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
-        if k > distStart and k <= distEnd and \
-           loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-            groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
-            lastDetection[ln]    = t
-            dist                 = get_dist(distDict, leg)               
-        
+        # heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
+        if k >= distStart and k < distEnd:
+            dist = get_dist(distDict, leg)
+            # dist = np.random.normal(size=dist.shape) * distDict['maxVelocity'] * (Ts / ctrlSpeedRatio)
+            # loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
+            #  groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
+            #  lastDetection[ln]    = t
+            #  dist                 = get_dist(distDict, leg)
+
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
