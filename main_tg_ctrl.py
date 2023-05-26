@@ -24,10 +24,10 @@ numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.03  # Seconds; typically 0.02-0.04
-senseDelay      = 0.01  # Seconds; typically 0.01
+actDelay        = 0.012  # Seconds; typically 0.02-0.04
+senseDelay      = 0.00  # Seconds; typically 0.01
 
-leg = sys.argv[1]
+leg = 'R3'
 
 ################################################################################
 # Disturbance

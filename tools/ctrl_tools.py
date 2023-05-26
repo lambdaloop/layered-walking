@@ -297,6 +297,63 @@ def get_augmented_system(AReal, BReal, CReal, dSense, dAct):
         C[:,0:n] = CReal
 
     return (A, B, C)
+    
+
+
+def get_augmented_system_lqr(AReal, BReal, dAct):
+    if dAct == 0:
+        return (AReal, BReal)
+    Nx = BReal.shape[0]
+    Nu = BReal.shape[1]
+        
+    # Dimensions of blocks
+    N1 = Nx*(dAct+1)
+    N2 = Nu*dAct
+    NA = 2*N1 + N2
+        
+    A     = np.zeros([NA, NA])
+    ANow1 = np.eye(Nx) # Powers of A for upper left block of A
+    ANow2 = np.eye(Nx) # Powers of A for upper middle block of A
+    ABNow = BReal      # Powers of A*B for upper right block of A
+        
+    for i in range(dAct+1):
+        # Upper left block of A
+        ANow1 = AReal @ ANow1
+        A[Nx*i:Nx*(i+1), 0:Nx] = ANow1
+        
+        # Upper middle block of A
+        aux     = np.empty([Nx*i, 0])
+        blkdiag = aux # Be careful, shallow copy
+        for j in range(dAct+1-i):
+            blkdiag = block_diag(blkdiag, ANow2)
+        blkdiag = block_diag(blkdiag, aux.T)
+        ANow2   = AReal @ ANow2
+        A[0:N1, N1:2*N1] += blkdiag
+        
+        # Upper right block of A
+        for j in range(dAct):
+            rowStart = (i+j)*Nx
+            rowEnd   = rowStart + Nx
+            if rowEnd <= N1:
+                colStart = 2*N1+(dAct-j-1)*Nu
+                colEnd   = colStart + Nu            
+                A[rowStart:rowEnd, colStart:colEnd] = ABNow
+        ABNow = AReal @ ABNow            
+
+    # Middle block of A
+    aux                 = np.empty([0, Nx])
+    A[N1:2*N1, N1:2*N1] = block_diag(aux, np.eye(Nx*dAct), aux.T)
+
+    # Bottom right block of A
+    aux                 = np.empty([Nu, 0])
+    A[2*N1:NA, 2*N1:NA] = block_diag(aux, np.eye(Nu*(dAct-1)), aux.T)
+
+    # Construct B matrix
+    B                 = np.zeros([NA, Nu])
+    B[N1-Nx:N1,:]     = BReal
+    B[2*N1:2*N1+Nu,:] = np.eye(Nu)
+    
+    return (A, B)
 
 
 
@@ -312,7 +369,7 @@ def get_augmented_dist_mtx(AReal, dAct):
 
 
 class ControlAndDynamics:
-    def __init__(self, leg, Ts, dSense, dAct, namesTG=None):
+    def __init__(self, leg, Ts, dSense, dAct, namesTG=None, alwaysLQG=False):
         # Assumes we already ran get_linearized_system() for the appropriate leg
         ALin, BLin, self._xEqm, self._uEqm = load_linearized_system(leg)
         self._Ts        = Ts
@@ -322,6 +379,7 @@ class ControlAndDynamics:
         self._dAct      = dAct
         self._Nxr       = ALin.shape[0] # Number of 'real' states
         self._Nur       = BLin.shape[1] # Number of 'real' inputs
+        self._alwaysLQG = alwaysLQG
 
         if namesTG is None:
             self._namesTG = [x[2:] for x in ANGLE_NAMES_DEFAULT[leg]]
@@ -334,21 +392,28 @@ class ControlAndDynamics:
         self._Cr  = np.eye(self._Nxr) # Perfect sensing
 
         # Convert to delayed system
-        self._A, self._B, self._C = get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
+        if self._dSense == 0 and not self._alwaysLQG: 
+            self._A, self._B = get_augmented_system_lqr(self._Ar, self._Br, dAct)
+        else:
+            self._A, self._B, self._C = \
+                get_augmented_system(self._Ar, self._Br, self._Cr, dSense, dAct)
+        
         self._Nx = self._B.shape[0]
         self._Nu = self._B.shape[1]
         
         # Only used if no delay
         self._Bi = np.linalg.pinv(self._B)
-
+        
         self._distMtx = get_augmented_dist_mtx(self._Ar, dAct)
         
         # Get penalty matrices
         Q, R, W, V = self.get_penalty_matrices()
         
         # Generate controller and observer
-        self._K    = control.dlqr(self._A, self._B, Q, R)[0]        
-        self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
+        self._K    = control.dlqr(self._A, self._B, Q, R)[0]
+        
+        if self._dSense > 0 or self._alwaysLQG:
+            self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
         
         self.print_sanity_check()
      
@@ -401,16 +466,18 @@ class ControlAndDynamics:
         print(f'Augmented: {specRadAugOL:.3f}')
         
         ABK        = self._A - self._B @ self._K
-        ALC        = self._A - self._L @ self._C
         eigsABK    = np.linalg.eig(ABK)[0]
-        eigsALC    = np.linalg.eig(ALC)[0]
         specRadABK = max(np.abs(eigsABK))        
-        specRadALC = max(np.abs(eigsALC))
         
         print(f'Closed loop spectral radii (should be less than 1):')
         print(f'Controller: {specRadABK:.3f}')
-        print(f'Observer  : {specRadALC:.3f}')
 
+        if self._dSense > 0 or self._alwaysLQG:
+            ALC        = self._A - self._L @ self._C
+            eigsALC    = np.linalg.eig(ALC)[0]
+            specRadALC = max(np.abs(eigsALC))
+            print(f'Observer  : {specRadALC:.3f}')
+            
 
     def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, dist):
         ''' 
@@ -431,16 +498,27 @@ class ControlAndDynamics:
         wTrajAhead = self._A[0:self._Nxr, 0:self._Nxr] @ (trajs[:,0] - xEqmFlat) + \
                      xEqmFlat - trajs[:,1]
 
-        # Update dynamics + estimate with trajectory tracking
-        xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
-        xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
-            
-        # Controller: calculate input        
-        uNow = -self._K @ xEst
+        uNow    = 0
+        xEstNxt = 0
+        if self._dSense == 0 and not self._alwaysLQG: # LQR
+            if self._dAct > 0:
+                N1 = self._Nxr*(self._dAct+1)
+                xNow[2*N1-self._Nxr:2*N1] = wTrajAhead
         
-        # Controller: advance estimator
-        y       = self._C @ xNow # Sensor input (possibly delayed)
-        xEstNxt = self._A @ xEst + self._B @ uNow + self._L @ (y - self._C @ xEst)
+            uNow = -self._K @ xNow # Calculate input
+            if self._dAct == 0:
+                uNow -= self._Bi @ wTrajAhead
+        else:
+            # Update dynamics + estimate with trajectory tracking
+            xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+            xEst[self._Nx-self._Nxr:self._Nx] = wTrajAhead
+                
+            # Controller: calculate input        
+            uNow = -self._K @ xEst
+            
+            # Controller: advance estimator
+            y       = self._C @ xNow # Sensor input (possibly delayed)
+            xEstNxt = self._A @ xEst + self._B @ uNow + self._L @ (y - self._C @ xEst)
         
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
