@@ -27,9 +27,8 @@ basename = 'test'
 ################################################################################
 # User-defined parameters
 ################################################################################
-# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+#filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -61,14 +60,9 @@ distEnd   = 400
 distType = DistType.POISSON_GAUSSIAN
 distDict = {
     'maxVelocity' : 5,
-    'rate': 20 * Ts / ctrlSpeedRatio # about 20 Hz
+    'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
+    'distType': distType
 }
-
-distDict['distType'] = distType
-
-# Local minima detection parameters (for applying disturbance)
-locMinWindow      = 2*ctrlSpeedRatio
-nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
 
 ################################################################################
 # Get walking data
@@ -111,20 +105,11 @@ xs      = [None for i in range(nLegs)]
 xEsts   = [None for i in range(nLegs)]
 us      = [None for i in range(nLegs)]
 
-# For height detection and visualization
-heights        = [None for i in range(nLegs)]
-groundContact  = [None for i in range(nLegs)] # For visualization only
-lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
-fullAngleNames = []
-
 for ln, leg in enumerate(legs):    
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
-    fullAngleNames.append(TG[ln]._angle_names)
-
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
     CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
-    fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
     numAng = TG[ln]._numAng
 
     angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
@@ -134,9 +119,6 @@ for ln, leg in enumerate(legs):
     xEsts[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
     us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
     
-    heights[ln]       = np.array([None] * numSimSteps)
-    groundContact[ln] = np.array([None] * numSimSteps)
-
 
 # Simulation
 for t in range(numSimSteps-1):
@@ -170,24 +152,18 @@ for t in range(numSimSteps-1):
             angleTG[ln,:numAng,k+1:kEnd+1], drvTG[ln,:numAng,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
         
-        # Apply disturbance if in contact with ground
         dist           = get_zero_dists()[leg]    
-        # heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
         if k >= distStart and k < distEnd:
             dist = get_dist(distDict, leg)
-            # dist = np.random.normal(size=dist.shape) * distDict['maxVelocity'] * (Ts / ctrlSpeedRatio)
-            # loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-            #  groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
-            #  lastDetection[ln]    = t
-            #  dist                 = get_dist(distDict, leg)
 
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                       drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
-            
+        
+        angleNxt = angleTG[ln,:,kn]
         us[ln][:,t], xs[ln][:,t+1], xEsts[ln][:,t+1] = \
-            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, dist)
+            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, angleNxt, dist)
         
 # True angles sampled at Ts
 # angle    = np.zeros((nLegs, dofTG, numTGSteps))
