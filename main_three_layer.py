@@ -21,7 +21,8 @@ from tools.dist_tools import *
 # basename = 'dist_12mms_uneven'
 # basename = 'compare_8mms'
 # basename = 'dist_12mms_slippery_delay_30ms'
-basename = 'poisson_sensedelay_5ms'
+# basename = 'poisson_sensedelay_5ms'
+basename = 'test'
 
 ################################################################################
 # User-defined parameters
@@ -37,7 +38,7 @@ Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay       = 0.030  # Seconds; typically 0.02-0.04
-senseDelay     = 0.005  # Seconds; typically 0.01
+senseDelay     = 0.045  # Seconds; typically 0.01
 couplingDelay  = 0.010
 
 

@@ -15,8 +15,8 @@ from tools.dist_tools import *
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-#filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_11.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [15, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -24,10 +24,11 @@ numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay        = 0.012  # Seconds; typically 0.02-0.04
-senseDelay      = 0.00  # Seconds; typically 0.01
+actDelay       = 0.030  # Seconds; typically 0.02-0.04
+senseDelay     = 0.045  # Seconds; typically 0.01
 
-leg = 'R3'
+#
+leg = 'R2'
 
 ################################################################################
 # Disturbance

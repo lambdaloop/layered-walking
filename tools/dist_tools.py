@@ -228,9 +228,12 @@ def get_dists_missing_leg(missingLeg):
 
 def get_dists_impulse(impulse):
     distDict = {}
-    distAngles = {1: np.array([3]),    # femur-tibia flexion
-                  2: np.array([1, 2]), # femur rotation, femur-tibia flexion
-                  3: np.array([1, 2])} # femur rotation, femur-tibia flexion
+    # distAngles = {1: np.array([3]),    # femur-tibia flexion
+    #               2: np.array([1, 2]), # femur rotation, femur-tibia flexion
+    #               3: np.array([1, 2])} # femur rotation, femur-tibia flexion
+    distAngles = {1: np.array([0, 1, 2, 3]),
+                  2: np.array([0, 1, 2]),
+                  3: np.array([0, 1, 2])}
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])
@@ -251,9 +254,9 @@ def get_dists_poisson_gaussian(maxVelocity, rate):
        Similar to walking on a slippery surface, but more random.
         maxVelocity: maximum velocity induced by slip '''
     distDict = {}
-    distAngles = {1: np.array([3]),    # femur-tibia flexion
-                  2: np.array([1, 2]), # femur rotation, femur-tibia flexion
-                  3: np.array([1, 2])} # femur rotation, femur-tibia flexion
+    distAngles = {1: np.array([0, 1, 2, 3]),
+                  2: np.array([0, 1, 2]),
+                  3: np.array([0, 1, 2])}
     for leg in legs:
         legPos        = int(leg[-1])
         numAngles     = len(anglesCtrl[legPos])

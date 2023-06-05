@@ -415,7 +415,7 @@ class ControlAndDynamics:
         if self._dSense > 0 or self._alwaysLQG:
             self._L    = control.dlqr(self._A.T, self._C.T, W, V)[0].T
         
-        self.print_sanity_check()
+        # self.print_sanity_check()
      
      
     def get_augmented_dist(self, dist):

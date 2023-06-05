@@ -7,13 +7,19 @@ from collections import Counter
 import pickle
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Suppress warnings from tensorflow
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # compute on cpu, it's actually faster for inference with smaller model
 
 import numpy as np
+import xarray as xr
+from typing import Optional, Text
+
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import layers
-import xarray as xr
-from typing import Optional, Text
+
+physical_devices = tf.config.list_physical_devices('GPU')
+for gpu_instance in physical_devices:
+    tf.config.experimental.set_memory_growth(gpu_instance, True)
 
 FPS = 300.0
 
