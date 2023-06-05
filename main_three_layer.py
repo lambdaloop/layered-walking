@@ -104,21 +104,11 @@ xs      = [None for i in range(nLegs)]
 xEsts   = [None for i in range(nLegs)]
 us      = [None for i in range(nLegs)]
 
-# For height detection and visualization
-nonRepeatWindow = 10*ctrlSpeedRatio # Assumed minimum distance between minima
-heights        = [None for i in range(nLegs)]
-groundContact  = [None for i in range(nLegs)] # For visualization only
-lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
-fullAngleNames = []
-
 for ln, leg in enumerate(legs):    
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
 
-    fullAngleNames.append(TG[ln]._angle_names)
-
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
     CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
-    fullAngleNames.append([(leg + ang) for ang in namesTG[ln]])
     numAng = TG[ln]._numAng
 
     angleTG[ln,:numAng,0], drvTG[ln,:numAng,0], phaseTG[ln,0] = \
@@ -128,9 +118,6 @@ for ln, leg in enumerate(legs):
     xEsts[ln] = np.zeros([CD[ln]._Nx, numSimSteps])
     us[ln]    = np.zeros([CD[ln]._Nu, numSimSteps])
     
-    heights[ln]       = np.array([None] * numSimSteps)
-    groundContact[ln] = np.array([None] * numSimSteps)
-
 
 # Simulation
 for t in range(numSimSteps-1):
@@ -164,16 +151,9 @@ for t in range(numSimSteps-1):
             angleTG[ln,:numAng,k+1:kEnd+1], drvTG[ln,:numAng,k+1:kEnd+1], phaseTG[ln,k+1:kEnd+1] = \
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
         
-        # Apply disturbance if in contact with ground
         dist           = get_zero_dists()[leg]    
-        # heights[ln][t] = get_current_height(ang, fullAngleNames[ln], legIdx)
         if k >= distStart and k < distEnd:
             dist = get_dist(distDict, leg)
-            # dist = np.random.normal(size=dist.shape) * distDict['maxVelocity'] * (Ts / ctrlSpeedRatio)
-            # loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection[ln], heights[ln], t):
-            #  groundContact[ln][t] = heights[ln][t] # Visualize height minimum detection
-            #  lastDetection[ln]    = t
-            #  dist                 = get_dist(distDict, leg)
 
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)

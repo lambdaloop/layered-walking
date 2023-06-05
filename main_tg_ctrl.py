@@ -27,14 +27,7 @@ ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple 
 actDelay        = 0.012  # Seconds; typically 0.02-0.04
 senseDelay      = 0.00  # Seconds; typically 0.01
 
-leg = 'R3'
-
-################################################################################
-# Disturbance
-################################################################################
-distType = DistType.SLIPPERY_SURFACE
-distDict = {'maxVelocity' : 1}
-distDict['distType'] = distType
+leg = 'R1'
 
 ################################################################################
 # Get walking data
@@ -118,12 +111,12 @@ xsDist    = np.zeros([CD._Nx, numSimSteps])
 xEstsDist = np.zeros([CD._Nx, numSimSteps])
 usDist    = np.zeros([CD._Nu, numSimSteps])
 
-# Visualize height detection and compare heights
-heightsDist       = np.array([None] * numSimSteps)
-groundContactDist = np.array([None] * numSimSteps)
-locMinWindow      = 2*ctrlSpeedRatio
-nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
-lastDetection     = -nonRepeatWindow
+distType = DistType.POISSON_GAUSSIAN
+distDict = {
+    'maxVelocity' : 150,
+    'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
+    'distType': distType
+}
 
 for t in range(numSimSteps-1): 
     k   = int(t / ctrlSpeedRatio)     # Index for TG data
@@ -136,14 +129,8 @@ for t in range(numSimSteps-1):
         angleTGDist[:,k+1:kEnd+1], drvTGDist[:,k+1:kEnd+1], phaseTGDist[k+1:kEnd+1] = \
             TG.get_future_traj(k, kEnd, ang, drv, phaseTGDist[k], contexts)
     
-    dist           = get_zero_dists()[leg]    
-    heightsDist[t] = get_current_height(ang, fullAngleNames, legIdx)
+    dist           = get_dist(distDict, leg)    
     
-    if loc_min_detected(locMinWindow, nonRepeatWindow, lastDetection, heightsDist, t):
-        groundContactDist[t] = heightsDist[t] # Visualize height minimum detection
-        lastDetection        = t
-        dist                 = get_dist(distDict, leg)               
-
     k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
     k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
     
@@ -167,9 +154,11 @@ angle2Dist = angleTGDist + ctrl_to_tg(xsDist[0:dof,downSamp], legPos, namesTG)
 drv2Dist   = drvTGDist + ctrl_to_tg(xsDist[dof:dof*2,downSamp]*CD._Ts, legPos, namesTG)
 
 # Get heights for non-perturbed case as well
-heights       = np.array([None] * numTGSteps)
+heights     = np.array([None] * numTGSteps)
+heightsDist = np.array([None] * numTGSteps)
 for t in range(numTGSteps-1):
-    heights[t] = get_current_height(angle2[:,t], fullAngleNames, legIdx)
+    heights[t]     = get_current_height(angle2[:,t], fullAngleNames, legIdx)
+    heightsDist[t] = get_current_height(angle2Dist[:,t], fullAngleNames, legIdx)
 
 time  = np.array(range(numTGSteps))
 time2 = np.array(range(numSimSteps)) / ctrlSpeedRatio
@@ -200,11 +189,9 @@ for i in range(dof):
     plt.plot(time, drv2Dist[idx,:], 'm--', label=f'2Layer-Dist')
         
     plt.subplot(3,dof,i+2*dof+1)
-    plt.title('Disturbance injected')
+    plt.title('Heights')
     plt.plot(time, heights, 'g', label=f'2Layer')
-    plt.plot(time2, heightsDist, 'm', label=f'2Layer-Dist')
-    
-    plt.plot(time2, groundContactDist, 'r*', markersize=10)
+    plt.plot(time, heightsDist, 'm', label=f'2Layer-Dist')    
 
 plt.show()
 
