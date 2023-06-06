@@ -16,6 +16,7 @@ from tqdm import tqdm, trange
 from collections import defaultdict
 import os
 import pickle
+import gc
 
 # python3 main_three_layer.py [optional: output file name]
 # outfilename = 'vids/multileg_3layer.mp4' # default
@@ -297,7 +298,7 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     output['drvTG'].append(np.copy(drvTG))
     output['phaseTG'].append(np.copy(phaseTG))
     output['us'].append(np.copy(us))
-    output['ys'].append(np.copy(ys))
+    # output['ys'].append(np.copy(ys))
     output['dists'].append(np.copy(dists))
     output['angle'].append(np.copy(angs_sim))
     output['angleNames'].append(np.copy(angNames))
