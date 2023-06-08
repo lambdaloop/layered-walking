@@ -264,9 +264,11 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
             drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                           drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
 
+            angleNxt = angleTG[ln,:,kn]
+
             # us[ln][:,t], ys[ln][:,t+1] = CD[ln].step_forward(ys[ln][:,t], anglesAhead, drvsAhead, dist)
             us[ln][:nu,t], ys[ln][:nx,t+1], xEsts[ln][:nx,t+1] = \
-                CD[ln].step_forward(ys[ln][:nx,t], xEsts[ln][:nx,t], anglesAhead, drvsAhead, dist)
+                CD[ln].step_forward(ys[ln][:nx,t], xEsts[ln][:nx,t], anglesAhead, drvsAhead, angleNxt, dist)
             dists[ln][:nur*2, t] = dist
 
 
