@@ -1,0 +1,87 @@
+#    -*- mode: org -*-
+
+
+Archived entries from file /jellyfish/research/tuthill/layered-walking/analyses/Model can walk.org
+
+
+* Phase coupling within a leg - phase version
+:PROPERTIES:
+:ARCHIVE_TIME: 2022-10-14 Fri 10:41
+:ARCHIVE_FILE: /jellyfish/research/tuthill/layered-walking/analyses/Model can walk.org
+:ARCHIVE_CATEGORY: Model can walk
+:END:
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    forward, rot, side = speeds[i]
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(angle_names_1leg):
+            x = np.vstack([angles[i, ix_leg, ix_ang, :],
+                           derivs[i, ix_leg, ix_ang, :]]).T
+            phase = get_phase(x)
+            key = leg + angname
+            d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'simulated'
+    ds.append(d)
+phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 500/500 [00:04<00:00, 107.86it/s]
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(angle_names_1leg):
+            x = np.vstack([ww['angles'][leg][:, ix_ang],
+                           ww['derivatives'][leg][:, ix_ang]]).T
+            phase = get_phase(x)
+            key = leg + angname
+            d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'real'
+    ds.append(d)
+phases_byleg_real = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|███████████████████████████████| 171/171 [00:01<00:00, 99.52it/s]
+
+#+BEGIN_SRC jupyter-python
+phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+d = phases_byleg
+fig, subplots = plt.subplots(1, 4, figsize=(8, 6))
+ix = 0
+for angname in angle_names_1leg:
+    if angname == 'C_flex': continue
+    ax = subplots[ix]
+    d = phases_byleg[phases_byleg['type'] == 'simulated']
+    sns.kdeplot(np.mod(d['L1' + angname] - d['L1C_flex'] +np.pi, 2*np.pi)-np.pi, cut=0, shade=True, ax=ax)
+    d = phases_byleg[phases_byleg['type'] == 'real']
+    sns.kdeplot(np.mod(d['L1' + angname] - d['L1C_flex'] +np.pi, 2*np.pi)-np.pi, cut=0, shade=True, ax=ax)
+    ix += 1
+
+#+END_SRC
+
+#+RESULTS:
+: c3df4e43-dd4b-4229-8193-f1eea9fd33aa

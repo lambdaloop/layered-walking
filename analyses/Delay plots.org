@@ -1,0 +1,438 @@
+#+TITLE: Perturbation plots
+
+* Goal
+
+The goal of this notebook is to make plots for the delays figure of the paper. Namely:
+- Example perturbed trajectories with different delays
+- Effect of delta perturbation on other legs
+- Heatmap of magnitude of slippery perturbation vs delays
+
+The network should be set up so that running it from top to bottom makes all the figure sublayouts.
+
+* Setup
+
+#+BEGIN_SRC jupyter-python
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
+import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm, trange
+import pandas as pd
+from scipy import signal
+from scipy.stats import gaussian_kde
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import sys
+project_path = "/home/pierre/research/tuthill/layered-walking"
+sys.path.append(project_path)
+from tools.angle_functions import anglesTG as angle_names_1leg
+from tools.angle_functions import legs
+from tools.angle_functions import make_fly_video, angles_to_pose_names
+from tools.trajgen_tools import WalkingData
+from tools.dist_tools import DistType
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+%matplotlib inline
+
+plt.style.use('default')
+plt.rcParams['figure.figsize'] = (7.5, 2)
+#+END_SRC
+
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+xvals = np.linspace(-np.pi, np.pi)
+def get_phase(ang):
+    m = np.median(ang, axis=0)
+    s = np.std(ang, axis=0)
+    s[s == 0] = 1
+    dm = (ang - m) / s
+    phase = np.arctan2(-dm[:,1], dm[:,0])
+    return phase
+
+def phase_align_poly(ang, extra=None, order=5):
+    topredict = ang
+    if extra is not None:
+        topredict = np.hstack([ang, extra])
+    means = np.full((len(xvals), topredict.shape[1]), np.nan)
+    stds = np.full((len(xvals), topredict.shape[1]), np.nan)
+    if len(ang) < 50: # not enough data
+        return means, stds
+    phase = get_phase(ang)
+    # pcs = np.vstack([np.cos(phase), np.sin(phase)]).T
+    b = np.vstack([np.cos(i * phase + j) for i in range(order) for j in [0, np.pi/2]]).T
+    xcs = np.vstack([np.cos(i * xvals + j) for i in range(order) for j in [0, np.pi/2]]).T
+    for i in range(topredict.shape[1]):
+        cc = np.isfinite(topredict[:,i])
+        model = sm.OLS(topredict[cc,i], b[cc]).fit()
+        means[:,i] = model.predict(xcs)
+        s, upper,lower = wls_prediction_std(model, xcs)
+        stds[:,i] = s
+    return means, stds
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+# list(d.keys())
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+fname = os.path.join(project_path, 'output', 'delays_stats_subang_v1.npz')
+d = np.load(fname, allow_pickle=True)
+
+conditions = d['conditions'][()]
+angles = d['angle']
+# derivs = d['drvTG']
+poses = d['pose_3d']
+angle_names = d['angleNames'][0]
+derivs = signal.savgol_filter(angles, 5, 2, deriv=1, axis=1)
+accels = signal.savgol_filter(derivs, 5, 2, deriv=1, axis=1)
+
+
+speeds = np.array([x['context'] for x in conditions])
+dist_types = np.array([x['dist'].value for x in conditions])
+delays = np.array([x['actDelay'] for x in conditions])
+max_velocities = np.array([x['maxVelocity'] for x in conditions])
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+conditions[0]
+#+END_SRC
+
+#+RESULTS:
+| context | : | (12 0 0) | offset | : | 0 | dist | : | <DistType.SLIPPERY_SURFACE: | 1> | maxVelocity | : | 0 | actDelay | : | 0.0 |
+
+
+
+#+BEGIN_SRC jupyter-python
+perturb_ranges = {
+    'before': (0, 300),
+    'during': (300, 600),
+    'after': (600, 900)
+}
+#+END_SRC
+
+#+RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python
+fname = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+wd = WalkingData(fname)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+wd.bout_context
+#+END_SRC
+
+#+RESULTS:
+: array([[ 3.4748168, 18.434208 ,  2.642376 ],
+:        [ 1.0033004, 20.97231  ,  3.094752 ],
+:        [ 1.4011644, 11.787567 ,  2.894012 ],
+:        ...,
+:        [ 9.824624 ,  3.8363965,  2.475409 ],
+:        [13.015    , -0.6182214,  1.8810371],
+:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+
+#+BEGIN_SRC jupyter-python
+fancy_angle_names = {
+    'C_flex': 'femur-tibia\nflexion',
+    'A_rot': 'coxa\nrotation',
+    'A_abduct': 'body-coxa\nflexion',
+    'B_flex': 'coxa-femur\nflexion',
+    'B_rot': 'femur\nrotation'
+}
+#+END_SRC
+
+#+RESULTS:
+
+
+* Example time series
+
+For the figure part A, we'd like to have multiple example angles. Perhaps R1 femur-tibia flexion would be good to show, but also L2 femur rotation?
+I'd like to have multiple traces for each angle, perhaps we could show with forward, rotation, and sideslip?
+
+In this code, we could also make a supplementary figure with a more complete set of angles.
+
+** Simulated plots
+
+#+BEGIN_SRC jupyter-python
+# plot_speeds = [[[[12, 0, 0]]]]
+plot_delays = [0, 0.02, 0.04, 0.06]
+plot_velocities = [5, 20]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+
+# angname = 'C_flex'
+# leg = 'R1'
+
+for angname in ['R1C_flex', 'L2B_rot']:
+    ix_ang = np.where(angle_names == angname)[0][0]
+
+    fig, axes = plt.subplots(
+        nrows=len(plot_delays),
+        ncols=len(plot_velocities),
+        figsize=(9, 4))
+
+    for i in range(len(plot_delays)):
+        for j in range(len(plot_velocities)):
+            ax = axes[i][j]
+            ixs = np.where(np.isclose(delays, plot_delays[i]) &
+                           np.isclose(max_velocities, plot_velocities[j]))[0]
+            ix_bout = ixs[0]
+            ang = angles[ix_bout, :, ix_ang]
+            t = np.arange(len(ang))/300.0
+            ax.plot(t, np.mod(ang, 360))
+            ax.axvline(t[300], color='gray', linestyle='dotted')
+            ax.axvline(t[600], color='gray', linestyle='dotted')
+            # ax.set_ylim(140, 200)
+            # plt.yticks([60, 120])
+            if angname == 'R1C_flex':
+                ax.set_ylim(0, 180)
+            elif angname == 'L2B_rot':
+                ax.set_ylim(0, 360)
+
+            if i != len(plot_delays)-1:
+                ax.set_xticks(ticks=[])
+
+            ax.set_title('{} delay: {}s, speed: {}mm/s'.format(angname, plot_delays[i], plot_velocities[j]))
+
+    sns.despine(bottom=True)
+    # plt.ylabel("Angle (deg)")
+    # plt.xlabel("Time (s)")
+
+    plt.savefig('plots/fig_delays_examples_slippery_{}.pdf'.format(angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/f3cde786cfddc26f8f19ffb5feae4f35ca40d9f1.png]]
+[[file:./.ob-jupyter/0a5bdb8bf8ddc7e84eb49c47693897d7c195c2ba.png]]
+:END:
+
+* principal component metric
+
+#+BEGIN_SRC jupyter-python
+
+full_L = []
+bnums = wd._get_minlen_bnums(300)
+for bnum in bnums:
+    bout = wd.get_bnum(bnum)
+    angs = np.hstack([bout['angles'][leg] for leg in legs])
+    full_L.append(angs)
+full = np.vstack(full_L)
+
+full_sc = np.hstack([np.sin(np.deg2rad(full)),
+                     np.cos(np.deg2rad(full))])
+
+pca = PCA(n_components=2)
+pcs = pca.fit_transform(full_sc)
+
+subixs = np.random.choice(pcs.shape[0], size=10000, replace=False)
+kde = gaussian_kde(pcs[subixs,:2].T)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(7.5/3, 2))
+plt.scatter(pcs[:,0], pcs[:,1], s=1, alpha=0.01)
+plt.xlim(-1.2, 1.2)
+plt.ylim(-1.2, 1.2)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| -1.2 | 1.2 |
+[[file:./.ob-jupyter/cf015db7c4f4d3550cc2416e14ca7a5b50104782.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+ix_bout = 100
+ang = angles[ix_bout]
+ang_sc = np.hstack([np.sin(np.deg2rad(ang)),
+                    np.cos(np.deg2rad(ang))])
+
+pcs = pca.transform(ang_sc)
+
+plt.subplot(1, 3, 1)
+plt.plot(pcs[:300,0], pcs[:300,1])
+plt.xlim(-1.2, 1.2)
+plt.ylim(-1.2, 1.2)
+plt.subplot(1, 3, 2)
+plt.plot(pcs[300:600,0], pcs[300:600,1])
+plt.xlim(-1.2, 1.2)
+plt.ylim(-1.2, 1.2)
+plt.subplot(1, 3, 3)
+plt.plot(pcs[600:,0], pcs[600:,1])
+plt.xlim(-1.2, 1.2)
+plt.ylim(-1.2, 1.2)
+
+pdfs = kde.logpdf(pcs[:, :2].T)
+# plt.plot(pdfs)
+
+print(np.sum(pdfs[0:300]))
+print(np.sum(pdfs[300:600]))
+print(np.sum(pdfs[600:900]))
+
+plt.figure()
+plt.plot(ang)
+
+plt.figure()
+plt.plot(pdfs)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: -337.41798080559147
+: -684.9316871017518
+: -309.9992173086983
+| <matplotlib.lines.Line2D | at | 0x7f0d192320a0> |
+[[file:./.ob-jupyter/8adb140ab6e93d644873abb45923e28e349fb165.png]]
+[[file:./.ob-jupyter/90e5ccb31ec9e984be71315ad0492a938f23efcf.png]]
+[[file:./.ob-jupyter/b254313b634aa84e783ef44151204498fb7bc61b.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+
+angles_sc = np.dstack([np.sin(np.deg2rad(angles)),
+                       np.cos(np.deg2rad(angles))])
+
+angles_sc_flat = angles_sc.reshape(-1, angles_sc.shape[-1])
+
+pcs = pca.transform(angles_sc_flat)
+
+pdfs_flat = np.zeros(len(pcs))
+step = 500
+for i in trange(0, len(pcs), step, ncols=70):
+    pdfs_flat[i:i+step] = kde.logpdf(pcs[i:i+step, :2].T)
+
+pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
+#+END_SRC
+
+#+RESULTS:
+: 100%|███████████████████████████████| 454/454 [01:26<00:00,  5.27it/s]
+
+
+#+BEGIN_SRC jupyter-python
+before = np.mean(pdfs_shaped[:, :300], axis=1)
+during = np.mean(pdfs_shaped[:, 300:600], axis=1)
+after = np.mean(pdfs_shaped[:, 600:900], axis=1)
+
+# plt.plot(before)
+# plt.plot(during - before)
+plt.plot(after - before)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f0d18b6fc70> |
+[[file:./.ob-jupyter/ca6f0e07ff8d1315309ad1b6b1e0bbfb2754b185.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+dd = pd.DataFrame({"delay": delays,
+                   "max_velocity": max_velocities,
+                   "during_logpdf": during,
+                   "after_logpdf": after,
+                   "during_diff_logpdf": during-before,
+                   "after_diff_logpdf": after-before,
+                   "before_logpdf": before})
+
+dgroup = dd.groupby(['delay', 'max_velocity']).mean()
+
+
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+to_plot  = [("during - before perturbations", "during_diff_logpdf"),
+            ("after - before perturbations", "after_diff_logpdf"),
+            ("before perturbations", "before_logpdf"),
+            ("during perturbations", "during_logpdf"),
+            ("after perturbations", "after_logpdf")
+            ]
+
+
+for (name, key) in to_plot:
+    dimg = dgroup.reset_index().pivot(columns='max_velocity', index='delay', values=key)
+    plt.figure(figsize=(6, 3), dpi=200)
+    plt.imshow(dimg)
+    if "diff" in key:
+        plt.imshow(dimg, vmin=-2, vmax=0)
+    else:
+        plt.imshow(dimg, vmin=-2, vmax=-1)
+
+    ax = plt.gca()
+    ax.set_xticks(np.arange(len(dimg.columns)), labels=dimg.columns)
+    ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index * 1000))
+
+    ax.set_xlabel("Perturbation strength")
+    ax.set_ylabel("Delay (ms)")
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    plt.colorbar()
+    plt.title(name)
+
+    plt.savefig('plots/fig_delays_logpdf_{}.pdf'.format(key), bbox_inches = "tight")
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+n[[file:./.ob-jupyter/bf717dcbaf862c914566ca203d734c294ee12f16.png]]n
+[[file:./.ob-jupyter/0b3fe07b88c451b64a1ab14ae7658c7a702cd838.png]]
+[[file:./.ob-jupyter/2804ccd8fea8967d47c363ec7bb2e95e8132e486.png]]
+[[file:./.ob-jupyter/f0e4966757a37858c570c23a0a766429f80f668c.png]]
+[[file:./.ob-jupyter/68719eba12212d4cd50cfc2ec58a638a3653d1b9.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+plt.plot(pcs[:,0], pcs[:,1])
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f0d1a6597f0> |
+[[file:./.ob-jupyter/d820a48677009fcd7b851b664e5aa533f372493c.png]]
+:END:
