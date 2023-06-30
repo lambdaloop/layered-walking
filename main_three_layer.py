@@ -13,6 +13,9 @@ from tools.angle_functions import legs, anglesTG, anglesCtrl, \
                             angles_to_pose_names, make_fly_video
 from tools.dist_tools import *
 
+from scipy import signal
+import seaborn as sns
+
 # python3 main_three_layer.py [optional: output file name]
 # outfilename = 'vids/multileg_3layer.mp4' # default
 # if len(sys.argv) > 1:
@@ -27,8 +30,8 @@ basename = 'test'
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-#filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -37,15 +40,15 @@ Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay       = 0.030  # Seconds; typically 0.02-0.04
-senseDelay     = 0.045  # Seconds; typically 0.01
-couplingDelay  = 0.010
+senseDelay     = 0.000  # Seconds; typically 0.01
+couplingDelay  = 0.000
 
 
 
 ################################################################################
 # Disturbance
 ################################################################################
-boutNum  = 0 # Default is 0; change bouts for different random behaviors
+boutNum  = 1 # Default is 0; change bouts for different random behaviors
 
 distStart = 200
 distEnd   = 400
@@ -57,7 +60,9 @@ distEnd   = 400
 #     'rate': 30 * Ts / ctrlSpeedRatio # about 15 Hz
 # }
 
-distType = DistType.POISSON_GAUSSIAN
+# distType = DistType.POISSON_GAUSSIAN
+distType = DistType.ZERO
+
 distDict = {
     'maxVelocity' : 5,
     'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
@@ -133,7 +138,7 @@ for t in range(numSimSteps-1):
     # This is only used if TG is updated
     ws = np.zeros(6)
     px = phaseTG[:,kc]
-    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*8
+    px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*4
     phaseTG[:,k] = phaseTG[:,k] + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
     # phaseTG[:,k] = pxk
 
@@ -186,7 +191,7 @@ angs_sim = np.vstack(angle).T
 angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
-make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))
+# make_fly_video(pose_3d, 'vids/{}_sim.mp4'.format(basename))
 
 angs_real = np.hstack([bout['angles'][leg] for leg in legs])
 p3d = angles_to_pose_names(angs_real, angNames)
@@ -206,4 +211,66 @@ plt.clf()
 plt.plot(angs_sim[:, ixs])
 # plt.plot(angs_real[:, ix])
 plt.draw()
+plt.show(block=False)
+
+
+# compute phase
+def get_phase(ang):
+    m = np.median(ang, axis=0)
+    s = np.std(ang, axis=0)
+    s[s == 0] = 1
+    dm = (ang - m) / s
+    phase = np.arctan2(-dm[:,1], dm[:,0])
+    return phase
+
+phases_sim = []
+for ix_leg, leg in enumerate(legs):
+    if leg in ['L2', 'R2']:
+        phaseang = 'B_rot'
+    else:
+        phaseang = 'C_flex'
+    names = TG[ix_leg]._angle_names
+    ix_ang_phase = names.index(leg + phaseang)
+    ang = angle[ix_leg][ix_ang_phase]
+    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+    x = np.vstack([ang, deriv]).T
+    phase = get_phase(x)
+    phases_sim.append(phase)
+
+phases_real = []
+for ix_leg, leg in enumerate(legs):
+    if leg in ['L2', 'R2']:
+        phaseang = 'B_rot'
+    else:
+        phaseang = 'C_flex'
+    names = wd._angle_names[leg]
+    ix_ang_phase = names.index(leg + phaseang)
+    ang = bout['angles'][leg][:, ix_ang_phase]
+    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+    x = np.vstack([ang, deriv]).T
+    phase = get_phase(x)
+    phases_real.append(phase)
+
+fig, subplots = plt.subplots(6, 6, figsize=(8, 8), num=1)
+for i, leg_i in enumerate(legs):
+    for j, leg_j in enumerate(legs):
+        if i == j:
+            ax = subplots[i][j]
+            ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
+            ax.set_axis_off()
+            continue
+        ax = subplots[i][j]
+        sns.kdeplot(np.mod(phases_sim[i] - phases_sim[j], 2*np.pi), cut=0, bw_method=0.1,
+                    fill=True, ax=ax)
+        sns.kdeplot(np.mod(phases_real[i] - phases_real[j], 2*np.pi), cut=0, bw_method=0.1,
+                    fill=True, ax=ax)
+        ax.set_xlim(0, 2*np.pi)
+        ax.set_ylim(0, 1.0)
+        ax.set_ylabel("")
+        ax.set_xticks([np.pi])
+        ax.set_yticks([0.3])
+        if i != 5:
+            ax.set_xticklabels([])
+        if j != 0:
+            ax.set_yticklabels([])
 plt.show(block=False)
