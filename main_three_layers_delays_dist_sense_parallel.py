@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+# only 1 thread, to help parallelize across data
+import os
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+
+# only 1 thread for tf as well
+import tensorflow as tf
+tf.config.set_soft_device_placement(True)
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+
 import math
 import numpy as np
 import sys
@@ -17,15 +29,8 @@ from collections import defaultdict
 import os
 import pickle
 import gc
+import time
 
-# python3 main_three_layer.py [optional: output file name]
-# outfilename = 'vids/multileg_3layer.mp4' # default
-# if len(sys.argv) > 1:
-    # outfilename = sys.argv[1]
-
-# basename = 'dist_12mms_uneven'
-# basename = 'compare_8mms'
-# basename = 'dist_12mms_slippery_delay_90ms'
 
 if len(sys.argv) > 1:
     outfilename = sys.argv[1]
@@ -37,7 +42,10 @@ if len(sys.argv) > 2:
 else:
     dist_type = 'poisson'
 
-start_index = int(sys.argv[3]) * 100
+num_batch = 50
+
+start_index = int(sys.argv[3]) * num_batch
+
 
 ################################################################################
 # User-defined parameters
@@ -138,7 +146,11 @@ full_conditions = [
 
 print(" processing {} / {} ".format(start_index, len(full_conditions)))
 
-conditions = full_conditions[start_index:start_index+100]
+if start_index >= len(full_conditions):
+    print("  index past length, exiting")
+    exit()
+
+conditions = full_conditions[start_index:start_index+num_batch]
 actual_sense_delays = list(set([x['senseDelay'] for x in conditions]))
 
 CD_dict = dict()
@@ -168,6 +180,7 @@ outpath = outname.format(store_start)
 if os.path.exists(outpath):
     print("  already processed, exiting!")
     exit()
+
 
 for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     context = cond['context']
@@ -248,8 +261,8 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
         # This is only used if TG is updated
         ws = np.zeros(6)
         px = phaseTG[:,k]
-        px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*8
-        px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
+        px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)
+        px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)
         phaseTG[:,k] = px
 
         for ln, leg in enumerate(legs):

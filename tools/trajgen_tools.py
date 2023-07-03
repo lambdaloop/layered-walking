@@ -3,9 +3,11 @@ from collections import Counter, defaultdict
 import numpy as np
 from tools.angle_functions import *
 from tools.model_functions import MLPScaledXY
-       
+
+import tensorflow as tf
 
 
+@tf.function
 def update_state(ang, drv, phase, out, ratio=1.0):
     accel = out[:len(ang)]
     drv1 = drv + accel * ratio
@@ -62,34 +64,49 @@ class TrajectoryGenerator:
     def get_initial_vals(self):
         return self._angReal[0], self._drvReal[0], self._phaseReal[0]
     
-    
+
+    @tf.function
     def step_forward(self, ang, drv, phase, context):
-        rad = np.radians(ang)
-        inp = np.hstack([np.cos(rad), np.sin(rad),
-                         drv, context, np.cos(phase), np.sin(phase)])
-        out = self._model(inp[None].astype('float32'))[0].numpy()
+        rad = ang * np.pi/180
+        inp = tf.concat([tf.cos(rad), tf.sin(rad),
+                         drv, context, [tf.cos(phase)], [tf.sin(phase)]], axis=-1)
+        out = self._model(inp[None])[0]
         ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
-        rad1 = np.radians(ang1)
-        new_inp = np.hstack([np.cos(rad1), np.sin(rad1),
-                             drv1, context, np.cos(phase1), np.sin(phase1)])
-        out = self._model(new_inp[None].astype('float32'))[0].numpy()
+        rad1 = ang1 * np.pi/180
+        new_inp = tf.concat([tf.cos(rad1), tf.sin(rad1),
+                             drv1, context, [tf.cos(phase1)], [tf.sin(phase1)]], axis=-1)
+        out = self._model(new_inp[None])[0]
         ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
         return ang, drv, phase
 
 
-    def get_future_traj(self, t1, t2, ang, drv, phase, contexts):
-        ''' Given values at time t1, returns values from t1+1 to t2, inclusive '''
+    def get_future_traj_raw(self, t1, t2, ang, drv, phase, contexts):
         numVals = t2 - t1
-        angs    = np.zeros([len(ang), numVals])
-        drvs    = np.zeros([len(drv), numVals])
-        phases  = np.zeros(numVals)
-        
-        angs[:,0], drvs[:,0], phases[0] = self.step_forward(ang, drv, 
-                                          phase, contexts[t1])
+        angs    = []
+        drvs    = []
+        phases  = []
+
+        tf_contexts = tf.cast(contexts, 'float32')
+
+        out = self.step_forward(
+            tf.cast(ang, 'float32'), tf.cast(drv, 'float32'),
+            tf.cast(phase, 'float32'), tf_contexts[t1])
+        angs.append(out[0])
+        drvs.append(out[1])
+        phases.append(out[2])
+
         for i in range(1, numVals):
-            angs[:,i], drvs[:,i], phases[i] = self.step_forward(angs[:,i-1], drvs[:,i-1], 
-                                              phases[i-1], contexts[t1+i])
-        return angs, drvs, phases            
+            out = self.step_forward(angs[i-1], drvs[i-1], phases[i-1],
+                                    tf_contexts[t1+i])
+            angs.append(out[0])
+            drvs.append(out[1])
+            phases.append(out[2])
+
+        return angs, drvs, phases
+
+    def get_future_traj(self, t1, t2, ang, drv, phase, contexts):
+        angs, drvs, phases = self.get_future_traj_raw(t1, t2, ang, drv, phase, contexts)
+        return np.array(angs).T, np.array(drvs).T, np.array(phases)
 
 
 

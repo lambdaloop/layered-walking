@@ -1,5 +1,17 @@
 #!/usr/bin/env python
 
+# only 1 thread, to help parallelize across data
+import os
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+
+# only 1 thread for tf as well
+import tensorflow as tf
+tf.config.set_soft_device_placement(True)
+tf.config.threading.set_inter_op_parallelism_threads(1)
+tf.config.threading.set_intra_op_parallelism_threads(1)
+
 import math
 import numpy as np
 import sys
@@ -18,15 +30,6 @@ import os
 import pickle
 import gc
 
-# python3 main_three_layer.py [optional: output file name]
-# outfilename = 'vids/multileg_3layer.mp4' # default
-# if len(sys.argv) > 1:
-    # outfilename = sys.argv[1]
-
-# basename = 'dist_12mms_uneven'
-# basename = 'compare_8mms'
-# basename = 'dist_12mms_slippery_delay_90ms'
-
 
 if len(sys.argv) > 1:
     outfilename = sys.argv[1]
@@ -38,7 +41,9 @@ if len(sys.argv) > 2:
 else:
     dist_type = 'poisson'
 
-start_index = int(sys.argv[3]) * 100
+num_batch = 50
+
+start_index = int(sys.argv[3]) * num_batch
 
 # start_index = 0
 # outfilename = "delays_stats_subang_v2_actuate_poisson"
@@ -49,8 +54,8 @@ start_index = int(sys.argv[3]) * 100
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
-# filename = '/home/pierre/models_sls/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/pierre/models_sls/walk_sls_legs_subang_1.pickle'
 
 
 numTGSteps     = 900   # How many timesteps to run TG for
@@ -112,8 +117,8 @@ else:
         dist_type
     ))
 
-# 0 sensory delay for this sweep
-senseDelay = 0
+# 10ms sensory delay for this sweep
+senseDelay = 0.010
 dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 
 TG      = [None for i in range(nLegs)]
@@ -145,7 +150,11 @@ full_conditions = [
 
 print(" processing {} / {} ".format(start_index, len(full_conditions)))
 
-conditions = full_conditions[start_index:start_index+100]
+if start_index >= len(full_conditions):
+    print("  index past length, exiting")
+    exit()
+
+conditions = full_conditions[start_index:start_index+num_batch]
 actual_act_delays = list(set([x['actDelay'] for x in conditions]))
 
 for actDelay in tqdm(actual_act_delays, ncols=70, desc="making controllers"):
@@ -251,8 +260,8 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
         # This is only used if TG is updated
         ws = np.zeros(6)
         px = phaseTG[:,k]
-        px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*8
-        px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
+        px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)
+        px = px + Ts * kuramato_deriv(px_half, alphas, offsets, ws)
         phaseTG[:,k] = px
 
         for ln, leg in enumerate(legs):
