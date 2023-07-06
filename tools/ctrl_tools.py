@@ -478,7 +478,7 @@ class ControlAndDynamics:
             print(f'Observer  : {specRadALC:.3f}')
             
 
-    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, angleNxt, dist):
+    def step_forward(self, xNow, xEst, anglesAhead, drvsAhead, angleNxt, derivNxt, dist):
         ''' 
         xNow       : includes augmented states as well
         xEst       : internal estimation of xNow
@@ -524,10 +524,21 @@ class ControlAndDynamics:
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
     
         # Clip flexions from 0 to 180 degrees, or 0 to pi radians
-        angNxt  = tg_to_ctrl(angleNxt, self._legPos, self._namesTG) + xNxt[0:self._Nur]
         clipIdx = anglesCtrlFlex[self._legPos]
+        isClip = np.zeros(self._Nur, dtype='bool')
+        isClip[clipIdx] = True
+
+        angNxt  = tg_to_ctrl(angleNxt, self._legPos, self._namesTG) + xNxt[0:self._Nur]
         angNxt[clipIdx] = np.clip(angNxt[clipIdx], 0, np.pi) # clip from 0 to pi
         xNxt[0:self._Nur] = angNxt - tg_to_ctrl(angleNxt, self._legPos, self._namesTG)
+
+        # clip deriv to be not push above the clipped angle
+        drvNxt  = tg_to_ctrl(derivNxt, self._legPos, self._namesTG) + xNxt[self._Nur:self._Nur*2]
+        bad_hi = isClip & np.isclose(angNxt, np.pi)
+        bad_lo = isClip & np.isclose(angNxt, 0)
+        drvNxt[bad_hi] = np.clip(drvNxt[bad_hi], -np.inf, 0)
+        drvNxt[bad_lo] = np.clip(drvNxt[bad_lo], 0, np.inf)
+        xNxt[self._Nur:self._Nur*2] = drvNxt - tg_to_ctrl(derivNxt, self._legPos, self._namesTG)
 
         return (uNow, xNxt, xEstNxt)
 

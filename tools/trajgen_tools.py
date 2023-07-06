@@ -59,7 +59,9 @@ class TrajectoryGenerator:
         rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
         self._phaseReal = np.arctan2(rsin, rcos)
         self._context   = xy_w[0][cc, -5:-2]
-    
+
+        self._angles_flex = ['B_flex' in name or 'C_flex' in name
+                             for name in self._angle_names]
     
     def get_initial_vals(self):
         return self._angReal[0], self._drvReal[0], self._phaseReal[0]
@@ -77,6 +79,10 @@ class TrajectoryGenerator:
                              drv1, context, [tf.cos(phase1)], [tf.sin(phase1)]], axis=-1)
         out = self._model(new_inp[None])[0]
         ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+        # clip flexion angles
+        ang = tf.where(self._angles_flex, tf.clip_by_value(ang, 0, 180), ang)
+        drv = tf.where(self._angles_flex & (ang == 180), tf.clip_by_value(drv, -np.inf, 0), drv)
+        drv = tf.where(self._angles_flex & (ang == 0), tf.clip_by_value(drv, 0, np.inf), drv)
         return ang, drv, phase
 
 
@@ -113,8 +119,11 @@ class TrajectoryGenerator:
 class WalkingData:
     def __init__(self, filename):
         with open(filename, 'rb') as myfile:
-            self.data = pickle.load(myfile)
+            data = pickle.load(myfile)
+        self.init_from_data(data)
 
+    def init_from_data(self, data):
+        self.data = data
         self._legs = sorted(self.data.keys())
 
         if 'angle_names' in self.data[self._legs[0]]:
@@ -197,6 +206,10 @@ class WalkingData:
         return self._get_subix(subix)
 
     def get_bout(self, context=None, offset=0, min_bout_length=500, seed=1234):
+        bnum = self.get_bout_bnum(context, offset, min_bout_length, seed)
+        return self.get_bnum(bnum)
+
+    def get_bout_bnum(self, context=None, offset=0, min_bout_length=500, seed=1234):
         np.random.seed(seed)
         s = set(self._get_minlen_bnums(min_bout_length))
         check = np.array([b in s for b in self.bnums_uniq])
@@ -209,4 +222,4 @@ class WalkingData:
             dist = dist + np.random.normal(size=dist.shape)*0.1
             ix = np.argsort(dist)
         bnum = self.bnums_uniq[check][ix[offset]]
-        return self.get_bnum(bnum)
+        return bnum

@@ -16,6 +16,7 @@ from tools.dist_tools import *
 from scipy import signal
 import seaborn as sns
 
+# offsets = offsets_simple
 # python3 main_three_layer.py [optional: output file name]
 # outfilename = 'vids/multileg_3layer.mp4' # default
 # if len(sys.argv) > 1:
@@ -31,16 +32,16 @@ basename = 'test'
 # User-defined parameters
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
 
-walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [8, 0, 0] # walking, turning, flipping speeds (mm/s)
 
-numTGSteps     = 600   # How many timesteps to run TG for
+numTGSteps     = 900   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.030  # Seconds; typically 0.02-0.04
-senseDelay     = 0.000  # Seconds; typically 0.01
+actDelay       = 0.025  # Seconds; typically 0.02-0.04
+senseDelay     = 0.010  # Seconds; typically 0.01
 couplingDelay  = 0.000
 
 
@@ -50,8 +51,8 @@ couplingDelay  = 0.000
 ################################################################################
 boutNum  = 1 # Default is 0; change bouts for different random behaviors
 
-distStart = 200
-distEnd   = 400
+distStart = 300
+distEnd   = 600
 
 # distType = DistType.SLIPPERY_SURFACE
 # distType = DistType.IMPULSE
@@ -60,11 +61,11 @@ distEnd   = 400
 #     'rate': 30 * Ts / ctrlSpeedRatio # about 15 Hz
 # }
 
-# distType = DistType.POISSON_GAUSSIAN
-distType = DistType.ZERO
+distType = DistType.POISSON_GAUSSIAN
+# distType = DistType.ZERO
 
 distDict = {
-    'maxVelocity' : 5,
+    'maxVelocity' : 5.0,
     'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
     'distType': distType
 }
@@ -139,7 +140,7 @@ for t in range(numSimSteps-1):
     ws = np.zeros(6)
     px = phaseTG[:,kc]
     px_half = px + 0.5*Ts * kuramato_deriv(px, alphas, offsets, ws)*4
-    phaseTG[:,k] = phaseTG[:,k] + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*8
+    phaseTG[:,k] = phaseTG[:,k] + Ts * kuramato_deriv(px_half, alphas, offsets, ws)*1
     # phaseTG[:,k] = pxk
 
     for ln, leg in enumerate(legs):
@@ -166,14 +167,18 @@ for t in range(numSimSteps-1):
         drvsAhead   = np.concatenate((drvTG[ln,:,k1].reshape(dofTG,1),
                                       drvTG[ln,:,k2].reshape(dofTG,1)), axis=1)/ctrlSpeedRatio
         
-        angleNxt = angleTG[ln,:,kn]
+        angleNxt = angleTG[ln,:numAng,kn]
+        drvNxt = drvTG[ln,:numAng,kn]
         us[ln][:,t], xs[ln][:,t+1], xEsts[ln][:,t+1] = \
-            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead, angleNxt, dist)
+            CD[ln].step_forward(xs[ln][:,t], xEsts[ln][:,t], anglesAhead, drvsAhead,
+                                angleNxt, drvNxt,
+                                dist)
         
 # True angles sampled at Ts
 # angle    = np.zeros((nLegs, dofTG, numTGSteps))
 downSamp = list(range(ctrlSpeedRatio-1, numSimSteps, ctrlSpeedRatio))
 angle = []
+deriv = []
 names = []
 
 for ln, leg in enumerate(legs):
@@ -181,13 +186,16 @@ for ln, leg in enumerate(legs):
     name = TG[ln]._angle_names
     legPos    = int(leg[-1])
     x = angleTG[ln,:numAng,:] + ctrl_to_tg(xs[ln][0:CD[ln]._Nur,downSamp], legPos, namesTG[ln])
+    d = drvTG[ln,:numAng,:] + ctrl_to_tg(xs[ln][CD[ln]._Nur:CD[ln]._Nur*2,downSamp], legPos, namesTG[ln])
     angle.append(x)
+    deriv.append(d)
     names.append(name)
     
 matplotlib.use('Agg')
 # angs           = angle.reshape(-1, angle.shape[-1]).T
 # angNames       = [(leg + ang) for leg in legs for ang in anglesTG]
 angs_sim = np.vstack(angle).T
+drvs_sim = np.vstack(deriv).T
 angNames = np.hstack(names)
 pose_3d        = angles_to_pose_names(angs_sim, angNames)
 # make_fly_video(pose_3d, outfilename)
@@ -208,69 +216,71 @@ matplotlib.use('TkAgg')
 # ix = np.where(angNames == 'L1C_flex')[0]
 plt.figure(1)
 plt.clf()
-plt.plot(angs_sim[:, ixs])
+plt.plot(angs_sim[:750, ixs[0]])
+# plt.plot(np.log(np.abs(drvTG[0, 3, :])+1))
 # plt.plot(angs_real[:, ix])
+# plt.plot(np.abs(drvs_sim[:750, ixs[0]])+1)
 plt.draw()
 plt.show(block=False)
 
 
 # compute phase
-def get_phase(ang):
-    m = np.median(ang, axis=0)
-    s = np.std(ang, axis=0)
-    s[s == 0] = 1
-    dm = (ang - m) / s
-    phase = np.arctan2(-dm[:,1], dm[:,0])
-    return phase
+# def get_phase(ang):
+#     m = np.median(ang, axis=0)
+#     s = np.std(ang, axis=0)
+#     s[s == 0] = 1
+#     dm = (ang - m) / s
+#     phase = np.arctan2(-dm[:,1], dm[:,0])
+#     return phase
 
-phases_sim = []
-for ix_leg, leg in enumerate(legs):
-    if leg in ['L2', 'R2']:
-        phaseang = 'B_rot'
-    else:
-        phaseang = 'C_flex'
-    names = TG[ix_leg]._angle_names
-    ix_ang_phase = names.index(leg + phaseang)
-    ang = angle[ix_leg][ix_ang_phase]
-    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
-    x = np.vstack([ang, deriv]).T
-    phase = get_phase(x)
-    phases_sim.append(phase)
+# phases_sim = []
+# for ix_leg, leg in enumerate(legs):
+#     if leg in ['L2', 'R2']:
+#         phaseang = 'B_rot'
+#     else:
+#         phaseang = 'C_flex'
+#     names = TG[ix_leg]._angle_names
+#     ix_ang_phase = names.index(leg + phaseang)
+#     ang = angle[ix_leg][ix_ang_phase]
+#     deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+#     x = np.vstack([ang, deriv]).T
+#     phase = get_phase(x)
+#     phases_sim.append(phase)
 
-phases_real = []
-for ix_leg, leg in enumerate(legs):
-    if leg in ['L2', 'R2']:
-        phaseang = 'B_rot'
-    else:
-        phaseang = 'C_flex'
-    names = wd._angle_names[leg]
-    ix_ang_phase = names.index(leg + phaseang)
-    ang = bout['angles'][leg][:, ix_ang_phase]
-    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
-    x = np.vstack([ang, deriv]).T
-    phase = get_phase(x)
-    phases_real.append(phase)
+# phases_real = []
+# for ix_leg, leg in enumerate(legs):
+#     if leg in ['L2', 'R2']:
+#         phaseang = 'B_rot'
+#     else:
+#         phaseang = 'C_flex'
+#     names = wd._angle_names[leg]
+#     ix_ang_phase = names.index(leg + phaseang)
+#     ang = bout['angles'][leg][:, ix_ang_phase]
+#     deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+#     x = np.vstack([ang, deriv]).T
+#     phase = get_phase(x)
+#     phases_real.append(phase)
 
-fig, subplots = plt.subplots(6, 6, figsize=(8, 8), num=1)
-for i, leg_i in enumerate(legs):
-    for j, leg_j in enumerate(legs):
-        if i == j:
-            ax = subplots[i][j]
-            ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
-            ax.set_axis_off()
-            continue
-        ax = subplots[i][j]
-        sns.kdeplot(np.mod(phases_sim[i] - phases_sim[j], 2*np.pi), cut=0, bw_method=0.1,
-                    fill=True, ax=ax)
-        sns.kdeplot(np.mod(phases_real[i] - phases_real[j], 2*np.pi), cut=0, bw_method=0.1,
-                    fill=True, ax=ax)
-        ax.set_xlim(0, 2*np.pi)
-        ax.set_ylim(0, 1.0)
-        ax.set_ylabel("")
-        ax.set_xticks([np.pi])
-        ax.set_yticks([0.3])
-        if i != 5:
-            ax.set_xticklabels([])
-        if j != 0:
-            ax.set_yticklabels([])
-plt.show(block=False)
+# fig, subplots = plt.subplots(6, 6, figsize=(8, 8), num=2)
+# for i, leg_i in enumerate(legs):
+#     for j, leg_j in enumerate(legs):
+#         if i == j:
+#             ax = subplots[i][j]
+#             ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
+#             ax.set_axis_off()
+#             continue
+#         ax = subplots[i][j]
+#         sns.kdeplot(np.mod(phases_sim[i] - phases_sim[j], 2*np.pi), cut=0, bw_method=0.1,
+#                     fill=True, ax=ax)
+#         sns.kdeplot(np.mod(phases_real[i] - phases_real[j], 2*np.pi), cut=0, bw_method=0.1,
+#                     fill=True, ax=ax)
+#         ax.set_xlim(0, 2*np.pi)
+#         ax.set_ylim(0, 1.0)
+#         ax.set_ylabel("")
+#         ax.set_xticks([np.pi])
+#         ax.set_yticks([0.3])
+#         if i != 5:
+#             ax.set_xticklabels([])
+#         if j != 0:
+#             ax.set_yticklabels([])
+# plt.show(block=False)
