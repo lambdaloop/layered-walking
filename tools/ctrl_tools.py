@@ -522,12 +522,6 @@ class ControlAndDynamics:
         # System: advance dynamics
         augDist = self.get_augmented_dist(dist)
         xNxt    = self._A @ xNow + self._B @ uNow + augDist
-    
-        # Clip flexions from 0 to 180 degrees, or 0 to pi radians
-        angNxt  = tg_to_ctrl(angleNxt, self._legPos, self._namesTG) + xNxt[0:self._Nur]
-        clipIdx = anglesCtrlFlex[self._legPos]
-        angNxt[clipIdx] = np.clip(angNxt[clipIdx], 0, np.pi) # clip from 0 to pi
-        xNxt[0:self._Nur] = angNxt - tg_to_ctrl(angleNxt, self._legPos, self._namesTG)
 
         return (uNow, xNxt, xEstNxt)
 
