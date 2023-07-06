@@ -32,23 +32,34 @@ from collections import defaultdict
 import os
 import pickle
 import gc
-import time
+
+# python3 main_three_layer.py [optional: output file name]
+# outfilename = 'vids/multileg_3layer.mp4' # default
+# if len(sys.argv) > 1:
+    # outfilename = sys.argv[1]
+
+# basename = 'dist_12mms_uneven'
+# basename = 'compare_8mms'
+# basename = 'dist_12mms_slippery_delay_90ms'
 
 
 if len(sys.argv) > 1:
     outfilename = sys.argv[1]
 else:
-    outfilename = "delays_stats_subang_v2_sense_poisson"
+    outfilename = "stats_subang_v2_nodist"
 
-if len(sys.argv) > 2:
-    dist_type = sys.argv[2]
+
+if len(sys.argv) > 3:
+    num_batch = int(sys.argv[3])
 else:
-    dist_type = 'poisson'
+    num_batch = 30
 
-num_batch = 50
+start_index = int(sys.argv[2]) * num_batch
 
-start_index = int(sys.argv[3]) * num_batch
 
+# start_index = 0
+# outfilename = "delays_stats_subang_v2_actuate_poisson"
+# dist_type = 'poisson'
 
 ################################################################################
 # User-defined parameters
@@ -79,14 +90,8 @@ anglePen       = 1e0
 inputPen       = 1e-8
 
 # disturbance start and end
-if dist_type == 'gaussian':
-    distStart = 300
-    distEnd   = 301
-else:
-    distStart = 300
-    distEnd   = 600
-
-
+distStart = 300
+distEnd   = 600
 
 # Local minima detection parameters (for applying disturbance)
 locMinWindow      = 2*ctrlSpeedRatio
@@ -107,30 +112,19 @@ phaseTG = np.zeros((nLegs, numTGSteps))
 
 
 fictrac_speeds = [6, 8, 10, 12, 14, 16, 18]
-fictrac_rots = [0]
-fictrac_sides = [0]
+fictrac_rots = [-8, -4, 0, 4, 8]
+fictrac_sides = [-4, -2, 0, 2, 4]
 # max_velocities = np.arange(0, 25, 5)
-# max_velocities = [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20]
-max_velocities = [0.   , 0.625, 1.25 , 1.875, 2.5  , 3.125, 3.75 , 4.375, 5.   ]
+max_velocities = [0]
+dist_types = [DistType.ZERO]
+# act_delays = np.arange(0, 0.065, 0.005)
+act_delays = [0.030]
+# sense_delays = np.arange(0, 0.065, 0.01)
 
-if dist_type == 'poisson':
-    dist_types = [DistType.POISSON_GAUSSIAN]
-elif dist_type == 'gaussian':
-    dist_types = [DistType.IMPULSE]
-else:
-    raise ValueError('invalid dist type: received "{}" but should be one of "poisson" or "gaussian"'.format(
-        dist_type
-    ))
 
-# act_delays = np.arange(0, 0.065, 0.01)
-sense_delays = np.arange(0, 0.045, 0.005)
-
-actDelay = 0.030
-dAct = int(actDelay / Ts * ctrlSpeedRatio)
-
-# # 0 delay for this figure
-# senseDelay = 0
-# dSense = int(senseDelay / Ts * ctrlSpeedRatio)
+# 0 sensory delay for this sweep
+senseDelay = 0.010
+dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 
 TG      = [None for i in range(nLegs)]
 namesTG = [None for i in range(nLegs)]
@@ -138,14 +132,15 @@ for ln, leg in enumerate(legs):
     TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
 
+CD_dict = dict()
 
 full_conditions = [
     {'context': [f_speed, f_rot, f_side],
      'offset': offset,
      'dist': dd,
      'maxVelocity': vel,
-     'senseDelay': delay}
-    for delay in sense_delays
+     'actDelay': delay}
+    for delay in act_delays
     for f_speed in fictrac_speeds
     for f_rot in fictrac_rots
     for f_side in fictrac_sides
@@ -154,6 +149,7 @@ full_conditions = [
     for offset in range(4)
 ]
 
+
 print(" processing {} / {} ".format(start_index, len(full_conditions)))
 
 if start_index >= len(full_conditions):
@@ -161,23 +157,7 @@ if start_index >= len(full_conditions):
     exit()
 
 conditions = full_conditions[start_index:start_index+num_batch]
-actual_sense_delays = list(set([x['senseDelay'] for x in conditions]))
-
-CD_dict = dict()
-
-for senseDelay in tqdm(actual_sense_delays, ncols=70, desc="making controllers"):
-    dSense = int(senseDelay / Ts * ctrlSpeedRatio)
-    CD = [None for i in range(nLegs)]
-    for ln, leg in enumerate(legs):
-        # CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
-        #                             anglePen, drvPen[leg], inputPen, namesTG[ln])
-        try:
-            CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
-        except ValueError:
-            print("  ERROR leg={}, senseDelay={}, dSense={}".format(
-                repr(leg), senseDelay, dSense))
-    CD_dict[dSense] = CD
-
+actual_act_delays = list(set([x['actDelay'] for x in conditions]))
 
 
 output = defaultdict(list)
@@ -191,6 +171,17 @@ if os.path.exists(outpath):
     print("  already processed, exiting!")
     exit()
 
+for actDelay in tqdm(actual_act_delays, ncols=70, desc="making controllers"):
+    dAct = int(actDelay / Ts * ctrlSpeedRatio)
+    CD = [None for i in range(nLegs)]
+    for ln, leg in enumerate(legs):
+        # CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, numDelays, futurePenRatio,
+        #                             anglePen, drvPen[leg], inputPen, namesTG[ln])
+        try:
+            CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
+        except ValueError:
+            print("  ERROR leg={}, actDelay={}, dAct={}".format(repr(leg), actDelay, dAct))
+    CD_dict[dAct] = CD
 
 for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     context = cond['context']
@@ -198,15 +189,17 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     distType = cond['dist']
     maxVelocity = cond['maxVelocity']
 
-    # actDelay = cond['actDelay']
-    senseDelay = cond['senseDelay']
+    actDelay = cond['actDelay']
+    # senseDelay = cond['senseDelay'] # set above
 
-    # dAct   = int(actDelay / Ts * ctrlSpeedRatio)
+    dAct   = int(actDelay / Ts * ctrlSpeedRatio)
     dSense = int(senseDelay / Ts * ctrlSpeedRatio)
 
-    lookahead   = math.ceil(dAct/ctrlSpeedRatio)
+    numDelays = dAct
 
-    CD = CD_dict[dSense]
+    lookahead   = math.ceil(numDelays/ctrlSpeedRatio)
+
+    CD = CD_dict[dAct]
 
     contexts = [context for _ in range(numSimSteps)]
 
@@ -216,9 +209,9 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     phaseTG[:] = 0
 
     # ys = [None for i in range(nLegs)]
-    # xEsts   = [None for i in range(nLegs)]
     # us = [None for i in range(nLegs)]
     # dists = [None for i in range(nLegs)]
+    # xEsts   = [None for i in range(nLegs)]
 
     max_nx = max([C._Nx for C in CD])
     max_nu = max([C._Nu for C in CD])
@@ -249,7 +242,6 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
         heights[ln]       = np.array([None] * numSimSteps)
         groundContact[ln] = np.array([None] * numSimSteps)
 
-
     lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 
     distDict = {'maxVelocity' : maxVelocity,
@@ -263,10 +255,9 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
         k  = int(t / ctrlSpeedRatio)     # Index for TG data
         kn = int((t+1) / ctrlSpeedRatio) # Next index for TG data
 
-
         # Index for future TG data
-        k1 = min(int((t+dAct) / ctrlSpeedRatio), numTGSteps-1)
-        k2 = min(int((t+dAct+1) / ctrlSpeedRatio), numTGSteps-1)
+        k1 = min(int((t+numDelays) / ctrlSpeedRatio), numTGSteps-1)
+        k2 = min(int((t+numDelays+1) / ctrlSpeedRatio), numTGSteps-1)
 
         # This is only used if TG is updated
         ws = np.zeros(6)
@@ -283,7 +274,7 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
             nx = CD[ln]._Nx
             nur = CD[ln]._Nur
 
-            ang = angleTG[ln,:numAng,k] + ctrl_to_tg(ys[ln][0:nur,t], legPos, namesTG[ln])
+            ang = angleTG[ln,:numAng,k] + ctrl_to_tg(ys[ln][0:CD[ln]._Nur,t], legPos, namesTG[ln])
             drv = drvTG[ln,:numAng,k] + ctrl_to_tg(
                 ys[ln][nur:nur*2,t]*CD[ln]._Ts, legPos, namesTG[ln])
 
@@ -309,6 +300,7 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
             us[ln][:nu,t], ys[ln][:nx,t+1], xEsts[ln][:nx,t+1] = \
                 CD[ln].step_forward(ys[ln][:nx,t], xEsts[ln][:nx,t], anglesAhead, drvsAhead, angleNxt, dist)
             dists[ln][:nur*2, t] = dist
+
 
 
     # True angles sampled at Ts
@@ -343,17 +335,7 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     output['conditions'].append(cond)
     output['pose_3d'].append(np.copy(pose_3d))
 
-    # if (ix_cond + 1) % 100 == 0:
-    #     outpath = outname.format(store_start)
-    #     # np.savez_compressed(outpath, **output)
-    #     with open(outpath, 'wb') as f:
-    #         pickle.dump(output, f)
-    #     del output
-    #     gc.collect()
-    #     output = defaultdict(list)
-    #     store_start = ix_cond + 1
 
-# outpath = outname.format(store_start)
 # np.savez_compressed(outpath, **output)
 with open(outpath, 'wb') as f:
     pickle.dump(output, f)

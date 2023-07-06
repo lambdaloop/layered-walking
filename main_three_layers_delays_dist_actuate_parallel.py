@@ -6,6 +6,9 @@ os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' # Suppress warnings from tensorflow
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1' # compute on cpu, it's actually faster for inference with smaller model
+
 # only 1 thread for tf as well
 import tensorflow as tf
 tf.config.set_soft_device_placement(True)
@@ -55,7 +58,7 @@ start_index = int(sys.argv[3]) * num_batch
 # filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
 # filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
-filename = '/home/pierre/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/pierre/models_sls/walk_sls_legs_subang_6.pickle'
 
 
 numTGSteps     = 900   # How many timesteps to run TG for
@@ -78,8 +81,12 @@ anglePen       = 1e0
 inputPen       = 1e-8
 
 # disturbance start and end
-distStart = 300
-distEnd   = 600
+if dist_type == 'gaussian':
+    distStart = 300
+    distEnd   = 301
+else:
+    distStart = 300
+    distEnd   = 600
 
 # Local minima detection parameters (for applying disturbance)
 locMinWindow      = 2*ctrlSpeedRatio
@@ -103,7 +110,7 @@ fictrac_speeds = [6, 8, 10, 12, 14, 16, 18]
 fictrac_rots = [0]
 fictrac_sides = [0]
 # max_velocities = np.arange(0, 25, 5)
-max_velocities = [0, 2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20]
+max_velocities = [0.   , 0.625, 1.25 , 1.875, 2.5  , 3.125, 3.75 , 4.375, 5.   ]
 dist_types = [DistType.POISSON_GAUSSIAN]
 act_delays = np.arange(0, 0.065, 0.005)
 # sense_delays = np.arange(0, 0.065, 0.01)
