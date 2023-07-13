@@ -27,6 +27,7 @@ from scipy import signal
 #+END_SRC
 
 #+RESULTS:
+: 44928355-7126-497b-adf7-af0e31a102c3
 
 #+BEGIN_SRC jupyter-python
 import sys
@@ -362,7 +363,8 @@ realangf['speed_side'] = realangf['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 171/171 [00:23<00:00,  7.36it/s]
+: 100%|███████████████████████████████| 171/171 [00:20<00:00,  8.50it/s]
+:
 
 #+BEGIN_SRC jupyter-python
 fullangf = pd.concat([allangf, realangf]).reset_index(drop=True)
@@ -418,10 +420,11 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/a95404ee5acda38b42b679df2a85ab6d5ae7c31a.png]]
-[[file:./.ob-jupyter/46935b5ace0e1cf0f14f056f7b1eed1f682256e6.png]]
-[[file:./.ob-jupyter/bcb08ba25361a1db665ea733f9ac986ecc4f3051.png]]
+[[file:./.ob-jupyter/d5c9dcca45b3cd8262bc45d3aa2fec52f66201a7.png]]
+[[file:./.ob-jupyter/a649c2a76c55a4d0277eaaaa1b4882b998595fac.png]]
+[[file:./.ob-jupyter/98b92dd3339cdf013aa415328f27806db5bf6351.png]]
 :END:
+
 
 #+BEGIN_SRC jupyter-python
 leg = 'L2'
@@ -458,9 +461,9 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/72cceb5a82fcc52f8e3b1e704a29d8f07e06ee95.png]]
-[[file:./.ob-jupyter/267544fb72bd24905153c732bac7a72357cbf888.png]]
-[[file:./.ob-jupyter/9530c307796f2b61fff65be11311073399cb5faa.png]]
+[[file:./.ob-jupyter/3d432b345548d74f7b34af2e3f957684c483e01f.png]]
+[[file:./.ob-jupyter/c9df774ccab6d4c41e88ce72471a8b9355b3a1cf.png]]
+[[file:./.ob-jupyter/198e4cfbb0ee7fc7149756b32594f5f70602df37.png]]
 :END:
 
 
@@ -516,13 +519,13 @@ angle_errors['accel_units'] = angle_errors['accel'] * 300.0 * 300.0
 
 #+RESULTS:
 : angle
-: /tmp/ipykernel_1248377/855530367.py:2: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_675863/855530367.py:2: RuntimeWarning: Mean of empty slice
 :   return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
 : deriv
-: /tmp/ipykernel_1248377/1432084253.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_675863/1432084253.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 : accel
-: /tmp/ipykernel_1248377/1432084253.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_675863/1432084253.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 
 
@@ -550,7 +553,7 @@ plt.savefig('plots/fig2C_error_raw_horizontal.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/ce815b1e0d4cc42c1f74d41b029da1232490fad9.png]]
+[[file:./.ob-jupyter/372fa7a9f1e20378307d5f8ec30d7d47aa8c86ae.png]]
 
 #+BEGIN_SRC jupyter-python
 plt.figure(figsize=(6, 4))
@@ -571,7 +574,7 @@ plt.savefig('plots/fig2C_error_raw_vertical.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/6346f591818bdbc31305ac66ff2e92cb6d5764f4.png]]
+[[file:./.ob-jupyter/71d593ad6cbf866f6743d71ac5f2be75395fad5e.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -598,7 +601,7 @@ plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/f3947055e4639b0829292262bac94bf59d9a2c9f.png]]
+[[file:./.ob-jupyter/17cc41475be0bbabfa4aa7116b530ddae6fda582.png]]
 
 
 * Phase coupling within a leg - angles version
@@ -645,7 +648,6 @@ allangf_sync = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 500/500 [00:44<00:00, 11.14it/s]
 
 
 Load the real data
@@ -687,7 +689,7 @@ for i in trange(len(bnums), ncols=70):
         d['leg'] = leg
         d['bnum'] = bnum
         d['type'] = 'real'
-          ds.append(d)
+        ds.append(d)
 realangf_sync = pd.concat(ds).reset_index(drop=True)
 
 realangf_sync['speed_forward'] = ((realangf_sync['speed_forward_raw'] + 2) // 4) * 4
@@ -699,7 +701,13 @@ realangf_sync['speed_side'] = realangf_sync['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 171/171 [00:17<00:00,  9.51it/s]
+:RESULTS:
+# [goto error]
+: [0;36m  Input [0;32mIn [28][0;36m[0m
+: [0;31m    ds.append(d)[0m
+: [0m    ^[0m
+: [0;31mIndentationError[0m[0;31m:[0m unexpected indent
+:END:
 
 
 #+BEGIN_SRC jupyter-python
@@ -707,6 +715,15 @@ fullangf_sync_raw = pd.concat([allangf_sync, realangf_sync]).reset_index(drop=Tr
 #+END_SRC
 
 #+RESULTS:
+:RESULTS:
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Input [0;32mIn [29][0m, in [0;36m<cell line: 1>[0;34m()[0m
+: [0;32m----> 1[0m fullangf_sync_raw [38;5;241m=[39m pd[38;5;241m.[39mconcat([allangf_sync, [43mrealangf_sync[49m])[38;5;241m.[39mreset_index(drop[38;5;241m=[39m[38;5;28;01mTrue[39;00m)
+: 
+: [0;31mNameError[0m: name 'realangf_sync' is not defined
+:END:
 
 #+BEGIN_SRC jupyter-python
 fullangf_sync_melt = pd.melt(
@@ -727,6 +744,24 @@ fullangf_sync.loc[:,'accel'] = fullangf_sync_melt.loc[
 #+END_SRC
 
 #+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+[0;31m---------------------------------------------------------------------------[0m
+[0;31mNameError[0m                                 Traceback (most recent call last)
+Input [0;32mIn [30][0m, in [0;36m<cell line: 1>[0;34m()[0m
+[1;32m      1[0m fullangf_sync_melt [38;5;241m=[39m pd[38;5;241m.[39mmelt(
+[0;32m----> 2[0m     [43mfullangf_sync_raw[49m,
+[1;32m      3[0m     id_vars[38;5;241m=[39m[[38;5;124m'[39m[38;5;124mphase[39m[38;5;124m'[39m,[38;5;124m'[39m[38;5;124mspeed_forward[39m[38;5;124m'[39m,
+[1;32m      4[0m              [38;5;124m'[39m[38;5;124mspeed_rotation[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mspeed_side[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mangle_name[39m[38;5;124m'[39m,
+[1;32m      5[0m              [38;5;124m'[39m[38;5;124mspeed_forward_raw[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mspeed_rotation_raw[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mspeed_side_raw[39m[38;5;124m'[39m,
+[1;32m      6[0m              [38;5;124m'[39m[38;5;124mleg[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mtype[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mbnum[39m[38;5;124m'[39m])
+[1;32m      7[0m fullangf_sync_melt[[38;5;124m'[39m[38;5;124morder[39m[38;5;124m'[39m] [38;5;241m=[39m [x[38;5;241m.[39msplit([38;5;124m'[39m[38;5;124m_[39m[38;5;124m'[39m)[[38;5;241m-[39m[38;5;241m1[39m] [38;5;28;01mfor[39;00m x [38;5;129;01min[39;00m fullangf_sync_melt[[38;5;124m'[39m[38;5;124mvariable[39m[38;5;124m'[39m]]
+[1;32m      9[0m fullangf_sync [38;5;241m=[39m fullangf_sync_melt[fullangf_sync_melt[[38;5;124m'[39m[38;5;124morder[39m[38;5;124m'[39m] [38;5;241m==[39m [38;5;124m'[39m[38;5;124mangle[39m[38;5;124m'[39m][38;5;241m.[39mreset_index(drop[38;5;241m=[39m[38;5;28;01mTrue[39;00m)
+
+[0;31mNameError[0m: name 'fullangf_sync_raw' is not defined
+#+end_example
+:END:
 
 #+BEGIN_SRC jupyter-python
 fullangf_sync['fancy_angle_name'] = [fancy_angle_names[x] for x in fullangf_sync['angle_name']]
@@ -734,6 +769,15 @@ fullangf_sync['fancy_angle_name'] = [fancy_angle_names[x] for x in fullangf_sync
 
 
 #+RESULTS:
+:RESULTS:
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Input [0;32mIn [31][0m, in [0;36m<cell line: 1>[0;34m()[0m
+: [0;32m----> 1[0m fullangf_sync[[38;5;124m'[39m[38;5;124mfancy_angle_name[39m[38;5;124m'[39m] [38;5;241m=[39m [fancy_angle_names[x] [38;5;28;01mfor[39;00m x [38;5;129;01min[39;00m [43mfullangf_sync[49m[[38;5;124m'[39m[38;5;124mangle_name[39m[38;5;124m'[39m]]
+: 
+: [0;31mNameError[0m: name 'fullangf_sync' is not defined
+:END:
 
 #+BEGIN_SRC jupyter-python
 # leg = 'L1'
@@ -752,8 +796,22 @@ plt.savefig('plots/fig2D_coupling_perleg.pdf', bbox_inches = "tight")
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/68bf59a9410c6e7891331775608522fe09475962.png]]
-[[file:./.ob-jupyter/9ddd8d17abc57e9d8000246acfecef7639825ed4.png]]
+# [goto error]
+#+begin_example
+[0;31m---------------------------------------------------------------------------[0m
+[0;31mNameError[0m                                 Traceback (most recent call last)
+Input [0;32mIn [32][0m, in [0;36m<cell line: 2>[0;34m()[0m
+[1;32m      1[0m [38;5;66;03m# leg = 'L1'[39;00m
+[0;32m----> 2[0m dd [38;5;241m=[39m [43mfullangf_sync[49m
+[1;32m      3[0m c [38;5;241m=[39m (dd[[38;5;124m'[39m[38;5;124mspeed_side[39m[38;5;124m'[39m][38;5;241m.[39mabs() [38;5;241m<[39m[38;5;241m=[39m [38;5;241m3[39m) [38;5;241m&[39m (dd[[38;5;124m'[39m[38;5;124mspeed_rotation[39m[38;5;124m'[39m][38;5;241m.[39mabs() [38;5;241m<[39m[38;5;241m=[39m [38;5;241m3[39m) \
+[1;32m      4[0m     [38;5;241m&[39m (dd[[38;5;124m'[39m[38;5;124mspeed_forward[39m[38;5;124m'[39m] [38;5;241m==[39m [38;5;241m12[39m)
+[1;32m      5[0m g [38;5;241m=[39m sns[38;5;241m.[39mrelplot(data[38;5;241m=[39mdd[c], x[38;5;241m=[39m[38;5;124m"[39m[38;5;124mphase[39m[38;5;124m"[39m, y[38;5;241m=[39m[38;5;124m"[39m[38;5;124mangle[39m[38;5;124m"[39m, hue[38;5;241m=[39m[38;5;124m"[39m[38;5;124mtype[39m[38;5;124m"[39m,
+[1;32m      6[0m                 estimator[38;5;241m=[39mnp[38;5;241m.[39mmean, err_style[38;5;241m=[39m[38;5;124m'[39m[38;5;124mband[39m[38;5;124m'[39m, ci[38;5;241m=[39m[38;5;241m95[39m,
+[1;32m      7[0m                 row[38;5;241m=[39m[38;5;124m'[39m[38;5;124mleg[39m[38;5;124m'[39m, col[38;5;241m=[39m[38;5;124m"[39m[38;5;124mfancy_angle_name[39m[38;5;124m"[39m, kind[38;5;241m=[39m[38;5;124m"[39m[38;5;124mline[39m[38;5;124m"[39m,
+[1;32m      8[0m                 height[38;5;241m=[39m[38;5;241m2[39m, aspect[38;5;241m=[39m[38;5;241m0.8[39m, facet_kws[38;5;241m=[39m{[38;5;124m'[39m[38;5;124msharey[39m[38;5;124m'[39m: [38;5;28;01mFalse[39;00m, [38;5;124m'[39m[38;5;124msharex[39m[38;5;124m'[39m: [38;5;28;01mTrue[39;00m})
+
+[0;31mNameError[0m: name 'fullangf_sync' is not defined
+#+end_example
 :END:
 
 * Phase coupling within a leg - phase version
@@ -778,7 +836,8 @@ phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 500/500 [00:04<00:00, 107.86it/s]
+: 100%|██████████████████████████████| 500/500 [00:04<00:00, 103.98it/s]
+:
 
 
 #+BEGIN_SRC jupyter-python
@@ -806,7 +865,8 @@ phases_byleg_real = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 171/171 [00:01<00:00, 99.52it/s]
+: 100%|███████████████████████████████| 171/171 [00:01<00:00, 96.07it/s]
+:
 
 #+BEGIN_SRC jupyter-python
 phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
@@ -885,7 +945,8 @@ phased_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 500/500 [00:01<00:00, 372.32it/s]
+: 100%|██████████████████████████████| 500/500 [00:01<00:00, 324.97it/s]
+:
 
 
 #+BEGIN_SRC jupyter-python
@@ -924,7 +985,8 @@ phased_real['speed_side'] = phased_real['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 171/171 [00:00<00:00, 284.77it/s]
+: 100%|██████████████████████████████| 171/171 [00:00<00:00, 274.47it/s]
+:
 
 
 #+BEGIN_SRC jupyter-python
@@ -935,6 +997,8 @@ phased['phase_L1'] += np.pi
 phased['phase_R1'] += np.pi
 phased['phase_R2'] += np.pi
 #+END_SRC
+
+#+RESULTS:
 
 
 #+BEGIN_SRC jupyter-python

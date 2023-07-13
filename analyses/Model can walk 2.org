@@ -1,0 +1,946 @@
+#+TITLE: Model Can Walk
+
+* Goal
+
+The goal of this notebook is to make plots for Figure 2 of the paper. Namely:
+- An example trajectory
+- Phase angle plot comparisons
+- Angle error
+- Phase coupling within a leg
+- Phase coupling across legs
+- Step frequency distributions
+- Demo videos
+
+The network should be set up so that running it from top to bottom makes all the figure sublayouts.
+
+* Setup
+
+#+BEGIN_SRC jupyter-python
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
+import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm, trange
+import pandas as pd
+from scipy import signal
+import pickle
+from glob import glob
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import sys
+project_path = "/home/lili/research/tuthill/layered-walking"
+data_path = '/home/lili/data/tuthill/models/sls_runs'
+sys.path.append(project_path)
+from tools.angle_functions import anglesTG as angle_names_1leg
+from tools.angle_functions import legs
+from tools.angle_functions import make_fly_video, angles_to_pose_names
+from tools.trajgen_tools import WalkingData
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+
+plt.style.use('default')
+plt.rcParams['figure.figsize'] = (7.5, 2)
+#+END_SRC
+
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+xvals = np.linspace(-np.pi, np.pi)
+def get_phase(ang):
+    m = np.median(ang, axis=0)
+    s = np.std(ang, axis=0)
+    s[s == 0] = 1
+    dm = (ang - m) / s
+    phase = np.arctan2(-dm[:,1], dm[:,0])
+    return phase
+
+def phase_align_poly(ang, extra=None, order=5):
+    topredict = ang
+    if extra is not None:
+        topredict = np.hstack([ang, extra])
+    means = np.full((len(xvals), topredict.shape[1]), np.nan)
+    stds = np.full((len(xvals), topredict.shape[1]), np.nan)
+    if len(ang) < 50: # not enough data
+        return means, stds
+    phase = get_phase(ang)
+    # pcs = np.vstack([np.cos(phase), np.sin(phase)]).T
+    b = np.vstack([np.cos(i * phase + j) for i in range(order) for j in [0, np.pi/2]]).T
+    xcs = np.vstack([np.cos(i * xvals + j) for i in range(order) for j in [0, np.pi/2]]).T
+    for i in range(topredict.shape[1]):
+        cc = np.isfinite(topredict[:,i])
+        model = sm.OLS(topredict[cc,i], b[cc]).fit()
+        means[:,i] = model.predict(xcs)
+        s, upper,lower = wls_prediction_std(model, xcs)
+        stds[:,i] = s
+    return means, stds
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+# list(d.keys())
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+# fname_pat = os.path.join(data_path, 'delays_stats_subang_v2_actuate_gaussian_*.npz')
+fname_pat = os.path.join(data_path, 'stats_subang_v4_nodist_*.pkl')
+fnames = sorted(glob(fname_pat))
+
+conditions = []
+angles = []
+derivs = []
+accels = []
+phasesTG = []
+
+for fname in tqdm(fnames, ncols=70):
+    # d = np.load(fname, allow_pickle=True)
+    with open(fname, 'rb') as f:
+        d = pickle.load(f)
+
+    angle_names = d['angleNames'][0]
+
+    for i, cond in enumerate(d['conditions']):
+        ang = d['angle'][i]
+        deriv = signal.savgol_filter(ang, 5, 2, deriv=1, axis=0)
+        accel = signal.savgol_filter(deriv, 5, 2, deriv=1, axis=0)
+        conditions.append(cond)
+        angles.append(ang)
+        derivs.append(deriv)
+        accels.append(accel)
+        phasesTG.append(d['phaseTG'][i])
+#+END_SRC
+
+#+RESULTS:
+: 100%|█████████████████████████████████| 24/24 [00:01<00:00, 12.62it/s]
+:
+
+#+BEGIN_SRC jupyter-python
+accels[0]
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+array([[ 0.12228459, -0.03494259, -0.1035303 , ...,  0.43372187,
+        -0.36349896,  1.16419658],
+       [ 0.12405504, -0.015649  , -0.08380094, ...,  0.31723266,
+        -0.31458959,  0.9845437 ],
+       [ 0.1258255 ,  0.00364458, -0.06407158, ...,  0.20074345,
+        -0.26568022,  0.80489082],
+       ...,
+       [ 0.00363128,  0.08772238,  0.06746582, ..., -0.03002013,
+         0.01297555,  0.0350287 ],
+       [-0.02538425,  0.07547481,  0.06702849, ..., -0.05699241,
+         0.02877854,  0.012058  ],
+       [-0.05439978,  0.06322723,  0.06659117, ..., -0.0839647 ,
+         0.04458153, -0.01091269]])
+#+end_example
+
+
+#+BEGIN_SRC jupyter-python
+speeds = np.array([x['context'] for x in conditions])
+angle_names = list(angle_names)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+fname = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+wd = WalkingData(fname)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+wd.bout_context
+#+END_SRC
+
+#+RESULTS:
+: array([[ 3.4748168, 18.434208 ,  2.642376 ],
+:        [ 1.0033004, 20.97231  ,  3.094752 ],
+:        [ 1.4011644, 11.787567 ,  2.894012 ],
+:        ...,
+:        [ 9.824624 ,  3.8363965,  2.475409 ],
+:        [13.015    , -0.6182214,  1.8810371],
+:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+
+#+BEGIN_SRC jupyter-python
+fancy_angle_names = {
+    'C_flex': 'femur-tibia\nflexion',
+    'A_rot': 'coxa\nrotation',
+    'A_abduct': 'body-coxa\nflexion',
+    'B_flex': 'coxa-femur\nflexion',
+    'B_rot': 'femur\nrotation'
+}
+#+END_SRC
+
+#+RESULTS:
+
+* Figure 2
+** Example time series
+
+For the figure 2 part A, we'd like to have multiple example angles. Perhaps R1 femur-tibia flexion would be good to show, but also L2 femur rotation?
+I'd like to have multiple traces for each angle, perhaps we could show with forward, rotation, and sideslip?
+
+In this code, we could also make a supplementary figure with a more complete set of angles.
+
+*** Real tracking
+
+Parameters for both angles
+#+BEGIN_SRC jupyter-python
+plot_speeds = [[8, 0, 0], [10, 0, 0], [12, 0, 0]]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+angname = 'C_flex'
+leg = 'R1'
+# ix_ang = angle_names_1leg.index(angname)
+ix_ang = wd._angle_names[leg].index(leg + angname)
+ix_leg = legs.index(leg)
+
+plt.figure(figsize=(9, 2.5))
+for i in range(len(plot_speeds)):
+    plt.subplot(3, 1, i+1)
+    ww = wd.get_bout(plot_speeds[i], offset=0)
+    ang = ww['angles'][leg][:, ix_ang]
+    t = np.arange(len(ang))/300.0
+    plt.plot(t, ang, color="#FF7F0E")
+    plt.ylim(30, 160)
+    plt.yticks([60, 120])
+    if i != 2:
+        plt.xticks(ticks=[])
+
+sns.despine(bottom=True)
+
+plt.ylabel("Angle (deg)")
+plt.xlabel("Time (s)")
+plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/a3c7032a59efb8544cab50ea8b897577eadcad33.png]]
+
+
+#+BEGIN_SRC jupyter-python
+angname = 'B_rot'
+leg = 'L2'
+# ix_ang = angle_names_1leg.index(angname)
+ix_ang = wd._angle_names[leg].index(leg + angname)
+ix_leg = legs.index(leg)
+
+plt.figure(figsize=(9, 2.5))
+for i in range(len(plot_speeds)):
+    plt.subplot(3, 1, i+1)
+    ww = wd.get_bout(plot_speeds[i], offset=2)
+    ang = ww['angles'][leg][:, ix_ang].copy()
+    t = np.arange(len(ang))/300.0
+    ang[ang > 50] -= 360
+    ang += 360
+    plt.plot(t, ang, color="#FF7F0E")
+    plt.ylim(110, 160)
+    plt.yticks([120, 150])
+    if i != 2:
+        plt.xticks(ticks=[])
+
+sns.despine(bottom=True)
+
+plt.ylabel("Angle (deg)")
+plt.xlabel("Time (s)")
+plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/9c902d6d31d1e3bfdcb62631b2fe885898395b99.png]]
+
+
+*** Simulated plots
+
+#+BEGIN_SRC jupyter-python
+angname = 'C_flex'
+leg = 'R1'
+ix_ang = angle_names.index(leg + angname)
+
+plt.figure(figsize=(9, 2.5))
+for i in range(len(plot_speeds)):
+    plt.subplot(3, 1, i+1)
+    ixs = np.where(np.all(speeds == plot_speeds[i], axis=1))[0]
+    ix_bout = ixs[0]
+    ang = angles[ix_bout][:, ix_ang]
+    t = np.arange(len(ang))/300.0
+    plt.plot(t[:600], ang[:600])
+    plt.ylim(30, 160)
+    plt.yticks([60, 120])
+    if i != 2:
+        plt.xticks(ticks=[])
+
+sns.despine(bottom=True)
+
+plt.ylabel("Angle (deg)")
+plt.xlabel("Time (s)")
+
+plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/9f7b1d9150639946cd7a70c3b7df60fc594272a6.png]]
+
+
+#+BEGIN_SRC jupyter-python
+angname = 'B_rot'
+leg = 'L2'
+ix_ang = angle_names.index(leg + angname)
+
+plt.figure(figsize=(9, 2.5))
+for i in range(len(plot_speeds)):
+    plt.subplot(3, 1, i+1)
+    ixs = np.where(np.all(speeds == plot_speeds[i], axis=1))[0]
+    ix_bout = ixs[0]
+    ang = angles[ix_bout][:, ix_ang]
+    t = np.arange(len(ang))/300.0
+    plt.plot(t[:600], ang[:600])
+    plt.ylim(110, 160)
+    plt.yticks([120, 150])
+    if i != 2:
+        plt.xticks(ticks=[])
+
+sns.despine(bottom=True)
+
+plt.ylabel("Angle (deg)")
+plt.xlabel("Time (s)")
+
+plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/482e7c07d8624d9a1381b795c78f24e23003bdd3.png]]
+
+
+
+
+** Phase angle plots
+
+In this set, I'll plot some angles of phase vs angle
+
+Load the simulated data
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    for ix_ang, angname in enumerate(angle_names):
+        leg = angname[:2]
+        forward, rot, side = speeds[i]
+        x = np.vstack([angles[i][:, ix_ang],
+                       derivs[i][:, ix_ang]]).T
+        c = np.all(np.isfinite(x), axis=1)
+        x = x[c]
+        means, stds = phase_align_poly(
+            x, extra=accels[i][c, ix_ang, None])
+        d = pd.DataFrame(np.hstack([xvals[:,None],means]),
+                         columns=['phase', 'angle', 'deriv', 'accel'])
+        d['speed_forward'] = forward
+        d['speed_rotation'] = rot
+        d['speed_side'] = side
+        d['angle_name'] = angname[2:]
+        d['leg'] = leg
+        d['type'] = 'simulated'
+        ds.append(d)
+allangf = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|███████████████████████████████| 700/700 [00:47<00:00, 14.70it/s]
+:
+
+
+Load the real data
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(wd._angle_names[leg]):
+            angs = ww['angles'][leg][:, ix_ang]
+            drvs = ww['derivatives'][leg][:, ix_ang]
+            acls = signal.savgol_filter(drvs, 5, 2, deriv=1)
+            x = np.vstack([angs, drvs]).T
+            c = np.all(np.isfinite(x), axis=1)
+            x = x[c]
+            means, stds = phase_align_poly(
+                x, extra=acls[:,None])
+            d = pd.DataFrame(np.hstack([xvals[:,None],means]),
+                             columns=['phase', 'angle', 'deriv', 'accel'])
+            d['speed_forward_raw'] = forward
+            d['speed_rotation_raw'] = rot
+            d['speed_side_raw'] = side
+            d['angle_name'] = angname[2:]
+            d['leg'] = leg
+            d['bnum'] = bnum
+            d['type'] = 'real'
+            ds.append(d)
+realangf = pd.concat(ds).reset_index(drop=True)
+
+realangf['speed_forward'] = ((realangf['speed_forward_raw'] + 2) // 2) * 2
+realangf['speed_rotation'] = ((realangf['speed_rotation_raw'] + 2) // 4) * 4
+realangf['speed_side'] = ((realangf['speed_side_raw'] + 1) // 2) * 2
+
+realangf['speed_forward'] = realangf['speed_forward'].astype('int')
+realangf['speed_rotation'] = realangf['speed_rotation'].astype('int')
+realangf['speed_side'] = realangf['speed_side'].astype('int')
+#+END_SRC
+
+#+RESULTS:
+: 100%|███████████████████████████████| 173/173 [00:12<00:00, 13.61it/s]
+:
+
+#+BEGIN_SRC jupyter-python
+fullangf = pd.concat([allangf, realangf]).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+fullangf['deriv_units'] = fullangf['deriv'] * 300.0
+fullangf['accel_units'] = fullangf['accel'] * 300.0 * 300.0
+#+END_SRC
+
+#+RESULTS:
+
+
+
+
+#+BEGIN_SRC jupyter-python
+leg = 'R1'
+angname = 'C_flex'
+
+dd = fullangf
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Angle (deg)")
+plt.savefig('plots/fig2B_phase_angle_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Derivative (deg/s)")
+plt.savefig('plots/fig2B_phase_deriv_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="accel_units", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Acceleration (deg/s^2)")
+plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/d9e1261b16829a1ed191c761cc5944dd8f8875c5.png]]
+[[file:./.ob-jupyter/dd7f04c3dfbca6b32ffed1b69887186980b181fe.png]]
+[[file:./.ob-jupyter/d03e3ab6a30fc4c0788fd24765dadb1543f12e80.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+leg = 'L2'
+angname = 'B_rot'
+
+dd = fullangf
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Angle (deg)")
+plt.savefig('plots/fig2B_phase_angle_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Derivative (deg/s)")
+plt.savefig('plots/fig2B_phase_deriv_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+
+c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+    & (dd['speed_forward'] > 5) \
+    & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+g = sns.relplot(data=dd[c], x="phase", y="accel_units", hue="type",
+                estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                col="speed_forward", kind="line", height=3, aspect=0.8)
+g.set(ylabel="Acceleration (deg/s^2)")
+plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+[[file:./.ob-jupyter/aa23f3b9267b2e5abb2aeebd8f7b624adb0e228e.png]]
+[[file:./.ob-jupyter/1dbc3984c77363e98b86e0769abbdd4e99a51cb6.png]]
+:END:
+
+
+
+** Errors across angles
+Need to run "Phase angle plots" section above to get the appropriate dataframes.
+
+#+BEGIN_SRC jupyter-python
+def circular_mean(x):
+    return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+columns = ['leg', 'speed_forward', 'speed_rotation', 'speed_side', 'angle_name', 'phase']
+
+ds = []
+for var in ['angle', 'deriv', 'accel']:
+    print(var)
+    if var == 'angle':
+        mean_fun = circular_mean
+    else:
+        mean_fun = np.nanmean
+    sd = allangf.groupby(columns)[var].agg(mean_fun)
+    rd = realangf.groupby(columns)[var].agg(mean_fun)
+    out = sd - rd
+    errors = out.reset_index().groupby(columns[:-1])[var]\
+                              .agg(lambda x: np.abs(mean_fun(np.abs(x))))
+
+    erange = rd.reset_index().groupby(columns[:-1])[var]\
+                             .agg(lambda x: np.max(x) - np.min(x))
+
+    percent_errors = (errors / erange) * 100.0
+
+    errors = errors.reset_index()
+    errors[var+'_percent'] = percent_errors.reset_index()[var]
+    errors = errors[~errors[var].isnull()]
+    ds.append(errors)
+
+angle_errors = pd.merge(pd.merge(ds[0], ds[1]), ds[2])
+
+fancy_angle_names = {
+    'C_flex': 'femur-tibia\nflexion',
+    'A_rot': 'coxa\nrotation',
+    'A_abduct': 'body-coxa\nflexion',
+    'B_flex': 'coxa-femur\nflexion',
+    'B_rot': 'femur\nrotation'
+}
+angle_errors['fancy_angle_name'] = [fancy_angle_names[x] for x in angle_errors['angle_name']]
+
+angle_order = ['body-coxa\nflexion',
+               'coxa\nrotation',
+               'coxa-femur\nflexion',
+               'femur\nrotation',
+               'femur-tibia\nflexion']
+
+angle_errors['deriv_units'] = angle_errors['deriv'] * 300.0
+angle_errors['accel_units'] = angle_errors['accel'] * 300.0 * 300.0
+#+END_SRC
+
+#+RESULTS:
+: angle
+: /tmp/ipykernel_825984/855530367.py:2: RuntimeWarning: Mean of empty slice
+:   return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
+: deriv
+: /tmp/ipykernel_825984/191909026.py:14: RuntimeWarning: Mean of empty slice
+:   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
+: accel
+: /tmp/ipykernel_825984/191909026.py:14: RuntimeWarning: Mean of empty slice
+:   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(5, 4))
+plt.subplot(1, 3, 1)
+g = sns.violinplot(y='fancy_angle_name', x='angle', data=angle_errors,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black',
+                   order=angle_order)
+g.set(ylabel='Angle', xlabel='Angle\nerror (deg)')
+g.legend_ = None
+
+plt.subplot(1, 3, 2)
+g = sns.violinplot(y='fancy_angle_name', x='deriv_units', data=angle_errors,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black')
+g.set(ylabel='', xlabel='Derivative\nerror (deg/s)', yticklabels=[])
+g.legend_ = None
+
+plt.subplot(1, 3, 3)
+g = sns.violinplot(y='fancy_angle_name', x='accel_units', data=angle_errors,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black')
+g.set(ylabel='', xlabel='Acceleration\nerror (deg/s^2)', yticklabels=[])
+g.legend_ = None
+
+plt.savefig('plots/fig2C_error_raw_horizontal.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/10ed8fc6bc4bcba70f14bddd1d906cc8a6153c9d.png]]
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle', data=angle_errors, color='lightgray', cut=0, order=angle_order)
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', data=angle_errors, color='lightgray', cut=0, order=angle_order)
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+g.legend_ = None
+
+plt.savefig('plots/fig2C_error_raw_vertical.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/ff947f20614a53f38406650fedfcd7bffdbf125d.png]]
+
+
+#+BEGIN_SRC jupyter-python :display plain
+angle_errors.groupby(['leg', 'angle_name'])['angle'].mean()
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+leg  angle_name
+L1   A_abduct       7.043719
+     A_rot          7.575748
+     B_flex         7.935238
+     C_flex        11.358220
+L2   B_flex         7.412133
+     B_rot          3.914980
+     C_flex         9.538709
+L3   B_flex        10.214628
+     B_rot          7.453489
+     C_flex        10.660708
+R1   A_abduct       7.098319
+     A_rot          7.590950
+     B_flex         7.020928
+     C_flex        10.814168
+R2   B_flex         5.595730
+     B_rot          7.990786
+     C_flex         7.749875
+R3   B_flex         9.440156
+     B_rot          6.468809
+     C_flex         8.758250
+Name: angle, dtype: float64
+#+end_example
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(2.5*3, 4))
+plt.subplot(1, 3, 1)
+g = sns.violinplot(y='fancy_angle_name', x='angle_percent', data=angle_errors, cut=0.2, bw=0.1,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black')
+g.set(ylabel='Angle', xlabel='Angle\npercent error', xlim=(-1, 130))
+g.legend_ = None
+
+plt.subplot(1, 3, 2)
+g = sns.violinplot(y='fancy_angle_name', x='deriv_percent', data=angle_errors, cut=1, bw=0.2,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black')
+g.set(ylabel='', xlabel='Derivative\npercent error', yticklabels=[], xlim=(0, 50))
+g.legend_ = None
+
+plt.subplot(1, 3, 3)
+g = sns.violinplot(y='fancy_angle_name', x='accel_percent', data=angle_errors, cut=1, bw=0.2,
+                   hue=True, hue_order=[True, False], split=True, orient='h', color='black')
+g.set(ylabel='', xlabel='Acceleration\npercent error', yticklabels=[], xlim=(0, 50))
+g.legend_ = None
+
+plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/e8cfc14be49f15771fdc2c5ba0e962d47145ac12.png]]
+
+
+
+* Figure 3
+** Phase coupling within a leg - phase version
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    forward, rot, side = speeds[i]
+    d = pd.DataFrame()
+    for ix_ang, angname in enumerate(angle_names):
+        leg = angname[:2]
+        x = np.vstack([angles[i][:, ix_ang],
+                       derivs[i][:, ix_ang]]).T
+        phase = get_phase(x)
+        key = angname
+        d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'simulated'
+    ds.append(d)
+phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 700/700 [00:04<00:00, 148.06it/s]
+:
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        for ix_ang, angname in enumerate(wd._angle_names[leg]):
+            x = np.vstack([ww['angles'][leg][:, ix_ang],
+                           ww['derivatives'][leg][:, ix_ang]]).T
+            phase = get_phase(x)
+            key = angname
+            d[key] = phase
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'real'
+    ds.append(d)
+phases_byleg_real = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 173/173 [00:01<00:00, 143.84it/s]
+:
+
+#+BEGIN_SRC jupyter-python
+phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+d = phases_byleg
+fig, subplots = plt.subplots(6, 5, figsize=(9, 1.5*6))
+for ix_leg, leg in enumerate(legs):
+    if leg in ['L2', 'R2']:
+        refname = 'B_rot'
+    else:
+        refname = 'C_flex'
+    for ix_ang, angname in enumerate(sorted(angle_names_1leg)):
+        ax = subplots[ix_leg][ix_ang]
+        if angname == refname:
+            if ix_leg == 0:
+                ax.set_title(fancy_angle_names[angname])
+            ax.set_axis_off()
+            continue
+
+        if leg + angname not in d:
+            ax.set_axis_off()
+        else:
+            d = phases_byleg[phases_byleg['type'] == 'simulated']
+            sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
+                        cut=0, fill=True, ax=ax)
+            d = phases_byleg[phases_byleg['type'] == 'real']
+            sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
+                        cut=0, fill=True, ax=ax)
+            ax.set_ylim(0, 1.5)
+
+        if ix_leg == 0:
+            ax.set_title(fancy_angle_names[angname])
+        if ix_ang == 0:
+            ax.set_ylabel(leg + "\nProbability density")
+        else:
+            ax.set_yticklabels([])
+            ax.set_ylabel("")
+        if ix_leg != 5:
+            ax.set_xticklabels([])
+
+plt.savefig("plots/fig3A_phases_withinleg.pdf", bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/ac11b13c3248b32ac7734a9fa500bfe1fab8bdf3.png]]
+
+** Phase coupling across legs
+
+How to demonstrate the phase coupling across the legs?
+I guess we extract the phase from each leg, and compute the difference mod 2 pi?
+
+#+BEGIN_SRC jupyter-python
+# compute phase
+def get_phase(ang):
+    m = np.median(ang, axis=0)
+    s = np.std(ang, axis=0)
+    s[s == 0] = 1
+    dm = (ang - m) / s
+    phase = np.arctan2(-dm[:,1], dm[:,0])
+    return phase
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+ds = []
+for i in trange(len(speeds), ncols=70):
+    d = pd.DataFrame()
+    forward, rot, side = speeds[i]
+    for ix_leg, leg in enumerate(legs):
+        if leg in ['L2', 'R2']:
+            phaseang = 'B_rot'
+        else:
+            phaseang = 'C_flex'
+        ix_ang_phase = angle_names.index(leg + phaseang)
+        x = np.vstack([angles[i][:, ix_ang_phase],
+                       derivs[i][:, ix_ang_phase]]).T
+        phase = get_phase(x)
+        d['phase_' + leg] = phase
+
+
+    d['speed_forward'] = forward
+    d['speed_rotation'] = rot
+    d['speed_side'] = side
+    d['type'] = 'simulated'
+    ds.append(d)
+phased_sim = pd.concat(ds).reset_index(drop=True)
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 700/700 [00:01<00:00, 370.24it/s]
+:
+
+
+#+BEGIN_SRC jupyter-python
+ds = []
+bnums = wd._get_minlen_bnums(400)
+for i in trange(len(bnums), ncols=70):
+    bnum = bnums[i]
+    ww = wd.get_bnum(bnum)
+    mean_speed = np.mean(ww['contexts'], axis=0)
+    forward, rot, side = mean_speed
+    d = pd.DataFrame()
+    for ix_leg, leg in enumerate(legs):
+        if leg in ['L2', 'R2']:
+            phaseang = 'B_rot'
+        else:
+            phaseang = 'C_flex'
+        ix_ang_phase = wd._angle_names[leg].index(leg + phaseang)
+        x = np.vstack([ww['angles'][leg][:, ix_ang_phase],
+                       ww['derivatives'][leg][:, ix_ang_phase]]).T
+        phase = get_phase(x)
+        d['phase_' + leg] = phase
+    d['speed_forward_raw'] = forward
+    d['speed_rotation_raw'] = rot
+    d['speed_side_raw'] = side
+    d['bnum'] = bnum
+    d['type'] = 'real'
+    ds.append(d)
+phased_real = pd.concat(ds).reset_index(drop=True)
+
+phased_real['speed_forward'] = ((phased_real['speed_forward_raw'] + 2) // 4) * 4
+phased_real['speed_rotation'] = ((phased_real['speed_rotation_raw'] + 2) // 4) * 4
+phased_real['speed_side'] = ((phased_real['speed_side_raw'] + 1) // 2) * 2
+phased_real['speed_forward'] = phased_real['speed_forward'].astype('int')
+phased_real['speed_rotation'] = phased_real['speed_rotation'].astype('int')
+phased_real['speed_side'] = phased_real['speed_side'].astype('int')
+#+END_SRC
+
+#+RESULTS:
+: 100%|██████████████████████████████| 173/173 [00:00<00:00, 297.45it/s]
+:
+
+
+#+BEGIN_SRC jupyter-python
+phased = pd.concat([phased_sim, phased_real]).reset_index(drop=True)
+
+# Add pi to correct for offset due to the way we compute the phase
+phased['phase_L1'] += np.pi
+phased['phase_R1'] += np.pi
+phased['phase_R2'] += np.pi
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+fig, subplots = plt.subplots(6, 6, figsize=(8, 8))
+for i, leg_i in enumerate(legs):
+    for j, leg_j in enumerate(legs):
+        if i == j:
+            ax = subplots[i][j]
+            ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
+            ax.set_axis_off()
+            continue
+        ax = subplots[i][j]
+        d = phased[phased['type'] == 'simulated']
+        sns.kdeplot(np.mod(d['phase_'+leg_i] - d['phase_'+leg_j], 2*np.pi), cut=0, bw_method=0.1,
+                    fill=True, ax=ax)
+        d = phased[phased['type'] == 'real']
+        sns.kdeplot(np.mod(d['phase_'+leg_i] - d['phase_'+leg_j], 2*np.pi), cut=0, bw_method=0.1,
+                    fill=True, ax=ax)
+        ax.set_xlim(0, 2*np.pi)
+        ax.set_ylim(0, 0.6)
+        ax.set_ylabel("")
+        ax.set_xticks([np.pi])
+        ax.set_yticks([0.3])
+        if i != 5:
+            ax.set_xticklabels([])
+        if j != 0:
+            ax.set_yticklabels([])
+
+fig.savefig('plots/fig3B_phases_legs.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+: 1f6631fc-c0ff-4830-846d-54e8006c6578
+
+
+
+#+BEGIN_SRC jupyter-python
+pp = phasesTG[10]
+plt.plot(np.mod(pp[1] - pp[5], 2*np.pi))
+# _ = plt.hist(np.mod(2*np.pi - (pp[2] - pp[5]), 2*np.pi), bins=50)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f3cf0897580> |
+[[file:./.ob-jupyter/bfbcb93960a0dd4aa1ad4e02d9e480c93d6e66f1.png]]
+:END:

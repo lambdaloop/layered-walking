@@ -88,10 +88,6 @@ else:
     distStart = 300
     distEnd   = 600
 
-# Local minima detection parameters (for applying disturbance)
-locMinWindow      = 2*ctrlSpeedRatio
-nonRepeatWindow   = 10*ctrlSpeedRatio # Assumed minimum distance between minima
-
 numSimSteps = numTGSteps*ctrlSpeedRatio
 
 
@@ -109,8 +105,12 @@ phaseTG = np.zeros((nLegs, numTGSteps))
 fictrac_speeds = [6, 8, 10, 12, 14, 16, 18]
 fictrac_rots = [0]
 fictrac_sides = [0]
-# max_velocities = np.arange(0, 25, 5)
-max_velocities = [0.   , 0.625, 1.25 , 1.875, 2.5  , 3.125, 3.75 , 4.375, 5.   ]
+
+if dist_type == 'gaussian':
+    max_velocities = np.arange(0, 10.1, 1.25)
+else:
+    max_velocities = np.arange(0, 5.1, 0.625)
+
 dist_types = [DistType.POISSON_GAUSSIAN]
 act_delays = np.arange(0, 0.065, 0.005)
 # sense_delays = np.arange(0, 0.065, 0.01)
@@ -230,7 +230,6 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     # For height detection and visualization
     heights        = [None for i in range(nLegs)]
     groundContact  = [None for i in range(nLegs)] # For visualization only
-    lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 
     bout = wd.get_initial_vals(context, offset=offset)
     for ln, leg in enumerate(legs):
@@ -247,10 +246,9 @@ for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
         heights[ln]       = np.array([None] * numSimSteps)
         groundContact[ln] = np.array([None] * numSimSteps)
 
-    lastDetection  = [-nonRepeatWindow for i in range(nLegs)]
 
     distDict = {'maxVelocity' : maxVelocity,
-                'rate': 20 * Ts / ctrlSpeedRatio,
+                'rate': 10 * Ts / ctrlSpeedRatio,
                 'distType'    : distType
                }
 

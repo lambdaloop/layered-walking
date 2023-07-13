@@ -118,7 +118,7 @@ fictrac_sides = [-4, -2, 0, 2, 4]
 max_velocities = [0]
 dist_types = [DistType.ZERO]
 # act_delays = np.arange(0, 0.065, 0.005)
-act_delays = [0.030]
+act_delays = [0.025]
 # sense_delays = np.arange(0, 0.065, 0.01)
 
 

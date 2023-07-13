@@ -31,7 +31,7 @@ basename = 'test'
 # User-defined parameters
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_1.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
 
 walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
@@ -39,8 +39,8 @@ numTGSteps     = 600   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
 ctrlSpeedRatio = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio  = 8     # Controller communicates to TG this often (as multiple of Ts)
-actDelay       = 0.030  # Seconds; typically 0.02-0.04
-senseDelay     = 0.000  # Seconds; typically 0.01
+actDelay       = 0.025  # Seconds; typically 0.02-0.04
+senseDelay     = 0.010  # Seconds; typically 0.01
 couplingDelay  = 0.000
 
 
@@ -60,12 +60,12 @@ distEnd   = 400
 #     'rate': 30 * Ts / ctrlSpeedRatio # about 15 Hz
 # }
 
-# distType = DistType.POISSON_GAUSSIAN
-distType = DistType.ZERO
+distType = DistType.IMPULSE
+# distType = DistType.ZERO
 
 distDict = {
-    'maxVelocity' : 5,
-    'rate': 20 * Ts / ctrlSpeedRatio, # about 20 Hz
+    'maxVelocity' : 10,
+    'rate': 15 * Ts / ctrlSpeedRatio, # about 15 Hz
     'distType': distType
 }
 
@@ -158,8 +158,14 @@ for t in range(numSimSteps-1):
                 TG[ln].get_future_traj(k, kEnd, ang, drv, phaseTG[ln,k], contexts)
         
         dist           = get_zero_dists()[leg]    
-        if k >= distStart and k < distEnd:
-            dist = get_dist(distDict, leg)
+        if distType == DistType.IMPULSE:
+            if k == distStart:
+                dist = get_dist(distDict, leg)
+        else:
+            if k >= distStart and k < distEnd:
+                dist = get_dist(distDict, leg)
+
+            
 
         anglesAhead = np.concatenate((angleTG[ln,:,k1].reshape(dofTG,1),
                                       angleTG[ln,:,k2].reshape(dofTG,1)), axis=1)
@@ -214,63 +220,63 @@ plt.draw()
 plt.show(block=False)
 
 
-# compute phase
-def get_phase(ang):
-    m = np.median(ang, axis=0)
-    s = np.std(ang, axis=0)
-    s[s == 0] = 1
-    dm = (ang - m) / s
-    phase = np.arctan2(-dm[:,1], dm[:,0])
-    return phase
+# # compute phase
+# def get_phase(ang):
+#     m = np.median(ang, axis=0)
+#     s = np.std(ang, axis=0)
+#     s[s == 0] = 1
+#     dm = (ang - m) / s
+#     phase = np.arctan2(-dm[:,1], dm[:,0])
+#     return phase
 
-phases_sim = []
-for ix_leg, leg in enumerate(legs):
-    if leg in ['L2', 'R2']:
-        phaseang = 'B_rot'
-    else:
-        phaseang = 'C_flex'
-    names = TG[ix_leg]._angle_names
-    ix_ang_phase = names.index(leg + phaseang)
-    ang = angle[ix_leg][ix_ang_phase]
-    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
-    x = np.vstack([ang, deriv]).T
-    phase = get_phase(x)
-    phases_sim.append(phase)
+# phases_sim = []
+# for ix_leg, leg in enumerate(legs):
+#     if leg in ['L2', 'R2']:
+#         phaseang = 'B_rot'
+#     else:
+#         phaseang = 'C_flex'
+#     names = TG[ix_leg]._angle_names
+#     ix_ang_phase = names.index(leg + phaseang)
+#     ang = angle[ix_leg][ix_ang_phase]
+#     deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+#     x = np.vstack([ang, deriv]).T
+#     phase = get_phase(x)
+#     phases_sim.append(phase)
 
-phases_real = []
-for ix_leg, leg in enumerate(legs):
-    if leg in ['L2', 'R2']:
-        phaseang = 'B_rot'
-    else:
-        phaseang = 'C_flex'
-    names = wd._angle_names[leg]
-    ix_ang_phase = names.index(leg + phaseang)
-    ang = bout['angles'][leg][:, ix_ang_phase]
-    deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
-    x = np.vstack([ang, deriv]).T
-    phase = get_phase(x)
-    phases_real.append(phase)
+# phases_real = []
+# for ix_leg, leg in enumerate(legs):
+#     if leg in ['L2', 'R2']:
+#         phaseang = 'B_rot'
+#     else:
+#         phaseang = 'C_flex'
+#     names = wd._angle_names[leg]
+#     ix_ang_phase = names.index(leg + phaseang)
+#     ang = bout['angles'][leg][:, ix_ang_phase]
+#     deriv = signal.savgol_filter(ang, 5, 2, deriv=1)
+#     x = np.vstack([ang, deriv]).T
+#     phase = get_phase(x)
+#     phases_real.append(phase)
 
-fig, subplots = plt.subplots(6, 6, figsize=(8, 8), num=1)
-for i, leg_i in enumerate(legs):
-    for j, leg_j in enumerate(legs):
-        if i == j:
-            ax = subplots[i][j]
-            ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
-            ax.set_axis_off()
-            continue
-        ax = subplots[i][j]
-        sns.kdeplot(np.mod(phases_sim[i] - phases_sim[j], 2*np.pi), cut=0, bw_method=0.1,
-                    fill=True, ax=ax)
-        sns.kdeplot(np.mod(phases_real[i] - phases_real[j], 2*np.pi), cut=0, bw_method=0.1,
-                    fill=True, ax=ax)
-        ax.set_xlim(0, 2*np.pi)
-        ax.set_ylim(0, 1.0)
-        ax.set_ylabel("")
-        ax.set_xticks([np.pi])
-        ax.set_yticks([0.3])
-        if i != 5:
-            ax.set_xticklabels([])
-        if j != 0:
-            ax.set_yticklabels([])
-plt.show(block=False)
+# fig, subplots = plt.subplots(6, 6, figsize=(8, 8), num=1)
+# for i, leg_i in enumerate(legs):
+#     for j, leg_j in enumerate(legs):
+#         if i == j:
+#             ax = subplots[i][j]
+#             ax.text(0.4, 0.4, leg_i, fontsize="xx-large")
+#             ax.set_axis_off()
+#             continue
+#         ax = subplots[i][j]
+#         sns.kdeplot(np.mod(phases_sim[i] - phases_sim[j], 2*np.pi), cut=0, bw_method=0.1,
+#                     fill=True, ax=ax)
+#         sns.kdeplot(np.mod(phases_real[i] - phases_real[j], 2*np.pi), cut=0, bw_method=0.1,
+#                     fill=True, ax=ax)
+#         ax.set_xlim(0, 2*np.pi)
+#         ax.set_ylim(0, 1.0)
+#         ax.set_ylabel("")
+#         ax.set_xticks([np.pi])
+#         ax.set_yticks([0.3])
+#         if i != 5:
+#             ax.set_xticklabels([])
+#         if j != 0:
+#             ax.set_yticklabels([])
+# plt.show(block=False)
