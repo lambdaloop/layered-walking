@@ -26,23 +26,24 @@ basename = 'test_ground'
 ################################################################################
 # User-defined parameters
 ################################################################################
-filename = '/home/lisa/Downloads/walk_sls_legs_subang_1.pickle'
+# filename = '/home/lisa/Downloads/walk_sls_legs_subang_6.pickle'
+filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
 
-walkingSettings = [10, 0, 0] # walking, turning, flipping speeds (mm/s)
+walkingSettings = [12, 0, 0] # walking, turning, flipping speeds (mm/s)
 
 numTGSteps      = 200   # How many timesteps to run TG for
 Ts              = 1/300 # How fast TG runs
 ctrlSpeedRatio  = 2     # Controller will run at Ts / ctrlSpeedRatio
 ctrlCommRatio   = 8     # Controller communicates to TG this often (as multiple of Ts)
 actDelay        = 0.03  # Seconds; typically 0.02-0.04
-couplingDelay   = 0.010
+couplingDelay   = 0.00
 
 ################################################################################
 # Ground model
 ################################################################################
 # TODO: Should we allow this to differ from leg to leg?
-boutNum   = 0
-startIdx  = 0
+boutNum   = 3
+startIdx  = 19
 gndHeight = -0.85
 ground    = GroundModel(offset=[0, 0, gndHeight], phi=0, theta=0)
 
