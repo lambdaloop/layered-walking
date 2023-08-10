@@ -96,8 +96,14 @@ def phase_align_poly(ang, extra=None, order=5):
 
 
 #+BEGIN_SRC jupyter-python
-fname_pat = os.path.join(data_path, 'delays_stats_subang_v4_*.pkl')
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v4_actuate_*.pkl')
 fnames = sorted(glob(fname_pat))
+
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v5_sense_poisson*.pkl')
+fnames += sorted(glob(fname_pat))
+
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v5_sense_gaussian*.pkl')
+fnames += sorted(glob(fname_pat))
 
 conditions = []
 angles = []
@@ -126,7 +132,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 224/224 [07:10<00:00,  1.92s/it]
+: 100%|███████████████████████████████| 334/334 [06:56<00:00,  1.25s/it]
 :
 
 
@@ -236,40 +242,8 @@ pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-# [goto error]
-#+begin_example
-[0;31m---------------------------------------------------------------------------[0m
-[0;31mKeyboardInterrupt[0m                         Traceback (most recent call last)
-Cell [0;32mIn[16], line 6[0m
-[1;32m      1[0m angles_sc [38;5;241m=[39m np[38;5;241m.[39mdstack([np[38;5;241m.[39msin(np[38;5;241m.[39mdeg2rad(angles)),
-[1;32m      2[0m                        np[38;5;241m.[39mcos(np[38;5;241m.[39mdeg2rad(angles))])
-[1;32m      4[0m angles_sc_flat [38;5;241m=[39m angles_sc[38;5;241m.[39mreshape([38;5;241m-[39m[38;5;241m1[39m, angles_sc[38;5;241m.[39mshape[[38;5;241m-[39m[38;5;241m1[39m])
-[0;32m----> 6[0m pcs [38;5;241m=[39m [43mpca[49m[38;5;241;43m.[39;49m[43mtransform[49m[43m([49m[43mangles_sc_flat[49m[43m)[49m
-[1;32m      8[0m pdfs_flat [38;5;241m=[39m np[38;5;241m.[39mzeros([38;5;28mlen[39m(pcs))
-[1;32m      9[0m step [38;5;241m=[39m [38;5;241m500[39m
-
-File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/sklearn/utils/_set_output.py:140[0m, in [0;36m_wrap_method_output.<locals>.wrapped[0;34m(self, X, *args, **kwargs)[0m
-[1;32m    138[0m [38;5;129m@wraps[39m(f)
-[1;32m    139[0m [38;5;28;01mdef[39;00m [38;5;21mwrapped[39m([38;5;28mself[39m, X, [38;5;241m*[39margs, [38;5;241m*[39m[38;5;241m*[39mkwargs):
-[0;32m--> 140[0m     data_to_wrap [38;5;241m=[39m [43mf[49m[43m([49m[38;5;28;43mself[39;49m[43m,[49m[43m [49m[43mX[49m[43m,[49m[43m [49m[38;5;241;43m*[39;49m[43margs[49m[43m,[49m[43m [49m[38;5;241;43m*[39;49m[38;5;241;43m*[39;49m[43mkwargs[49m[43m)[49m
-[1;32m    141[0m     [38;5;28;01mif[39;00m [38;5;28misinstance[39m(data_to_wrap, [38;5;28mtuple[39m):
-[1;32m    142[0m         [38;5;66;03m# only wrap the first output for cross decomposition[39;00m
-[1;32m    143[0m         return_tuple [38;5;241m=[39m (
-[1;32m    144[0m             _wrap_data_with_container(method, data_to_wrap[[38;5;241m0[39m], X, [38;5;28mself[39m),
-[1;32m    145[0m             [38;5;241m*[39mdata_to_wrap[[38;5;241m1[39m:],
-[1;32m    146[0m         )
-
-File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/sklearn/decomposition/_base.py:123[0m, in [0;36m_BasePCA.transform[0;34m(self, X)[0m
-[1;32m    121[0m X [38;5;241m=[39m [38;5;28mself[39m[38;5;241m.[39m_validate_data(X, dtype[38;5;241m=[39m[np[38;5;241m.[39mfloat64, np[38;5;241m.[39mfloat32], reset[38;5;241m=[39m[38;5;28;01mFalse[39;00m)
-[1;32m    122[0m [38;5;28;01mif[39;00m [38;5;28mself[39m[38;5;241m.[39mmean_ [38;5;129;01mis[39;00m [38;5;129;01mnot[39;00m [38;5;28;01mNone[39;00m:
-[0;32m--> 123[0m     X [38;5;241m=[39m [43mX[49m[43m [49m[38;5;241;43m-[39;49m[43m [49m[38;5;28;43mself[39;49m[38;5;241;43m.[39;49m[43mmean_[49m
-[1;32m    124[0m X_transformed [38;5;241m=[39m np[38;5;241m.[39mdot(X, [38;5;28mself[39m[38;5;241m.[39mcomponents_[38;5;241m.[39mT)
-[1;32m    125[0m [38;5;28;01mif[39;00m [38;5;28mself[39m[38;5;241m.[39mwhiten:
-
-[0;31mKeyboardInterrupt[0m:
-#+end_example
-:END:
+: 100%|█████████████████████████| 29938/29938 [1:07:33<00:00,  7.39it/s]
+:
 
 
 #+BEGIN_SRC jupyter-python
@@ -397,10 +371,12 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
         before = np.mean(pdfs_shaped[:, :300], axis=1)
         during = np.mean(pdfs_shaped[:, 300:600], axis=1)
         after = np.mean(pdfs_shaped[:, 600:900], axis=1)
+        max_velocity_constant = 3.75
     elif dist_name == 'impulse':
         before = np.mean(pdfs_shaped[:, :300], axis=1)
         during = np.mean(pdfs_shaped[:, 305:400], axis=1)
         after = np.mean(pdfs_shaped[:, 400:900], axis=1)
+        max_velocity_constant = 7.5
 
     dd = pd.DataFrame({"act_delay": act_delays,
                    "dist_type": dist_types,
@@ -416,7 +392,7 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
     for xaxis in ['speed', 'max_velocity']:
         check = np.isclose(dd['sense_delay'], 0.01) & (dd['dist_type'] == dist.value)
         if xaxis == 'speed':
-            check = check & np.isclose(dd['max_velocity'], 3.75)
+            check = check & np.isclose(dd['max_velocity'], max_velocity_constant)
         elif xaxis == 'max_velocity':
             check = check & np.isclose(dd['speed'], 12)
         dgroup = dd[check].groupby(['act_delay', xaxis]).mean()
@@ -454,14 +430,14 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/ce00e240357b0ebbb0bdab3bd4b58a49379d0c0b.png]]
-[[file:./.ob-jupyter/e418274404e2d8c96c558a2b3f24b8cbd0154c3e.png]]
-[[file:./.ob-jupyter/09e853aadec395737e22954346f41c6c4abea328.png]]
-[[file:./.ob-jupyter/fadc76dab6efcf8d68e0be5d5fdc34aa57abb57a.png]]
-[[file:./.ob-jupyter/437fd7815ff6b22efdc7decf7e2cb656ca5fe126.png]]
-[[file:./.ob-jupyter/16b0172e9a2ccc2c854a40eab78c7ee048ba8bb5.png]]
-[[file:./.ob-jupyter/71c77b3191b36000c3656fb88347dd1b444d9d1c.png]]
-[[file:./.ob-jupyter/afdbaf95eed861b3a47c6b3e6cb035368e30bfc1.png]]
+[[file:./.ob-jupyter/98ce1670ab04e442ae5393c40bb8952818170476.png]]
+[[file:./.ob-jupyter/c611cc2b929efabca4b76777715eb820c4fb3b8b.png]]
+[[file:./.ob-jupyter/fecebc45b33fe74932f12a493c645060775ad266.png]]
+[[file:./.ob-jupyter/1d5714f819f79a78d17afe88f1babeda2a8625fd.png]]
+[[file:./.ob-jupyter/7e2921139c459fa620c5639d8e1cdf056dc8117b.png]]
+[[file:./.ob-jupyter/570d2ed3d3590ecdc64f50300cfdeb8de78699c6.png]]
+[[file:./.ob-jupyter/f6de8b877450f9db32d962f7e70dfba92acc35e6.png]]
+[[file:./.ob-jupyter/729adfb9327018eaaeb73270fc60d2faf2d3de5f.png]]
 :END:
 
 
@@ -643,12 +619,12 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/93198dec4f2db5f1d275ba883348b5d756bb1703.png]]
-[[file:./.ob-jupyter/12429cfcf3b4eecc9642a96611a6a9841e164f25.png]]
-[[file:./.ob-jupyter/38fbda4a1661f7d960833fbf00a4324007aa1847.png]]
-[[file:./.ob-jupyter/7dab0d45012169b69b523c819c0cc527cea0762a.png]]
-[[file:./.ob-jupyter/7da8b1f047914a36ee257eeb50b7db7181f036ae.png]]
-[[file:./.ob-jupyter/6e72cd6ea060d2330c9c59e6bbdcfbd65c78e74c.png]]
-[[file:./.ob-jupyter/1540b5529abcb762f0c4668331c08f8b3ddcbd9b.png]]
-[[file:./.ob-jupyter/55ed48368bdac871810ef8983cecf12ef8f94aed.png]]
+[[file:./.ob-jupyter/bff6578d5b11013f86689f8a670ac2c25fe196be.png]]
+[[file:./.ob-jupyter/c07022ba7d66beceac96a570577d804e62580e39.png]]
+[[file:./.ob-jupyter/421423960974a8399993c1e06b44775c86ce3e2d.png]]
+[[file:./.ob-jupyter/96648574d997b7876e8a56863aba63f941bfb79a.png]]
+[[file:./.ob-jupyter/2a2d4ec15ea3bd12ad1e7dd493109784d8dffec7.png]]
+[[file:./.ob-jupyter/f1765230318a2243b222f9f12defdd6b882bf01f.png]]
+[[file:./.ob-jupyter/47c4eeef6dc0bdfc00e623b144eeabbec798d55f.png]]
+[[file:./.ob-jupyter/ea742605e354bff889b7249d82af9c90c20af5d4.png]]
 :END:

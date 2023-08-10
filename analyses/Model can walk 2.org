@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 import os
 from tqdm import tqdm, trange
 import pandas as pd
-from scipy import signal
+from scipy import signal, stats
 import pickle
 from glob import glob
 #+END_SRC
@@ -98,7 +98,7 @@ def phase_align_poly(ang, extra=None, order=5):
 
 #+BEGIN_SRC jupyter-python
 # fname_pat = os.path.join(data_path, 'delays_stats_subang_v2_actuate_gaussian_*.npz')
-fname_pat = os.path.join(data_path, 'stats_subang_v4_nodist_*.pkl')
+fname_pat = os.path.join(data_path, 'stats_subang_v5_nodist_*.pkl')
 fnames = sorted(glob(fname_pat))
 
 conditions = []
@@ -126,7 +126,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████████| 24/24 [00:01<00:00, 12.62it/s]
+: 100%|█████████████████████████████████| 52/52 [00:03<00:00, 14.78it/s]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -135,19 +135,19 @@ accels[0]
 
 #+RESULTS:
 #+begin_example
-array([[ 0.12228459, -0.03494259, -0.1035303 , ...,  0.43372187,
-        -0.36349896,  1.16419658],
-       [ 0.12405504, -0.015649  , -0.08380094, ...,  0.31723266,
-        -0.31458959,  0.9845437 ],
-       [ 0.1258255 ,  0.00364458, -0.06407158, ...,  0.20074345,
-        -0.26568022,  0.80489082],
+array([[ 0.02237683, -1.04705735, -0.0334956 , ..., -0.25130772,
+        -0.48072441,  0.17590914],
+       [ 0.05304825, -0.94203876, -0.07709571, ..., -0.20930985,
+        -0.43367159,  0.1362899 ],
+       [ 0.08371966, -0.83702018, -0.12069583, ..., -0.16731198,
+        -0.38661878,  0.09667067],
        ...,
-       [ 0.00363128,  0.08772238,  0.06746582, ..., -0.03002013,
-         0.01297555,  0.0350287 ],
-       [-0.02538425,  0.07547481,  0.06702849, ..., -0.05699241,
-         0.02877854,  0.012058  ],
-       [-0.05439978,  0.06322723,  0.06659117, ..., -0.0839647 ,
-         0.04458153, -0.01091269]])
+       [ 0.01745667, -0.01273886,  0.0122177 , ..., -0.1306441 ,
+         0.08310148, -0.1763693 ],
+       [ 0.03543241, -0.00465501,  0.04434183, ..., -0.14527406,
+         0.0882531 , -0.21103469],
+       [ 0.05340814,  0.00342884,  0.07646596, ..., -0.15990401,
+         0.09340473, -0.24570008]])
 #+end_example
 
 
@@ -365,7 +365,7 @@ allangf = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 700/700 [00:47<00:00, 14.70it/s]
+: 100%|█████████████████████████████| 1540/1540 [01:48<00:00, 14.16it/s]
 :
 
 
@@ -410,7 +410,7 @@ realangf['speed_side'] = realangf['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 173/173 [00:12<00:00, 13.61it/s]
+: 100%|███████████████████████████████| 173/173 [00:12<00:00, 13.52it/s]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -437,7 +437,7 @@ angname = 'C_flex'
 
 dd = fullangf
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -446,7 +446,7 @@ g.set(ylabel="Angle (deg)")
 plt.savefig('plots/fig2B_phase_angle_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
 
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -455,7 +455,7 @@ g.set(ylabel="Derivative (deg/s)")
 plt.savefig('plots/fig2B_phase_deriv_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
 
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="accel_units", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -467,9 +467,9 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/d9e1261b16829a1ed191c761cc5944dd8f8875c5.png]]
-[[file:./.ob-jupyter/dd7f04c3dfbca6b32ffed1b69887186980b181fe.png]]
-[[file:./.ob-jupyter/d03e3ab6a30fc4c0788fd24765dadb1543f12e80.png]]
+[[file:./.ob-jupyter/ffe63a2d8c2b96cdd25c5fdf8678937a159f7d62.png]]
+[[file:./.ob-jupyter/62b080ea5d55de4d1aa23d4088d70a1580eddd22.png]]
+[[file:./.ob-jupyter/0235c94faf73ce7c490653e246c1fd791446ae6c.png]]
 :END:
 
 
@@ -479,7 +479,7 @@ angname = 'B_rot'
 
 dd = fullangf
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -488,7 +488,7 @@ g.set(ylabel="Angle (deg)")
 plt.savefig('plots/fig2B_phase_angle_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
 
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -497,7 +497,7 @@ g.set(ylabel="Derivative (deg/s)")
 plt.savefig('plots/fig2B_phase_deriv_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
 
 c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
-    & (dd['speed_forward'] > 5) \
+    & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
 g = sns.relplot(data=dd[c], x="phase", y="accel_units", hue="type",
                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
@@ -508,9 +508,110 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/aa23f3b9267b2e5abb2aeebd8f7b624adb0e228e.png]]
-[[file:./.ob-jupyter/1dbc3984c77363e98b86e0769abbdd4e99a51cb6.png]]
+[[file:./.ob-jupyter/86334ac91cecd64e2b1eae60f287f2d7786204cd.png]]
+[[file:./.ob-jupyter/2326bd059951cea6e2af3deccaf89b014be5c575.png]]
+[[file:./.ob-jupyter/e35708320ccf5991ef5cfc91a29cd435c667d4c7.png]]
 :END:
+
+
+
+*** Supplementary plots - all the phase angle plots
+
+
+not sure if it's worth including these to be honest? There are wayyy to many to show
+
+#+BEGIN_SRC jupyter-python
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+def circular_mean(x):
+    # return np.degrees(stats.circmean(np.radians(x), nan_policy='omit'))
+    return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
+
+def circular_mean_high(x):
+    y = np.mod(circular_mean(x), 360)
+    if y < 90:
+        return y + 360
+    else:
+        return y
+
+def circular_mean_low(x):
+    y = np.mod(circular_mean(x), 360)
+    if y > 270:
+        return y - 360
+    else:
+        return y
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+def circular_ci(x):
+    stderr = np.degrees(stats.circstd(np.radians(x), nan_policy='omit')) / np.sqrt(len(x))
+    mean = circular_mean(x)
+    interval = stderr * 1.96
+    return (mean - interval, mean + interval)
+#+END_SRC
+
+
+#+RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python
+fullangf['leg_angle'] = fullangf['leg'] + fullangf['angle_name']
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+dd = fullangf
+leg_angle = 'R2B_rot'
+for leg_angle in tqdm(dd['leg_angle'].unique(), ncols=70):
+    plt.close('all')
+
+    c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+        & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
+        & (dd['leg_angle'] == leg_angle)
+    fancy_name = leg_angle[:2] + '\n' + fancy_angle_names[leg_angle[2:]]
+    g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
+                    estimator=circular_mean, err_style='band', errorbar=circular_ci,
+                    col="speed_forward", kind="line", height=1.5, aspect=0.8)
+    g.set(ylabel=fancy_name + "\nangle (deg)", title="", xlabel="")
+    g.set(xticks=[-np.pi/2, 0, np.pi/2], xticklabels=[])
+    plt.savefig('plots/suppfig2_phase_angle_{}.pdf'.format(leg_angle), bbox_inches = "tight")
+
+    g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
+                    estimator=np.mean, err_style='band', errorbar=('ci', 95),
+                    col="speed_forward", kind="line", height=1.5, aspect=0.8)
+    g.set(ylabel=fancy_name + "\nderivative (deg/s)", title="", xlabel="")
+    g.set(xticks=[-np.pi/2, 0, np.pi/2], xticklabels=[])
+    plt.savefig('plots/suppfig2_phase_deriv_{}.pdf'.format(leg_angle), bbox_inches = "tight")
+
+# c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
+#     & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
+#     & (dd['angle_name'] == angname) & (dd['leg'] == leg)
+# g = sns.relplot(data=dd[c], x="phase", y="accel_units", hue="type",
+#                 estimator=np.mean, err_style='band', errorbar=('ci', 95),
+#                 col="speed_forward", kind="line", height=3, aspect=0.8)
+# g.set(ylabel="Acceleration (deg/s^2)")
+# plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: 100%|█████████████████████████████████| 20/20 [03:47<00:00, 11.37s/it]
+:
+[[file:./.ob-jupyter/2a9d544cae0e94dd6fe602883e35248c54969c7e.png]]
+[[file:./.ob-jupyter/4343e73e7cca54289d82d1a45d37f90f14598f2f.png]]
+:END:
+
+
 
 
 
@@ -519,7 +620,9 @@ Need to run "Phase angle plots" section above to get the appropriate dataframes.
 
 #+BEGIN_SRC jupyter-python
 def circular_mean(x):
+    # return np.degrees(stats.circmean(np.radians(x), nan_policy='omit'))
     return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
+
 #+END_SRC
 
 #+RESULTS:
@@ -547,7 +650,7 @@ for var in ['angle', 'deriv', 'accel']:
 
     errors = errors.reset_index()
     errors[var+'_percent'] = percent_errors.reset_index()[var]
-    errors = errors[~errors[var].isnull()]
+    # errors = errors[~errors[var].isnull()]
     ds.append(errors)
 
 angle_errors = pd.merge(pd.merge(ds[0], ds[1]), ds[2])
@@ -573,13 +676,13 @@ angle_errors['accel_units'] = angle_errors['accel'] * 300.0 * 300.0
 
 #+RESULTS:
 : angle
-: /tmp/ipykernel_825984/855530367.py:2: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1250823/3407061830.py:3: RuntimeWarning: Mean of empty slice
 :   return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
 : deriv
-: /tmp/ipykernel_825984/191909026.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1250823/2397220802.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 : accel
-: /tmp/ipykernel_825984/191909026.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1250823/2397220802.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 
 
@@ -608,7 +711,7 @@ plt.savefig('plots/fig2C_error_raw_horizontal.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/10ed8fc6bc4bcba70f14bddd1d906cc8a6153c9d.png]]
+[[file:./.ob-jupyter/8ea2b767a899578ed33ccb0948ed4bd0b5c164e2.png]]
 
 #+BEGIN_SRC jupyter-python
 plt.figure(figsize=(6, 4))
@@ -629,7 +732,7 @@ plt.savefig('plots/fig2C_error_raw_vertical.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/ff947f20614a53f38406650fedfcd7bffdbf125d.png]]
+[[file:./.ob-jupyter/3fe1d77241fade3a76578cbb3627c648b92d2f50.png]]
 
 
 #+BEGIN_SRC jupyter-python :display plain
@@ -639,26 +742,26 @@ angle_errors.groupby(['leg', 'angle_name'])['angle'].mean()
 #+RESULTS:
 #+begin_example
 leg  angle_name
-L1   A_abduct       7.043719
-     A_rot          7.575748
-     B_flex         7.935238
-     C_flex        11.358220
-L2   B_flex         7.412133
-     B_rot          3.914980
-     C_flex         9.538709
-L3   B_flex        10.214628
-     B_rot          7.453489
-     C_flex        10.660708
-R1   A_abduct       7.098319
-     A_rot          7.590950
-     B_flex         7.020928
-     C_flex        10.814168
-R2   B_flex         5.595730
-     B_rot          7.990786
-     C_flex         7.749875
-R3   B_flex         9.440156
-     B_rot          6.468809
-     C_flex         8.758250
+L1   A_abduct       6.733312
+     A_rot          7.463104
+     B_flex         7.863317
+     C_flex        10.876282
+L2   B_flex         8.429925
+     B_rot          4.416498
+     C_flex         9.970893
+L3   B_flex         9.664860
+     B_rot          8.025939
+     C_flex        10.223924
+R1   A_abduct       7.177471
+     A_rot          7.374859
+     B_flex         8.506984
+     C_flex        11.357676
+R2   B_flex         5.466603
+     B_rot          7.753377
+     C_flex         7.594448
+R3   B_flex         8.958846
+     B_rot          6.436791
+     C_flex         8.731250
 Name: angle, dtype: float64
 #+end_example
 
@@ -687,9 +790,153 @@ plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/e8cfc14be49f15771fdc2c5ba0e962d47145ac12.png]]
+[[file:./.ob-jupyter/b75fc13f7949a9eb2574219a9ebda74ed7be3d69.png]]
 
 
+** supplementary errors
+
+I'd like to add the heatmap plots of different speeds. I'm not sure how to convey all the errors at all the different speeds in a compact way.
+Perhaps I could break down the violin plot by leg and by speed in two different plots.
+- break down by leg
+- break down by speed
+
+I think that would make more sense than heatmap plots yah.
+
+#+BEGIN_SRC jupyter-python
+angle_errors = angle_errors[np.isfinite(angle_errors['angle'])]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(11, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle', hue='leg', data=angle_errors,  cut=0, order=angle_order)
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', hue='leg', data=angle_errors, cut=0, order=angle_order)
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+plt.legend(ncol=6)
+# g.legend_ = None
+
+plt.savefig('plots/suppfig2_error_raw_byleg.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/e4330d6615a96d490a487529d1b20f64a009fe53.png]]
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(11, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle', hue='speed_forward', data=angle_errors,  cut=0, order=angle_order, palette='plasma')
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', hue='speed_forward', data=angle_errors, cut=0, order=angle_order, palette='plasma')
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+plt.legend(ncol=2)
+# g.legend_ = None
+
+plt.savefig('plots/suppfig2_error_raw_speed_forward.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/df852c60a1fea9c71a1c99d01e932676958d0514.png]]
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(11, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle', hue='speed_side', data=angle_errors,  cut=0, order=angle_order, palette='Spectral')
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', hue='speed_side', data=angle_errors, cut=0, order=angle_order, palette='Spectral')
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+plt.legend(ncol=5)
+# g.legend_ = None
+plt.savefig('plots/suppfig2_error_raw_speed_side.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/414a1b980c22089c5ee5b352e77ca71419ee533e.png]]
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(15, 4))
+ax = plt.subplot(2, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle', hue='speed_rotation', data=angle_errors,  cut=0, order=angle_order, palette='Spectral')
+g.set(ylabel='Angle error (deg)', xlabel='')
+plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(2, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_units', hue='speed_rotation', data=angle_errors, cut=0, order=angle_order, palette='Spectral')
+g.set(xlabel='Angle', ylabel='Derivative error (deg/s)')
+# plt.axhline(5.9, linestyle='dotted', color='black')
+plt.legend(ncol=2)
+# g.legend_ = None
+
+plt.savefig('plots/suppfig2_error_raw_speed_rotation.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/ea9e54eb24df86005b8d25d0d03e3edce465c94c.png]]
+
+
+
+** Supplementary - walking speed distributions
+
+#+BEGIN_SRC jupyter-python
+speed_names = ['forward velocity', 'rotation velocity', 'side velocity']
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+for i in range(3):
+    _ = sns.histplot(wd.context[:, i], element='step', fill=False, bins=200,
+                     label=speed_names[i])
+sns.despine()
+plt.legend()
+plt.xlabel("Velocity (mm/s)")
+plt.ylabel("Number of frames")
+plt.savefig('plots/suppfig2_velocities_hist.pdf')
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/5b38a30cd6296fa5b39a23266759109f28a360a9.png]]
+
+#+BEGIN_SRC jupyter-python
+for i in range(3):
+    _ = sns.histplot(wd.context[:, i], element='step', fill=False, stat='density',
+                     cumulative=True, label=speed_names[i])
+plt.legend()
+sns.despine()
+plt.xlabel("Velocity (mm/s)")
+plt.ylabel("Cumulative probability")
+plt.savefig('plots/suppfig2_velocities_cdf.pdf')
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/a7f306f54f75ad296449c650a68e7d11c33106ce.png]]
 
 * Figure 3
 ** Phase coupling within a leg - phase version
@@ -716,7 +963,7 @@ phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 700/700 [00:04<00:00, 148.06it/s]
+: 100%|████████████████████████████| 1540/1540 [00:10<00:00, 141.89it/s]
 :
 
 
@@ -745,7 +992,7 @@ phases_byleg_real = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 173/173 [00:01<00:00, 143.84it/s]
+: 100%|██████████████████████████████| 173/173 [00:01<00:00, 139.81it/s]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -796,7 +1043,7 @@ plt.savefig("plots/fig3A_phases_withinleg.pdf", bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/ac11b13c3248b32ac7734a9fa500bfe1fab8bdf3.png]]
+[[file:./.ob-jupyter/7230cbc2f4e57e629f5d9a6ea8ca23f9d3716793.png]]
 
 ** Phase coupling across legs
 
@@ -843,7 +1090,7 @@ phased_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 700/700 [00:01<00:00, 370.24it/s]
+: 100%|████████████████████████████| 1540/1540 [00:04<00:00, 348.32it/s]
 :
 
 
@@ -883,7 +1130,7 @@ phased_real['speed_side'] = phased_real['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 173/173 [00:00<00:00, 297.45it/s]
+: 100%|██████████████████████████████| 173/173 [00:00<00:00, 285.42it/s]
 :
 
 
@@ -929,7 +1176,7 @@ fig.savefig('plots/fig3B_phases_legs.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-: 1f6631fc-c0ff-4830-846d-54e8006c6578
+[[file:./.ob-jupyter/edea6429d663af4753be5cdb80e06c1df8283e46.png]]
 
 
 
@@ -941,6 +1188,6 @@ plt.plot(np.mod(pp[1] - pp[5], 2*np.pi))
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7f3cf0897580> |
-[[file:./.ob-jupyter/bfbcb93960a0dd4aa1ad4e02d9e480c93d6e66f1.png]]
+| <matplotlib.lines.Line2D | at | 0x7fd86c9ce8e0> |
+[[file:./.ob-jupyter/c5695e2cccdd4c914d26f1c804c73d694f38cd14.png]]
 :END:
