@@ -46,7 +46,7 @@ import gc
 if len(sys.argv) > 1:
     outfilename = sys.argv[1]
 else:
-    outfilename = "stats_subang_v2_nodist"
+    outfilename = "stats_subang_v5_nodist"
 
 
 if len(sys.argv) > 3:
@@ -112,7 +112,7 @@ phaseTG = np.zeros((nLegs, numTGSteps))
 
 
 fictrac_speeds = [6, 8, 10, 12, 14, 16, 18]
-fictrac_rots = [-8, -4, 0, 4, 8]
+fictrac_rots = [-20, -16, -12, -8, -4, 0, 4, 8, 12, 16, 20]
 fictrac_sides = [-4, -2, 0, 2, 4]
 # max_velocities = np.arange(0, 25, 5)
 max_velocities = [0]

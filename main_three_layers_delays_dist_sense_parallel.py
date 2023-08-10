@@ -121,7 +121,7 @@ else:
 
 # act_delays = np.arange(0, 0.065, 0.01)
 # sense_delays = np.arange(0, 0.045, 0.005)
-sense_delays = np.arange(0, 0.015, 0.001)
+sense_delays = np.arange(0, 0.020, 0.001)
 
 actDelay = 0.030
 dAct = int(actDelay / Ts * ctrlSpeedRatio)
