@@ -132,7 +132,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 334/334 [06:56<00:00,  1.25s/it]
+: 100%|███████████████████████████████| 334/334 [10:12<00:00,  1.83s/it]
 :
 
 
@@ -347,6 +347,63 @@ for dist in dists:
 [[file:./.ob-jupyter/55b63f71f86f781c63ec3ce2d35d49783572540d.png]]
 [[file:./.ob-jupyter/eb218689776d4f04c6ee112cf4d67b439e60fba9.png]]
 :END:
+
+** Videos
+#+BEGIN_SRC jupyter-python
+dists = ['poisson', 'impulse']
+dist_values = {'poisson': DistType.POISSON_GAUSSIAN.value,
+               'impulse': DistType.IMPULSE.value}
+
+for dist in dists:
+    for i in range(len(plot_delays)):
+        dist_value = dist_values[dist]
+
+        ixs = np.where((speeds[:, 0] == plot_speed)
+                       & (dist_types == dist_value)
+                       & np.isclose(act_delays, plot_delays[i])
+                       & np.isclose(sense_delays, 0.01)
+                       )[0]
+        ix_bout = ixs[33]
+        pose = angles_to_pose_names(angles[ix_bout], angle_names)
+        delay_ms = int(plot_delays[i]*1000)
+        print(dist, delay_ms)
+        make_fly_video(pose, 'vids/simulated_fly_actdelay_{}_{}ms.mp4'.format(dist, delay_ms))
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+begin_example
+poisson 0
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.14it/s]
+
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.82it/s]
+
+poisson 30
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 43.13it/s]
+
+poisson 45
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 43.56it/s]
+impulse 0
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.42it/s]
+impulse 15
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:18<00:00, 47.87it/s]
+impulse 30
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.49it/s]
+impulse 45
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.13it/s]
+#+end_example
+[[file:./.ob-jupyter/00253c8db0af0c332594b727a03df59cf1f85fc6.png]]
+[[file:./.ob-jupyter/fe13c29b45b8464ae2688e793e44cc6a28b88591.png]]
+[[file:./.ob-jupyter/a23e1f22bc04e26900cde39d279f329d0f0c7435.png]]
+[[file:./.ob-jupyter/4b001227c65d8724223ec50e798b88258bb3fa65.png]]
+[[file:./.ob-jupyter/fd8aa8f245820061cbfcd024c417e09ced716c6a.png]]
+[[file:./.ob-jupyter/d8b94bf46917a989fcaaee1c6847c33afcc03a78.png]]
+[[file:./.ob-jupyter/6a07838ec113afc0c5c0c40eea106d7727015095.png]]
+[[file:./.ob-jupyter/743bd0d8cb8eac8d11d25b2f6d4baf6e429358c1.png]]
+:END:
+
+
 ** all the heatmap plots!
 
 #+BEGIN_SRC jupyter-python
@@ -538,6 +595,61 @@ for dist in dists:
 [[file:./.ob-jupyter/ac9a91f21eb30f6c7a3931edc764c437dab12cde.png]]
 [[file:./.ob-jupyter/4964ed9e397262c07b3d052e97dc3cc4ce070a2e.png]]
 :END:
+** Videos
+
+#+BEGIN_SRC jupyter-python
+dists = ['poisson', 'impulse']
+dist_values = {'poisson': DistType.POISSON_GAUSSIAN.value,
+               'impulse': DistType.IMPULSE.value}
+
+for dist in dists:
+    for i in range(len(plot_delays)):
+        dist_value = dist_values[dist]
+        ixs = np.where((speeds[:, 0] == plot_speed)
+                       & (dist_types == dist_value)
+                       & np.isclose(sense_delays, plot_delays[i])
+                       & np.isclose(act_delays, 0.030)
+                       )[0]
+        ix_bout = ixs[33]
+        pose = angles_to_pose_names(angles[ix_bout], angle_names)
+        delay_ms = int(plot_delays[i]*1000)
+        print(dist, delay_ms)
+        make_fly_video(pose, 'vids/simulated_fly_sensedelay_{}_{}ms.mp4'.format(dist, delay_ms))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+#+begin_example
+poisson 0
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.12it/s]
+
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.48it/s]
+
+poisson 10
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.65it/s]
+
+poisson 15
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.09it/s]
+impulse 0
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.62it/s]
+impulse 5
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.49it/s]
+impulse 10
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.85it/s]
+impulse 15
+100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.51it/s]
+#+end_example
+[[file:./.ob-jupyter/783dc16f6c6c2062c610e303f74a0db8a91f7378.png]]
+[[file:./.ob-jupyter/179c55e180904016f9d2f874cd16c937b6f9e485.png]]
+[[file:./.ob-jupyter/a23e1f22bc04e26900cde39d279f329d0f0c7435.png]]
+[[file:./.ob-jupyter/b243eca707530d98e305511745f96f4166b85e93.png]]
+[[file:./.ob-jupyter/3ce8513bc228a58d5d74e8f8230678e9259bf72e.png]]
+[[file:./.ob-jupyter/622bb1320dabf69341ffb374812d0f9be4a018bd.png]]
+[[file:./.ob-jupyter/6a07838ec113afc0c5c0c40eea106d7727015095.png]]
+[[file:./.ob-jupyter/de0fd9ac696a36d049b6c709df2275381cb25d20.png]]
+:END:
+
+
 ** all the heatmap plots!
 
 #+BEGIN_SRC jupyter-python
