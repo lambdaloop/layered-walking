@@ -505,8 +505,7 @@ class ControlAndDynamics:
                 xNow[2*N1-self._Nxr:2*N1] = wTrajAhead
         
             uNow = -self._K @ xNow # Calculate input
-            if self._dAct == 0:
-                uNow -= self._Bi @ wTrajAhead
+
         else:
             # Update dynamics + estimate with trajectory tracking
             xNow[self._Nx-self._Nxr:self._Nx] = wTrajAhead
