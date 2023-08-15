@@ -126,7 +126,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████████| 52/52 [00:42<00:00,  1.22it/s]
+: 100%|█████████████████████████████████| 52/52 [00:12<00:00,  4.01it/s]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -891,6 +891,7 @@ plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
 [[file:./.ob-jupyter/b75fc13f7949a9eb2574219a9ebda74ed7be3d69.png]]
 
 
+
 ** supplementary errors
 
 I'd like to add the heatmap plots of different speeds. I'm not sure how to convey all the errors at all the different speeds in a compact way.
@@ -1036,6 +1037,21 @@ plt.savefig('plots/suppfig2_velocities_cdf.pdf')
 #+RESULTS:
 [[file:./.ob-jupyter/a7f306f54f75ad296449c650a68e7d11c33106ce.png]]
 
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(3, 2))
+plt.scatter(wd.context[:, 1], wd.context[:, 2], s=1, alpha=0.03)
+plt.xlabel('Average rotation speed (mm/s)')
+plt.ylabel('Average side speed\n(mm/s)')
+sns.despine()
+plt.savefig('plots/suppfig2_velocities_rotside_scatter.pdf')
+plt.savefig('plots/suppfig2_velocities_rotside_scatter.png')
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/c7626b9af7426bdc7489d37d531e18cfef585428.png]]
+
+
 * Figure 3
 ** Phase coupling within a leg - phase version
 
@@ -1061,8 +1077,30 @@ phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|████████████████████████████| 1540/1540 [00:10<00:00, 141.89it/s]
+:RESULTS:
+:   5%|█▍                             | 73/1540 [00:02<00:45, 32.52it/s]
 :
+# [goto error]
+#+begin_example
+[0;31m---------------------------------------------------------------------------[0m
+[0;31mKeyboardInterrupt[0m                         Traceback (most recent call last)
+Cell [0;32mIn[43], line 9[0m
+[1;32m      6[0m leg [38;5;241m=[39m angname[:[38;5;241m2[39m]
+[1;32m      7[0m x [38;5;241m=[39m np[38;5;241m.[39mvstack([angles[i][:, ix_ang],
+[1;32m      8[0m                derivs[i][:, ix_ang]])[38;5;241m.[39mT
+[0;32m----> 9[0m phase [38;5;241m=[39m [43mget_phase[49m[43m([49m[43mx[49m[43m)[49m
+[1;32m     10[0m key [38;5;241m=[39m angname
+[1;32m     11[0m d[key] [38;5;241m=[39m phase
+
+Cell [0;32mIn[42], line 7[0m, in [0;36mget_phase[0;34m(ang)[0m
+[1;32m      5[0m s[s [38;5;241m==[39m [38;5;241m0[39m] [38;5;241m=[39m [38;5;241m1[39m
+[1;32m      6[0m dm [38;5;241m=[39m (ang [38;5;241m-[39m m) [38;5;241m/[39m s
+[0;32m----> 7[0m phase [38;5;241m=[39m [43mnp[49m[38;5;241;43m.[39;49m[43marctan2[49m[43m([49m[38;5;241;43m-[39;49m[43mdm[49m[43m[[49m[43m:[49m[43m,[49m[38;5;241;43m1[39;49m[43m][49m[43m,[49m[43m [49m[43mdm[49m[43m[[49m[43m:[49m[43m,[49m[38;5;241;43m0[39;49m[43m][49m[43m)[49m
+[1;32m      8[0m [38;5;28;01mreturn[39;00m phase
+
+[0;31mKeyboardInterrupt[0m:
+#+end_example
+:END:
 
 
 #+BEGIN_SRC jupyter-python
@@ -1071,8 +1109,8 @@ bnums = wd._get_minlen_bnums(400)
 for i in trange(len(bnums), ncols=70):
     bnum = bnums[i]
     ww = wd.get_bnum(bnum)
-    mean_speed = np.mean(ww['contexts'], axis=0)
-    forward, rot, side = mean_speed
+    # mean_speed = np.mean(ww['contexts'], axis=0)
+    # forward, rot, side = mean_speed
     d = pd.DataFrame()
     for ix_leg, leg in enumerate(legs):
         for ix_ang, angname in enumerate(wd._angle_names[leg]):
@@ -1081,17 +1119,31 @@ for i in trange(len(bnums), ncols=70):
             phase = get_phase(x)
             key = angname
             d[key] = phase
-    d['speed_forward'] = forward
-    d['speed_rotation'] = rot
-    d['speed_side'] = side
+    contexts = ww['contexts']
+    d['speed_forward'] = contexts[:, 0]
+    d['speed_rotation'] = contexts[:, 1]
+    d['speed_side'] = contetxs[:, 2]
     d['type'] = 'real'
     ds.append(d)
 phases_byleg_real = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 173/173 [00:01<00:00, 139.81it/s]
+:RESULTS:
+:   0%|                                         | 0/173 [00:00<?, ?it/s]
 :
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mNameError[0m                                 Traceback (most recent call last)
+: Cell [0;32mIn[44], line 19[0m
+: [1;32m     17[0m d[[38;5;124m'[39m[38;5;124mspeed_forward[39m[38;5;124m'[39m] [38;5;241m=[39m contexts[:, [38;5;241m0[39m]
+: [1;32m     18[0m d[[38;5;124m'[39m[38;5;124mspeed_rotation[39m[38;5;124m'[39m] [38;5;241m=[39m contexts[:, [38;5;241m1[39m]
+: [0;32m---> 19[0m d[[38;5;124m'[39m[38;5;124mspeed_side[39m[38;5;124m'[39m] [38;5;241m=[39m [43mcontetxs[49m[:, [38;5;241m2[39m]
+: [1;32m     20[0m d[[38;5;124m'[39m[38;5;124mtype[39m[38;5;124m'[39m] [38;5;241m=[39m [38;5;124m'[39m[38;5;124mreal[39m[38;5;124m'[39m
+: [1;32m     21[0m ds[38;5;241m.[39mappend(d)
+:
+: [0;31mNameError[0m: name 'contetxs' is not defined
+:END:
 
 #+BEGIN_SRC jupyter-python
 phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
@@ -1141,7 +1193,18 @@ plt.savefig("plots/fig3A_phases_withinleg.pdf", bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/7230cbc2f4e57e629f5d9a6ea8ca23f9d3716793.png]]
+#+begin_example
+
+KeyboardInterrupt
+
+Error in callback <function _draw_all_if_interactive at 0x7fd0babbb9d0> (for post_execute):
+
+KeyboardInterrupt
+
+Error in callback <function flush_figures at 0x7fd08bb36f70> (for post_execute):
+
+KeyboardInterrupt
+#+end_example
 
 ** Phase coupling across legs
 
@@ -1177,8 +1240,6 @@ for i in trange(len(speeds), ncols=70):
                        derivs[i][:, ix_ang_phase]]).T
         phase = get_phase(x)
         d['phase_' + leg] = phase
-
-
     d['speed_forward'] = forward
     d['speed_rotation'] = rot
     d['speed_side'] = side
@@ -1188,7 +1249,7 @@ phased_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|████████████████████████████| 1540/1540 [00:04<00:00, 348.32it/s]
+: 100%|█████████████████████████████| 1540/1540 [00:19<00:00, 80.41it/s]
 :
 
 
@@ -1198,8 +1259,6 @@ bnums = wd._get_minlen_bnums(400)
 for i in trange(len(bnums), ncols=70):
     bnum = bnums[i]
     ww = wd.get_bnum(bnum)
-    mean_speed = np.mean(ww['contexts'], axis=0)
-    forward, rot, side = mean_speed
     d = pd.DataFrame()
     for ix_leg, leg in enumerate(legs):
         if leg in ['L2', 'R2']:
@@ -1211,15 +1270,17 @@ for i in trange(len(bnums), ncols=70):
                        ww['derivatives'][leg][:, ix_ang_phase]]).T
         phase = get_phase(x)
         d['phase_' + leg] = phase
-    d['speed_forward_raw'] = forward
-    d['speed_rotation_raw'] = rot
-    d['speed_side_raw'] = side
+
+    contexts = ww['contexts']
+    d['speed_forward_raw'] = contexts[:, 0]
+    d['speed_rotation_raw'] = contexts[:, 1]
+    d['speed_side_raw'] = contexts[:, 2]
     d['bnum'] = bnum
     d['type'] = 'real'
     ds.append(d)
 phased_real = pd.concat(ds).reset_index(drop=True)
 
-phased_real['speed_forward'] = ((phased_real['speed_forward_raw'] + 2) // 4) * 4
+phased_real['speed_forward'] = ((phased_real['speed_forward_raw'] + 1) // 2) * 2
 phased_real['speed_rotation'] = ((phased_real['speed_rotation_raw'] + 2) // 4) * 4
 phased_real['speed_side'] = ((phased_real['speed_side_raw'] + 1) // 2) * 2
 phased_real['speed_forward'] = phased_real['speed_forward'].astype('int')
@@ -1228,7 +1289,7 @@ phased_real['speed_side'] = phased_real['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|██████████████████████████████| 173/173 [00:00<00:00, 285.42it/s]
+: 100%|███████████████████████████████| 173/173 [00:02<00:00, 73.81it/s]
 :
 
 
@@ -1274,7 +1335,7 @@ fig.savefig('plots/fig3B_phases_legs.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/edea6429d663af4753be5cdb80e06c1df8283e46.png]]
+: 3af04e64-b432-4ae0-b488-2d41264a7442
 
 
 
@@ -1286,6 +1347,94 @@ plt.plot(np.mod(pp[1] - pp[5], 2*np.pi))
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7fd86c9ce8e0> |
+| <matplotlib.lines.Line2D | at | 0x7fdcbd3ac580> |
+[[file:./.ob-jupyter/c5695e2cccdd4c914d26f1c804c73d694f38cd14.png]]
+| <matplotlib.lines.Line2D | at | 0x7fdc3d8429d0> |
 [[file:./.ob-jupyter/c5695e2cccdd4c914d26f1c804c73d694f38cd14.png]]
 :END:
+
+
+** Phase offsets across speeds
+
+#+BEGIN_SRC jupyter-python
+preal = phased[phased['type'] == 'real'].copy()
+preal['speed_forward_4'] = (((preal['speed_forward_raw'] + 2) // 4) * 4).astype('int')
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+speeds_forward = [4, 8, 12, 16]
+speeds_rotation = [-12, -8, -4, 0, 4, 8, 12]
+speeds_side = phased_sim['speed_side'].unique()
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+rows = []
+
+for s_f in speeds_forward:
+    for s_r in speeds_rotation:
+        check = (preal['speed_forward_4'] == s_f) & \
+            (preal['speed_rotation'] == s_r)
+        if np.sum(check) == 0:
+            continue
+        sub = preal[check]
+
+        row = {'speed_forward': s_f,
+               'speed_rotation': s_r,
+               # 'speed_side': s_s,
+               'num': len(sub),
+               }
+
+        for leg_1 in legs:
+            for leg_2 in legs:
+                key = 'diff_{}_{}'.format(leg_1, leg_2)
+                diff = np.mod(sub['phase_'+leg_1].values -
+                              sub['phase_'+leg_2].values, 2*np.pi)
+                mm = np.mean(np.exp(1j * diff))
+                mean = np.mod(np.angle(mm), 2*np.pi)
+                std = np.sqrt(-2 * np.log(np.abs(mm)))
+                row[key + '_mean'] = mean
+                row[key + '_std'] = std
+        rows.append(row)
+
+mean_offsets = pd.DataFrame(rows)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap('plasma')
+norm = plt.Normalize(4, 18)
+plt.figure(figsize=(6,6))
+for i in range(6):
+    for j in range(6):
+        plt.subplot(6, 6, i*6+j+1)
+        if i == j:
+            plt.text(0.4, 0.4, legs[i], fontsize="xx-large")
+            plt.axis('off')
+            continue
+        key = 'diff_{}_{}_mean'.format(legs[i], legs[j])
+        for s_f in speeds_forward:
+            check = (mean_offsets['speed_forward'] == s_f)
+            means = np.array(mean_offsets.loc[check, key])
+            means[means > np.pi * 1.55] -= 2*np.pi
+            s_r = mean_offsets.loc[check, 'speed_rotation'].values
+            ix = np.argsort(s_r)
+            plt.plot(s_r[ix], means[ix], color=cmap(norm(s_f)))
+        if j != i+1:
+            ax = plt.gca()
+            ax.set_yticklabels([])
+            ax.set_xticklabels([])
+        # plt.ylim(-0.75, 0.75)
+        plt.ylim(-np.pi / 2, 2*np.pi)
+sns.despine()
+plt.savefig('plots/suppfig3_phase_offsets_speeds.pdf')
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/69a10f239d6506c2698672efdbf398d5fb3e0a4b.png]]
