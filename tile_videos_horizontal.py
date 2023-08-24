@@ -5,6 +5,7 @@ import cv2
 from tqdm import trange
 import sys
 import os.path
+import skvideo.io
 
 fnames = sys.argv[1:-1]
 outname = sys.argv[-1]
@@ -31,11 +32,20 @@ height = max([p['height'] for p in props])
 length = min([p['length'] for p in props])
 fps = props[0]['fps']
 fps = round(fps, 2)
-print(fps)
+
+print(outname)
 
 # Define the codec and create VideoWriter object
-fourcc = cv2.VideoWriter_fourcc(*'XVID')
-writer = cv2.VideoWriter(outname,fourcc, fps, (width,height))
+# fourcc = cv2.VideoWriter_fourcc(*'XVID')
+# writer = cv2.VideoWriter(outname,fourcc, fps, (width,height))
+
+writer = skvideo.io.FFmpegWriter(outname, inputdict={
+    '-framerate': str(fps),
+}, outputdict={
+    '-vcodec': 'h264',
+    '-pix_fmt': 'yuv420p', # to support more players
+    '-vf': 'pad=ceil(iw/2)*2:ceil(ih/2)*2' # to handle width/height not divisible by 2
+})
 
 keep_going = True
 
@@ -45,10 +55,12 @@ else:
     iterator = trange(length, ncols=70)
 for i in iterator:
     frame_out = np.zeros((height, width, 3), dtype='uint8')
+    frame_out[:] = 255
 
     x = 0
     for j, cap in enumerate(caps):
         ret, frame = cap.read()
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         if not ret:
             keep_going = False
             break
@@ -57,12 +69,11 @@ for i in iterator:
         x += w
 
     if keep_going:
-        writer.write(frame_out)
+        writer.writeFrame(frame_out)
     else:
         break
 
 # Release everything if job is finished
 for cap in caps:
     cap.release()
-writer.release()
-
+writer.close()

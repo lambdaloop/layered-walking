@@ -32,7 +32,8 @@ height = sum([p['height'] for p in props])
 length = min([p['length'] for p in props])
 fps = props[0]['fps']
 fps = round(fps, 2)
-print(fps)
+
+print(outname)
 
 # Define the codec and create VideoWriter object
 # fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -52,7 +53,7 @@ if length < 10:
     iterator = range(10000)
 else:
     iterator = trange(length, ncols=70)
-for i in trange(length):
+for i in iterator:
     frame_out = np.zeros((height, width, 3), dtype='uint8')
     frame_out[:] = 255
 
