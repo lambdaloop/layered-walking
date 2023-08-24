@@ -201,21 +201,6 @@ output = defaultdict(list)
 store_start = start_index
 
 
-# bad_delays = [ (10, 2), (10, 16), (20, 2), (20, 8), (35, 2), (35, 4), (40, 2),
-#                (45, 2), (45, 6), (50, 2), (55, 2), (60, 2) ]
-
-# for act, sense in bad_delays:
-#     print(act, sense)
-#     dAct = int((act / 1000.0) / Ts * ctrlSpeedRatio)
-#     dSense = int((sense / 1000.0) / Ts * ctrlSpeedRatio)
-#     for leg in legs:
-#         try:
-#             CD[ln] = ControlAndDynamics(leg, Ts/ctrlSpeedRatio, dSense, dAct, namesTG[ln])
-#         except ValueError:
-#             print("  ERROR leg={}, senseDelay={}, dSense={}, actDelay={}, dAct={}".format(
-#                 repr(leg), senseDelay, dSense, actDelay, dAct))
-
-
 for ix_cond, cond in enumerate(tqdm(conditions, ncols=70)):
     context = cond['context']
     offset = cond['offset']
