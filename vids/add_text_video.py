@@ -42,9 +42,9 @@ font_color = (0, 0, 0)
 
 # texts = ['8 mm/s forward\ntest', '10 mm/s forward',
 #          '12 mm/s forward', '14 mm/s forward']
-texts = sys.argv[3:7]
 
-text_header = '\n'.join(sys.argv[7:])
+text_header = sys.argv[3].replace('|', '\n')
+texts = [x.replace('|', '\n') for x in sys.argv[4:]]
 
 if length < 10:
     iterator = range(10000)
@@ -63,18 +63,21 @@ for _ in iterator:
 
     # Write the styled text on the frame
     font = ImageFont.truetype(font_path, font_size)
-    width_1 = frame.shape[1] // 2
-    height_1 = frame.shape[0] // 2
+    width_1 = frame.shape[1] // 4
+    if frame.shape[0] > 1000:
+        height_1 = 600 # header of 2nd row
+    else:
+        height_1 = 550 # bottom of 1st row
 
     for i, text in enumerate(texts):
         text_width, text_height = draw.textsize(text, font)
-        text_x = int((width_1 - text_width) / 2) + (i % 2) * width_1
-        text_y = 160 + (i//2) * height_1
-        draw.text((text_x, text_y), text, font=font, fill=font_color)
+        text_x = int((width_1 - text_width) / 2) + (i % 4) * width_1
+        text_y = 160 + (i//4) * height_1
+        draw.text((text_x, text_y), text, font=font, fill=font_color, align='center')
 
     text_width, text_height = draw.textsize(text_header, font)
     text_x = int((frame.shape[1] - text_width) / 2)
-    text_y = 30
+    text_y = 20
     draw.text((text_x, text_y), text_header, font=font, fill=font_color, align='center')
 
     # Convert the modified image back to a NumPy array

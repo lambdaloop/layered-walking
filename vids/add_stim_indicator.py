@@ -65,7 +65,7 @@ for framenum in iterator:
         text = "perturbation"
         text_width, text_height = draw.textsize(text, font)
         text_x = int((frame.shape[1] - text_width) / 2) + 40
-        text_y = frame.shape[0] // 2 - 50
+        text_y = frame.shape[0] - text_height - 100
         draw.text((text_x, text_y), text, font=font, fill="red", align='center')
 
         # Define the coordinates for the square
