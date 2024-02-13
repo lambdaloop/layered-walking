@@ -44,22 +44,23 @@ class TrajectoryGenerator:
         # Walking model
         self._model     = MLPScaledXY.from_full(allmodels[leg]['model_walk'])
 
-        # Set up values from training data         
-        xy_w, bnums = allmodels[self._leg]['train'] # xy_w is a real trajectory
-        common      = Counter(bnums).most_common(100)
-        b, _        = common[0]
-        cc          = np.where(b == bnums)[0][:numSimSteps]
-        
-        ang_c = xy_w[0][cc, :self._numAng]
-        ang_s = xy_w[0][cc, self._numAng:self._numAng*2]
-        self._angReal = np.degrees(np.arctan2(ang_s, ang_c))
-        # self._angReal = xy_w[0][cc, :self._numAng]
-        self._drvReal = xy_w[0][cc, self._numAng*2:self._numAng*3]
+        # Set up values from training data
+        if 'train' in allmodels[self._leg]:
+            xy_w, bnums = allmodels[self._leg]['train'] # xy_w is a real trajectory
+            common      = Counter(bnums).most_common(100)
+            b, _        = common[0]
+            cc          = np.where(b == bnums)[0][:numSimSteps]
 
-        rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
-        self._phaseReal = np.arctan2(rsin, rcos)
-        self._context   = xy_w[0][cc, -5:-2]
-    
+            ang_c = xy_w[0][cc, :self._numAng]
+            ang_s = xy_w[0][cc, self._numAng:self._numAng*2]
+            self._angReal = np.degrees(np.arctan2(ang_s, ang_c))
+            # self._angReal = xy_w[0][cc, :self._numAng]
+            self._drvReal = xy_w[0][cc, self._numAng*2:self._numAng*3]
+
+            rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+            self._phaseReal = np.arctan2(rsin, rcos)
+            self._context   = xy_w[0][cc, -5:-2]
+
     
     def get_initial_vals(self):
         return self._angReal[0], self._drvReal[0], self._phaseReal[0]
@@ -67,6 +68,7 @@ class TrajectoryGenerator:
 
     @tf.function
     def step_forward(self, ang, drv, phase, context):
+        context = context + tf.cast([3, 0, 0], 'float32') # speed hack
         rad = ang * np.pi/180
         inp = tf.concat([tf.cos(rad), tf.sin(rad),
                          drv, context, [tf.cos(phase)], [tf.sin(phase)]], axis=-1)
@@ -111,11 +113,21 @@ class TrajectoryGenerator:
 
 
 class WalkingData:
-    def __init__(self, filename):
-        with open(filename, 'rb') as myfile:
-            self.data = pickle.load(myfile)
+    def __init__(self, filename=None, data=None):
+        if filename is not None:
+            with open(filename, 'rb') as myfile:
+                data = pickle.load(myfile)
 
-        self._legs = sorted(self.data.keys())
+        if data is None:
+            raise ValueError("must pass either filename or data to initialize WalkingData")
+
+        self.init_from_data(data)
+
+    def init_from_data(self, data):
+        self.data = data
+
+        # self._legs = sorted(self.data.keys())
+        self._legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']
 
         if 'angle_names' in self.data[self._legs[0]]:
             self._angle_names = dict([(leg, self.data[leg]['angle_names']) for leg in self._legs])
@@ -196,7 +208,7 @@ class WalkingData:
         subix = self.bnums_ix[bnum]
         return self._get_subix(subix)
 
-    def get_bout(self, context=None, offset=0, min_bout_length=500, seed=1234):
+    def get_bout_bnum(self, context=None, offset=0, min_bout_length=500, seed=1234):
         np.random.seed(seed)
         s = set(self._get_minlen_bnums(min_bout_length))
         check = np.array([b in s for b in self.bnums_uniq])
@@ -209,4 +221,9 @@ class WalkingData:
             dist = dist + np.random.normal(size=dist.shape)*0.1
             ix = np.argsort(dist)
         bnum = self.bnums_uniq[check][ix[offset]]
+        return bnum
+
+    def get_bout(self, context=None, offset=0, min_bout_length=500, seed=1234):
+        bnum = self.get_bout_bnum(context=context, offset=offset,
+                                  min_bout_length=min_bout_length, seed=seed)
         return self.get_bnum(bnum)

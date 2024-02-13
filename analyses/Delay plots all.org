@@ -26,6 +26,7 @@ import pickle
 #+END_SRC
 
 #+RESULTS:
+: 30ee621d-db23-40c6-b534-f47f667a134a
 
 #+BEGIN_SRC jupyter-python
 import sys
@@ -40,6 +41,7 @@ from tools.dist_tools import DistType
 #+END_SRC
 
 #+RESULTS:
+: a8b9f696-49f8-4aee-be75-721d02dd478d
 
 #+BEGIN_SRC jupyter-python
 import matplotlib.pyplot as plt
@@ -53,6 +55,7 @@ plt.rcParams['figure.figsize'] = (7.5, 2)
 
 
 #+RESULTS:
+: 88600a8e-7231-4ba0-997b-50fe13ff547e
 
 #+BEGIN_SRC jupyter-python
 xvals = np.linspace(-np.pi, np.pi)
@@ -87,6 +90,7 @@ def phase_align_poly(ang, extra=None, order=5):
 #+END_SRC
 
 #+RESULTS:
+: d246b0b3-5b75-4a39-b5fb-5537dfa33c3c
 
 #+BEGIN_SRC jupyter-python
 # list(d.keys())
@@ -96,13 +100,13 @@ def phase_align_poly(ang, extra=None, order=5):
 
 
 #+BEGIN_SRC jupyter-python
-fname_pat = os.path.join(data_path, 'delays_stats_subang_v4_actuate_*.pkl')
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v9_actuate_*.pkl')
 fnames = sorted(glob(fname_pat))
 
-fname_pat = os.path.join(data_path, 'delays_stats_subang_v5_sense_poisson*.pkl')
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v9_sense_poisson*.pkl')
 fnames += sorted(glob(fname_pat))
 
-fname_pat = os.path.join(data_path, 'delays_stats_subang_v5_sense_gaussian*.pkl')
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v9_sense_gaussian*.pkl')
 fnames += sorted(glob(fname_pat))
 
 conditions = []
@@ -132,8 +136,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 334/334 [10:12<00:00,  1.83s/it]
-:
+: 83dfbae1-ae4d-42a8-9a44-196a762cafd6
 
 
 #+BEGIN_SRC jupyter-python
@@ -141,7 +144,7 @@ conditions[0]
 #+END_SRC
 
 #+RESULTS:
-| context | : | (6 0 0) | offset | : | 0 | dist | : | <DistType.IMPULSE: | 7> | maxVelocity | : | 0.0 | actDelay | : | 0.0 | senseDelay | : | 0.01 |
+: e947baef-aaca-4eee-9cae-f0bf815847a5
 
 
 
@@ -154,6 +157,7 @@ perturb_ranges = {
 #+END_SRC
 
 #+RESULTS:
+: 17ebfaf3-b782-4744-af28-edf060110abc
 
 
 #+BEGIN_SRC jupyter-python
@@ -166,27 +170,23 @@ angle_names = list(angle_names)
 #+END_SRC
 
 #+RESULTS:
+: 36a28e75-69e1-4d82-9497-613fc73c27d9
 
 
 #+BEGIN_SRC jupyter-python
-fname = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+fname = '/home/lili/data/tuthill/models/models_sls/data_subang_5.pickle'
 wd = WalkingData(fname)
 #+END_SRC
 
 #+RESULTS:
+: 5d3a231e-b9bb-4515-b1b4-4e7ff96ad5bd
 
 #+BEGIN_SRC jupyter-python
 wd.bout_context
 #+END_SRC
 
 #+RESULTS:
-: array([[ 3.4748168, 18.434208 ,  2.642376 ],
-:        [ 1.0033004, 20.97231  ,  3.094752 ],
-:        [ 1.4011644, 11.787567 ,  2.894012 ],
-:        ...,
-:        [ 9.824624 ,  3.8363965,  2.475409 ],
-:        [13.015    , -0.6182214,  1.8810371],
-:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+: 20ba6f48-0a42-4e86-9495-acd616818828
 
 #+BEGIN_SRC jupyter-python
 fancy_angle_names = {
@@ -199,6 +199,7 @@ fancy_angle_names = {
 #+END_SRC
 
 #+RESULTS:
+: 9f26a9ca-b919-4a36-a1ce-290d2540c668
 
 * principal component metric
 
@@ -215,7 +216,7 @@ full = np.vstack(full_L)
 full_sc = np.hstack([np.sin(np.deg2rad(full)),
                      np.cos(np.deg2rad(full))])
 
-pca = PCA(n_components=2)
+pca = PCA(n_components=10)
 pcs = pca.fit_transform(full_sc)
 
 subixs = np.random.choice(pcs.shape[0], size=10000, replace=False)
@@ -223,6 +224,15 @@ kde = gaussian_kde(pcs[subixs,:2].T)
 #+END_SRC
 
 #+RESULTS:
+: 72906637-d3b4-4389-a1da-8ed63e0e3043
+
+#+BEGIN_SRC jupyter-python
+pca.explained_variance_
+#+END_SRC
+
+#+RESULTS:
+: 3036220d-380a-49cb-9cbe-20df794bfafa
+
 
 #+BEGIN_SRC jupyter-python
 
@@ -242,8 +252,7 @@ pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████| 29938/29938 [1:07:33<00:00,  7.39it/s]
-:
+: a9a34ad1-172c-470a-8e4d-9a2b4654bb6c
 
 
 #+BEGIN_SRC jupyter-python
@@ -251,6 +260,7 @@ np.savez_compressed('angle_pdfs.npz', pdfs=pdfs_shaped)
 #+END_SRC
 
 #+RESULTS:
+: 049f7b60-dbb3-437d-9dfd-66e309a3d960
 
 
 
@@ -273,6 +283,7 @@ plot_speed = 12
 #+END_SRC
 
 #+RESULTS:
+: 9df203fc-ded9-48c9-b889-5f36c8aa8b98
 
 
 #+BEGIN_SRC jupyter-python
@@ -323,31 +334,7 @@ for dist in dists:
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-#+begin_example
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.0, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.015, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.045, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.0, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.015, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.045, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.0, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.015, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.045, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.0, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.015, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.045, 'senseDelay': 0.01}
-#+end_example
-[[file:./.ob-jupyter/95d8c3c34137b8a858822f3e4ce8bffea2367eb3.png]]
-[[file:./.ob-jupyter/ec3e45b8b10601bb6d98806ce22b7d69275885fd.png]]
-[[file:./.ob-jupyter/55b63f71f86f781c63ec3ce2d35d49783572540d.png]]
-[[file:./.ob-jupyter/eb218689776d4f04c6ee112cf4d67b439e60fba9.png]]
-:END:
-
+: 0d1e90d9-dcb5-49d3-afd9-30c5e73f8ab0
 ** Videos
 #+BEGIN_SRC jupyter-python
 dists = ['poisson', 'impulse']
@@ -366,42 +353,15 @@ for dist in dists:
         ix_bout = ixs[33]
         pose = angles_to_pose_names(angles[ix_bout], angle_names)
         delay_ms = int(plot_delays[i]*1000)
-        print(dist, delay_ms)
+        sub = slice(300, 600) if dist == 'poisson' else slice(305, 400)
+        pdf = np.mean(pdfs_shaped[ix_bout, sub])
+        print('{}, {} ms actuation, {:.3f}'.format(dist, delay_ms, pdf))
         make_fly_video(pose, 'vids/simulated_fly_actdelay_{}_{}ms.mp4'.format(dist, delay_ms))
 
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-#+begin_example
-poisson 0
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.14it/s]
-
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.82it/s]
-
-poisson 30
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 43.13it/s]
-
-poisson 45
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 43.56it/s]
-impulse 0
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.42it/s]
-impulse 15
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:18<00:00, 47.87it/s]
-impulse 30
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.49it/s]
-impulse 45
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.13it/s]
-#+end_example
-[[file:./.ob-jupyter/00253c8db0af0c332594b727a03df59cf1f85fc6.png]]
-[[file:./.ob-jupyter/fe13c29b45b8464ae2688e793e44cc6a28b88591.png]]
-[[file:./.ob-jupyter/a23e1f22bc04e26900cde39d279f329d0f0c7435.png]]
-[[file:./.ob-jupyter/4b001227c65d8724223ec50e798b88258bb3fa65.png]]
-[[file:./.ob-jupyter/fd8aa8f245820061cbfcd024c417e09ced716c6a.png]]
-[[file:./.ob-jupyter/d8b94bf46917a989fcaaee1c6847c33afcc03a78.png]]
-[[file:./.ob-jupyter/6a07838ec113afc0c5c0c40eea106d7727015095.png]]
-[[file:./.ob-jupyter/743bd0d8cb8eac8d11d25b2f6d4baf6e429358c1.png]]
-:END:
+: 8eeb9493-32c6-4cab-b19d-c8f579a4843f
 
 
 ** all the heatmap plots!
@@ -418,6 +378,7 @@ to_plot  = [("during - before perturbations", "during_diff_logpdf"),
 #+END_SRC
 
 #+RESULTS:
+: 857a77ad-f272-4b42-b486-e64d51014148
 
 
 #+BEGIN_SRC jupyter-python
@@ -468,6 +429,8 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
             ax.set_xticks(np.arange(len(dimg.columns)), labels=dimg.columns)
             ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index * 1000))
 
+            ax.invert_yaxis()
+
             if xaxis == 'speed':
                 ax.set_xlabel("Speed (mm/s)")
             elif xaxis == 'max_velocity':
@@ -486,16 +449,7 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-[[file:./.ob-jupyter/98ce1670ab04e442ae5393c40bb8952818170476.png]]
-[[file:./.ob-jupyter/c611cc2b929efabca4b76777715eb820c4fb3b8b.png]]
-[[file:./.ob-jupyter/fecebc45b33fe74932f12a493c645060775ad266.png]]
-[[file:./.ob-jupyter/1d5714f819f79a78d17afe88f1babeda2a8625fd.png]]
-[[file:./.ob-jupyter/7e2921139c459fa620c5639d8e1cdf056dc8117b.png]]
-[[file:./.ob-jupyter/570d2ed3d3590ecdc64f50300cfdeb8de78699c6.png]]
-[[file:./.ob-jupyter/f6de8b877450f9db32d962f7e70dfba92acc35e6.png]]
-[[file:./.ob-jupyter/729adfb9327018eaaeb73270fc60d2faf2d3de5f.png]]
-:END:
+: bb27b9ca-326f-4745-9745-933a2af56797
 
 
 * Sensory delay plots
@@ -521,6 +475,7 @@ plot_speed = 12
 #+END_SRC
 
 #+RESULTS:
+: acc11302-16e6-423a-913b-6b7df7feb97a
 
 
 #+BEGIN_SRC jupyter-python
@@ -571,30 +526,7 @@ for dist in dists:
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-#+begin_example
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.0, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.005, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.015, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.0, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.005, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 5.0, 'senseDelay': 0.015, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.0, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.005, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.015, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.0, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.005, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'actDelay': 0.03, 'senseDelay': 0.01}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 10.0, 'senseDelay': 0.015, 'actDelay': 0.03}
-#+end_example
-[[file:./.ob-jupyter/f6cfe4ed837a93bc315c487eb132ea4b44ebab83.png]]
-[[file:./.ob-jupyter/b56cfe48293b64193bf95a04ebc867908250c29d.png]]
-[[file:./.ob-jupyter/ac9a91f21eb30f6c7a3931edc764c437dab12cde.png]]
-[[file:./.ob-jupyter/4964ed9e397262c07b3d052e97dc3cc4ce070a2e.png]]
-:END:
+: f21e296c-90d6-4b88-b829-de8274e5fcd6
 ** Videos
 
 #+BEGIN_SRC jupyter-python
@@ -613,41 +545,14 @@ for dist in dists:
         ix_bout = ixs[33]
         pose = angles_to_pose_names(angles[ix_bout], angle_names)
         delay_ms = int(plot_delays[i]*1000)
-        print(dist, delay_ms)
+        sub = slice(300, 600) if dist == 'poisson' else slice(305, 400)
+        pdf = np.mean(pdfs_shaped[ix_bout, sub])
+        print('{}, {} ms sensory, {:.3f}'.format(dist, delay_ms, pdf))
         make_fly_video(pose, 'vids/simulated_fly_sensedelay_{}_{}ms.mp4'.format(dist, delay_ms))
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-#+begin_example
-poisson 0
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.12it/s]
-
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.48it/s]
-
-poisson 10
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.65it/s]
-
-poisson 15
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.09it/s]
-impulse 0
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.62it/s]
-impulse 5
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.49it/s]
-impulse 10
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.85it/s]
-impulse 15
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.51it/s]
-#+end_example
-[[file:./.ob-jupyter/783dc16f6c6c2062c610e303f74a0db8a91f7378.png]]
-[[file:./.ob-jupyter/179c55e180904016f9d2f874cd16c937b6f9e485.png]]
-[[file:./.ob-jupyter/a23e1f22bc04e26900cde39d279f329d0f0c7435.png]]
-[[file:./.ob-jupyter/b243eca707530d98e305511745f96f4166b85e93.png]]
-[[file:./.ob-jupyter/3ce8513bc228a58d5d74e8f8230678e9259bf72e.png]]
-[[file:./.ob-jupyter/622bb1320dabf69341ffb374812d0f9be4a018bd.png]]
-[[file:./.ob-jupyter/6a07838ec113afc0c5c0c40eea106d7727015095.png]]
-[[file:./.ob-jupyter/de0fd9ac696a36d049b6c709df2275381cb25d20.png]]
-:END:
+: 2253b5d9-473c-4e8b-af20-f085a1f9cadf
 
 
 ** all the heatmap plots!
@@ -664,6 +569,7 @@ to_plot  = [("during - before perturbations", "during_diff_logpdf"),
 #+END_SRC
 
 #+RESULTS:
+: 92767db0-5ed5-44cf-9d4f-24465c001b6c
 
 
 #+BEGIN_SRC jupyter-python
@@ -712,6 +618,8 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
             ax.set_xticks(np.arange(len(dimg.columns)), labels=dimg.columns)
             ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index * 1000))
 
+            ax.invert_yaxis()
+
             if xaxis == 'speed':
                 ax.set_xlabel("Speed (mm/s)")
             elif xaxis == 'max_velocity':
@@ -730,13 +638,4 @@ for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-[[file:./.ob-jupyter/bff6578d5b11013f86689f8a670ac2c25fe196be.png]]
-[[file:./.ob-jupyter/c07022ba7d66beceac96a570577d804e62580e39.png]]
-[[file:./.ob-jupyter/421423960974a8399993c1e06b44775c86ce3e2d.png]]
-[[file:./.ob-jupyter/96648574d997b7876e8a56863aba63f941bfb79a.png]]
-[[file:./.ob-jupyter/2a2d4ec15ea3bd12ad1e7dd493109784d8dffec7.png]]
-[[file:./.ob-jupyter/f1765230318a2243b222f9f12defdd6b882bf01f.png]]
-[[file:./.ob-jupyter/47c4eeef6dc0bdfc00e623b144eeabbec798d55f.png]]
-[[file:./.ob-jupyter/ea742605e354bff889b7249d82af9c90c20af5d4.png]]
-:END:
+: aabd8c07-c188-46ce-8a60-9ccd2780f5de
