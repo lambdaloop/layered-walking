@@ -1,0 +1,1453 @@
+#+TITLE: State walking model
+
+* Goal
+In this notebook, I'd like to implement a walking model which takes the following 4 angles:
+- L1A_flex
+- L1B_flex
+- L1C_flex
+- L1B_rot
+
+It should output the angle and derivative.
+
+* Setup
+#+BEGIN_SRC jupyter-python
+# -*- coding: utf-8 -*-
+import pandas as pd
+import numpy as np
+
+from tqdm import tqdm, trange
+from scipy import stats, signal
+import os
+from collections import Counter
+import pickle
+import time
+import sys
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+
+plt.style.use('default')
+plt.rcParams['figure.figsize'] = (7.5, 2)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+import tensorflow as tf
+
+from model_functions import get_props_by_bouts, get_sw_xy, get_period, get_speed
+from model_functions import prop_params
+from model_functions import MLPScaledXY, num_vars
+from model_functions import wrap_array, summarize
+
+print("TensorFlow version: {}".format(tf.__version__))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mModuleNotFoundError[0m                       Traceback (most recent call last)
+: Input [0;32mIn [3][0m, in [0;36m<cell line: 5>[0;34m()[0m
+: [1;32m      1[0m os[38;5;241m.[39menviron[[38;5;124m'[39m[38;5;124mTF_CPP_MIN_LOG_LEVEL[39m[38;5;124m'[39m] [38;5;241m=[39m [38;5;124m'[39m[38;5;124m3[39m[38;5;124m'[39m
+: [1;32m      3[0m [38;5;28;01mimport[39;00m [38;5;21;01mtensorflow[39;00m [38;5;28;01mas[39;00m [38;5;21;01mtf[39;00m
+: [0;32m----> 5[0m [38;5;28;01mfrom[39;00m [38;5;21;01mmodel_functions[39;00m [38;5;28;01mimport[39;00m get_props_by_bouts, get_sw_xy, get_period, get_speed
+: [1;32m      6[0m [38;5;28;01mfrom[39;00m [38;5;21;01mmodel_functions[39;00m [38;5;28;01mimport[39;00m prop_params
+: [1;32m      7[0m [38;5;28;01mfrom[39;00m [38;5;21;01mmodel_functions[39;00m [38;5;28;01mimport[39;00m MLPScaledXY, num_vars
+:
+: [0;31mModuleNotFoundError[0m: No module named 'model_functions'
+:END:
+
+I need these lines so that the GPU doesn't take up the whole memory in tensorflow
+#+BEGIN_SRC jupyter-python
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+  try:
+    # Currently, memory growth needs to be the same across GPUs
+    for gpu in gpus:
+      tf.config.experimental.set_memory_growth(gpu, True)
+    logical_gpus = tf.config.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
+  except RuntimeError as e:
+    # Memory growth must be set before GPUs have been initialized
+    print(e)
+#+END_SRC
+
+#+RESULTS:
+
+
+* Load the data
+
+** Constants
+Some constants
+#+BEGIN_SRC jupyter-python
+FPS = 300.0
+
+legs = ['L1', 'L2', 'L3', 'R1', 'R2', 'R3']
+items = {
+    'A_flex': 'coxa abduction',
+    'A_abduct': 'body-coxa flexion',
+    'A_rot': 'coxa rotation',
+    'B_flex': 'coxa-femur flexion',
+    'B_rot': 'femur rotation',
+    'C_flex': 'femur-tibia flexion',
+    'C_rot': 'tibia rotation',
+    'D_flex': 'tibia-tarsus flexion'
+}
+
+small_main = ['C_flex']
+subset_main = ['C_flex', 'A_abduct', 'B_flex', 'B_rot']
+# full_main = ['A_flex', 'A_abduct', 'A_rot', 'B_flex', 'B_rot', 'C_flex', 'C_rot', 'D_flex']
+# full_main = ['A_flex', 'A_abduct', 'A_rot', 'B_flex', 'B_rot', 'C_flex', 'C_rot']
+full_main = ['A_abduct', 'A_flex', 'B_flex', 'C_flex', 'D_flex', 'A_rot', 'B_rot', 'C_rot']
+
+#+END_SRC
+
+#+RESULTS:
+
+
+** Functions
+
+#+BEGIN_SRC jupyter-python
+def get_context_var(name, c):
+    if name == 'fictrac_speed':
+        return fictrac_vals[c, 1] # delta_rot_lab_y_mms
+    elif name == 'fictrac_rot':
+        return fictrac_vals[c, 0] # delta_rot_lab_x_mms
+    elif name == 'period':
+        ix = angle_names.index('L1C_flex')
+        return get_period(angles_raw[c, ix])
+    elif name == 'frequency':
+        ix = angle_names.index('L1C_flex')
+        return get_speed(angles_raw[c, ix])
+    else:
+        raise ValueError("invalid context name: {}".format(name))
+
+def get_context(context_list, c):
+    if len(context_list) == 0:
+        return np.zeros((np.sum(c), 0))
+    L = []
+    for name in context_list:
+        L.append(get_context_var(name, c))
+    context = np.vstack(L).T
+    return context
+
+def get_data(good_bouts, params):
+    ix = [angle_names.index(name) for name in angles_main]
+    c = np.isin(bout_numbers, good_bouts)
+    inp = np.hstack([angles_raw[:,ix][c], angles_deriv[:,ix][c]])
+    accel = angles_accel[:,ix][c]
+
+    praw = wrap_array(phases[c, 0])
+    pderiv = wrap_array(phases_deriv[c, 0])
+    context = get_context(params['context'], c)
+    fnum = framenums[c]
+    fname = fullfiles[c]
+    check = (fname[1:] == fname[:-1]) & (fnum[1:]-1 == fnum[:-1])
+    bnums = bout_numbers[c][1:][check]
+
+    x_walk = np.hstack([inp, context, np.cos(praw), np.sin(praw)])[:-1]
+    y_walk = np.hstack([accel, pderiv])[1:]
+
+    x_walk = x_walk[check].astype('float32')
+    y_walk = y_walk[check].astype('float32')
+    msx_w = summarize(x_walk)
+    msy_w = summarize(y_walk)
+
+    return (x_walk, y_walk, msx_w, msy_w), bnums
+
+def filter_bouts(bnums):
+  ix = angle_names.index('L1C_flex')
+  good_bouts = []
+  for bnum in tqdm(np.unique(bnums), ncols=70):
+      # if bnum == 0 or np.isnan(bnum): continue
+      # cc = np.isclose(bout_numbers, bnum)
+      cc = bout_numbers == bnum
+      raw = np.abs(angles_raw[cc, ix])
+      # deriv = angles_deriv[cc, ix] / FPS
+      low, high = np.percentile(raw, [5, 95])
+      # high_deriv = np.percentile(deriv, 95)
+      vals = fictrac_vals[cc]
+      if not np.all(np.isfinite(vals)):
+          continue
+      some_walking = np.mean(vals[:,1]) > 1.5
+      no_turning = np.abs(np.mean(vals[:,0])) < 2.0
+      if some_walking and no_turning \
+         and  high - low > 30 and len(raw) >= 150:
+          good_bouts.append(bnum)
+  good_bouts = np.array(good_bouts)
+  return good_bouts
+
+#+END_SRC
+
+#+RESULTS:
+
+
+
+
+** Data files
+#+BEGIN_SRC jupyter-python
+prefix = '/home/pierre/data/tuthill/summaries/v3-b4/lines'
+fnames = [
+  "evyn--Berlin-WT.pq",  "sarah--rv1-Berlin-WT.pq",
+  # "sarah--rv4-Berlin-WT.pq",
+  # "sarah--rv3-Berlin-WT.pq",  "sarah--rv10-Berlin-WT.pq"
+]
+ds = []
+for fname in fnames:
+  print(fname)
+  d = pd.read_parquet(os.path.join(prefix, fname))
+  ds.append(d)
+data = pd.concat(ds)
+#+END_SRC
+
+#+RESULTS:
+: evyn--Berlin-WT.pq
+: sarah--rv1-Berlin-WT.pq
+
+#+RESULTS:
+
+** Compute more values
+
+#+BEGIN_SRC jupyter-python
+check = data['walking_bout_number'].notna().values
+
+angle_names = [leg + name for leg in legs for name in subset_main]
+angle_deriv_names = [leg + name +"_d1" for leg in legs for name in subset_main]
+angle_accel_names = [leg + name +"_d2" for leg in legs for name in subset_main]
+
+angles_main = ['L1C_flex', 'L1A_abduct', 'L1B_flex', 'L1B_rot']
+
+all_names = angle_names + angle_deriv_names
+# all_names = joint_names + joint_deriv_names
+
+# angles_raw = np.abs(data.loc[check, angle_names].values)
+angles_raw = data.loc[check, angle_names].values
+# angles_deriv = data.loc[check, angle_deriv_names].values
+# angles_accel = data.loc[check, angle_accel_names].values
+# phases = np.mod(phases_d.loc[check].values, 2*np.pi)
+
+cc = [x[-6:] == 'C_flex' for x in angle_names]
+angles_raw[:,cc] = np.abs(angles_raw[:,cc])
+
+
+fullfiles = data.loc[check, 'fullfile'].to_numpy()
+framenums = data.loc[check, 'fnum'].to_numpy()
+flyids = data.loc[check, 'flyid'].to_numpy()
+
+bout_numbers_raw = data.loc[check, 'walking_bout_number'].values.astype('int64')
+bout_numbers = flyids + " b" + bout_numbers_raw.astype('str')
+
+
+# fictrac_vals = data.loc[check, ['fictrac_speed', 'fictrac_rot']].values
+fictrac_vals = data.loc[check, [
+  # 'fictrac_speed_mms',
+  'fictrac_delta_rot_lab_x_mms',
+  'fictrac_delta_rot_lab_y_mms',
+  'fictrac_delta_rot_lab_z_mms']].values
+
+fictrac_vals[:, 1] = -1 * fictrac_vals[:, 1]
+
+#+END_SRC
+
+#+RESULTS:
+: ed64e095-0adc-4ca2-b077-4e4a1765355a
+
+
+#+BEGIN_SRC jupyter-python
+def fix_angle(vals):
+    s = np.zeros(vals.shape)
+    if len(vals.shape) == 1:
+        d = np.append(0, np.diff(vals, axis=0))
+    elif len(vals.shape) == 2:
+        d = np.pad(np.diff(vals, axis=0), pad_width=((1, 0), (0,0)))
+    else:
+        raise ValueError("Unsupported input shape for fix_angle: {}".format(vals.shape))
+    s[d > 160] = -360
+    s[d < -160] = 360
+    out = np.cumsum(s, axis=0) + vals
+    return out
+#+END_SRC
+
+#+RESULTS:
+: 39d6d596-1552-4aaa-a6b1-18d42c42b17e
+
+
+
+
+#+BEGIN_SRC jupyter-python
+angles_deriv = np.zeros(angles_raw.shape)
+angles_accel = np.zeros(angles_raw.shape)
+phases = np.zeros(angles_raw.shape)
+phases_deriv = np.zeros(phases.shape)
+
+sos = signal.butter(1, (0.02, 0.4), 'bandpass', output='sos')
+
+for f in tqdm(np.unique(fullfiles), ncols=70):
+  cc = fullfiles == f
+  ang = fix_angle(angles_raw[cc])
+  angles_raw[cc] = ang
+  # ang = angles_raw[cc]
+  angles_deriv[cc] = signal.savgol_filter(ang, 5, 2, deriv=1, axis=0)
+  angles_accel[cc] = signal.savgol_filter(ang, 5, 2, deriv=2, axis=0)
+  ang_f = signal.sosfiltfilt(sos, ang, axis=0)
+  phases[cc] = np.mod(np.angle(signal.hilbert(ang_f, axis=0)), 2*np.pi)
+  phases_deriv[cc] = signal.savgol_filter(np.unwrap(phases[cc], axis=0),
+                                          5, 2, deriv=1, axis=0, mode='nearest')
+
+#+END_SRC
+
+#+RESULTS:
+: 51ffcd3f-c4a0-4faf-b7c1-dfba50615551
+
+
+** Format the data
+
+#+BEGIN_SRC jupyter-python
+for i in range(3):
+    plt.figure()
+    _ = plt.hist(fictrac_vals[:,i], bins=100)
+    plt.xlim(-30, 30)
+#+END_SRC
+
+#+RESULTS:
+: 43321199-d944-40ff-8a68-2ee53c4ae1df
+
+
+#+BEGIN_SRC jupyter-python
+# fly = "6.15.20 Fly 4_0"
+# fly = "all"
+# bnums = np.unique(bout_numbers[flyids == fly])
+bnums = np.unique(bout_numbers)
+ix = angle_names.index('L1C_flex')
+
+good_bouts = filter_bouts(bnums)
+
+np.random.seed(123)
+np.random.shuffle(good_bouts)
+#+END_SRC
+
+#+RESULTS:
+: 14db872b-10a0-4a02-8254-e14a63594ac6
+
+#+BEGIN_SRC jupyter-python
+# params = {'context': ['fictrac_speed', 'fictrac_rot'], 'use_phase': True}
+params = {'context': ['fictrac_speed'], 'use_phase': True}
+
+xy_w, bnums = get_data(good_bouts[:-5], params)
+xy_w_test, bnums_test = get_data(good_bouts[-5:], params)
+
+print("Data points in training set:", len(xy_w[0]))
+print("Data points in test set:", len(xy_w_test[0]))
+#+END_SRC
+
+#+RESULTS:
+: ae786b70-99d9-4fe1-8c3e-a9d695164ed1
+
+* Simple MLP
+** Train the model
+*** Constants
+
+#+BEGIN_SRC jupyter-python
+# batch_size = 2500
+# n_epochs = 6000
+batch_size = 2000
+n_epochs = 200
+# n_epochs = 1000
+#+END_SRC
+
+#+RESULTS:
+
+*** Model setup
+
+#+BEGIN_SRC jupyter-python
+model_walk = MLPScaledXY(output_dim=xy_w[1].shape[1],
+                         hidden_dim=256, dropout_rate=0.05,
+                         msx=xy_w[2], msy=xy_w[3])
+
+model_walk(xy_w[0][:2])
+print('Walk', num_vars(model_walk))
+#+END_SRC
+
+#+RESULTS:
+: Walk 70149
+
+*** Training function
+
+#+BEGIN_SRC jupyter-python
+lr = tf.Variable(1e-3)
+opt = tf.keras.optimizers.Adam(learning_rate=lr)
+
+@tf.function
+def step_mlp_norm(model_walk, in_walk, out_walk):
+  """Performs one optimizer step on a single mini-batch."""
+  in_walk = tf.cast(in_walk, 'float32')
+  out_walk = tf.cast(out_walk, 'float32')
+
+  N = out_walk.shape[0]
+
+  with tf.GradientTape() as tape:
+      pred_walk = model_walk(in_walk, is_training=True)
+      error_walk = tf.square(out_walk - pred_walk) / tf.square(model_walk.msy[1])
+      loss = tf.reduce_mean(error_walk)
+
+  variables = model_walk.trainable_variables
+  grads = tape.gradient(loss, variables)
+  opt.apply_gradients(zip(grads, variables))
+  return loss
+#+END_SRC
+
+#+RESULTS:
+
+*** Running the training
+
+#+BEGIN_SRC jupyter-python
+in_walk = xy_w[0]
+in_walk_state = in_walk[:, :-3]
+extra_walk = in_walk[:, -3:]
+out_walk = xy_w[1]
+
+t0 = time.time()
+
+for epoch_num in range(n_epochs+1):
+    ixs = np.arange(len(in_walk))
+    np.random.shuffle(ixs)
+    total = 0
+    num = 0
+    for s in range(0, len(ixs), batch_size):
+        c = ixs[s:s+batch_size]
+        in_walk_c = np.copy(in_walk[c])
+        out_walk_c = np.copy(out_walk[c])
+        total += step_mlp_norm(model_walk, in_walk_c, out_walk_c).numpy()
+        num += 1
+    if epoch_num % 25 == 0:
+        t1 = time.time() - t0
+        print("Time: {:.2f} Epoch {}: {:.5f}".format(t1, epoch_num, total / num))
+
+print("Done!")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Time: 0.48 Epoch 0: 0.52855
+Time: 5.02 Epoch 25: 0.38398
+Time: 9.53 Epoch 50: 0.36685
+Time: 13.98 Epoch 75: 0.35652
+Time: 18.50 Epoch 100: 0.34889
+Time: 23.00 Epoch 125: 0.34355
+Time: 27.45 Epoch 150: 0.33860
+Time: 31.97 Epoch 175: 0.33513
+Time: 36.49 Epoch 200: 0.33193
+Done!
+#+end_example
+
+** Evaluating the model
+
+#+BEGIN_SRC jupyter-python
+def update_state(ang, drv, phase, out, ratio=1.0):
+    accel = out[:len(ang)]
+    drv1 = drv + accel * ratio
+    ang1 = ang + drv * ratio
+    phase1 = phase + out[-1]*ratio
+    return ang1, drv1, phase1
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+n_ang = len(angles_main)
+
+common = Counter(bnums).most_common(50)
+b, _ = common[3]
+
+n_pred = 200
+
+cc = np.where(b == bnums)[0][:n_pred]
+real_ang = xy_w[0][cc, :n_ang]
+real_drv = xy_w[0][cc, n_ang:n_ang*2]
+rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+real_phase = np.arctan2(rsin, rcos)
+real_context = xy_w[0][cc, -3:-2]
+
+ang = real_ang[0]
+drv = real_drv[0]
+context = real_context
+pcos, psin = rcos[0], rsin[0]
+phase = np.arctan2(psin, pcos)
+
+pred_ang = np.zeros((n_pred, n_ang))
+pred_drv = np.zeros((n_pred, n_ang))
+pred_phase = np.zeros(n_pred)
+
+for i in range(n_pred):
+  inp = np.hstack([ang, drv, context[i], pcos, psin])
+  out = model_walk(inp[None].astype('float32'))[0].numpy()
+  ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+  new_inp = np.hstack([ang1, drv1, context[i], np.cos(phase1), np.sin(phase1)])
+  out = model_walk(new_inp[None].astype('float32'))[0].numpy()
+  ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+  # phase = np.mod(phase, 2*np.pi)
+  phase = np.mod(real_phase[i], 2*np.pi)
+  pcos, psin = np.cos(phase), np.sin(phase)
+  pred_ang[i] = ang
+  pred_drv[i] = drv
+  pred_phase[i] = phase
+#+END_SRC
+
+#+RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_ang)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_ang)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| 20.0 | 180.0 |
+[[file:./.ob-jupyter/62963e6ef43a72c766671e789015a8b2d28fdf3c.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_drv)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_drv)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: Text(0, 0.5, 'Angle (deg)')
+[[file:./.ob-jupyter/a050913d8ca4f83b3257a48da96ef84b72d75a4b.png]]
+:END:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(7, 4))
+plt.subplot(211)
+# plt.plot(np.cos(pred_phase))
+# plt.plot(np.sin(pred_phase))
+plt.plot(np.mod(pred_phase, 2*np.pi))
+plt.subplot(212)
+plt.plot(np.mod(real_phase, 2*np.pi))
+# plt.plot(np.cos(real_phase))
+# plt.plot(np.sin(real_phase))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f8b5402e730> |
+[[file:./.ob-jupyter/de7589810a0feea99e8575c047f2b93a1114b864.png]]
+:END:
+
+* Mode adaptive network model
+Although the basic MLP model works, it does not respond appropriately to a different phase input.
+I think this could be fixed if I switch to a mode adaptive formulation which changes weights as a function of speed and phase.
+
+** Network model
+#+BEGIN_SRC jupyter-python
+from typing import Optional, Text
+from tensorflow.python.keras.engine.input_spec import InputSpec
+from tensorflow.keras import Model
+from tensorflow.keras import layers
+
+
+class ModeAdaptiveLinear(Model):
+  """Linear module, modified to handle phase as an input."""
+
+  def __init__(self,
+               output_size: int,
+               n_control: int = 4,
+               with_bias: bool = True,
+               name: Optional[Text] = None):
+    super(ModeAdaptiveLinear, self).__init__(name=name)
+    self.output_size = output_size
+    self.with_bias = with_bias
+    self.n_control = n_control
+
+  def build(self, input_shape):
+      self.w = self.add_weight(shape=(self.n_control, input_shape[-1], self.output_size),
+                               initializer='random_normal',
+                               trainable=True)
+      if self.with_bias:
+        self.b = self.add_weight(shape=(self.n_control, self.output_size,),
+                                 initializer='zeros',
+                                 trainable=True)
+
+  def _get_weights(self, weights: tf.Tensor):
+    w_p = tf.einsum('ji,imk->jmk', weights, self.w)
+    if self.with_bias:
+      b_p = tf.einsum('ji,ik->jk', weights, self.b)
+    else:
+      b_p = None
+    return w_p, b_p
+
+  def call(self, inputs: tf.Tensor, weights: tf.Tensor) -> tf.Tensor:
+    w_p, b_p = self._get_weights(weights)
+
+    outputs = tf.squeeze(tf.matmul(tf.expand_dims(inputs, 1), w_p))
+    if self.with_bias:
+      outputs = tf.add(outputs, b_p)
+    return outputs
+#+END_SRC
+
+#+RESULTS:
+
+This is a variant of my previous mode adaptive network which takes a different set of variables for the determination of the weights
+#+BEGIN_SRC jupyter-python
+class ModeAdaptiveMLP(Model):
+  def __init__(self, output_dim=10, hidden_dim=512, gating_dim=32,
+               n_control=4, dropout_rate=None,
+               msx=(0,1), msg=(0,1), msy=(0,1)):
+    super(ModeAdaptiveMLP, self).__init__()
+    self.gating1 = layers.Dense(gating_dim, name="gating1")
+    self.gating2 = layers.Dense(gating_dim, name="gating2")
+    self.gating3 = layers.Dense(n_control, name="gating3")
+
+    self.hidden1 = ModeAdaptiveLinear(hidden_dim, n_control=n_control, name="hidden1")
+    self.hidden2 = ModeAdaptiveLinear(hidden_dim, n_control=n_control, name="hidden2")
+    self.final = ModeAdaptiveLinear(output_dim,  n_control=n_control, name="final")
+    self._dropout_rate = dropout_rate
+    self.msx = msx
+    self.msg = msg
+    self.msy = msy
+
+  def _get_phase_weights(self, g):
+    gs = (g - self.msg[0]) / self.msg[1]
+    output = tf.nn.elu(self.gating1(gs))
+    output = tf.nn.elu(self.gating2(output))
+    output = self.gating3(output)
+    output = tf.nn.softmax(output)
+    return output
+
+  def _run_with_weights(self, x, weights, is_training=False):
+    use_dropout = is_training and self._dropout_rate not in (None, 0)
+    xs = (x - self.msx[0]) / self.msx[1]
+    output = tf.nn.elu(self.hidden1(xs, weights))
+    if use_dropout:
+      output = tf.nn.dropout(output, self._dropout_rate)
+    output = tf.nn.elu(self.hidden2(output, weights))
+    if use_dropout:
+      output = tf.nn.dropout(output, self._dropout_rate)
+    output = self.final(output, weights)
+    output = output * self.msy[1] + self.msy[0]
+    return output
+
+  def __call__(self, x, g, is_training=False):
+    weights = self._get_phase_weights(g)
+    output = self._run_with_weights(x, weights, is_training)
+    return output
+#+END_SRC
+
+#+RESULTS:
+
+** Train the model
+*** Constants
+
+#+BEGIN_SRC jupyter-python
+# batch_size = 2500
+# n_epochs = 6000
+batch_size = 2000
+n_epochs = 200
+# n_epochs = 1000
+#+END_SRC
+
+#+RESULTS:
+
+*** Model setup
+#+BEGIN_SRC jupyter-python
+n_ang = len(angles_main)
+msx = xy_w[2][0][:n_ang*2], xy_w[2][1][:n_ang*2]
+msg = xy_w[2][0][n_ang*2:], xy_w[2][1][n_ang*2:]
+msy = xy_w[3]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+model_walk = ModeAdaptiveMLP(output_dim=xy_w[1].shape[1],
+                             n_control=6, gating_dim=32,
+                             hidden_dim=64, dropout_rate=0.05,
+                             msx=msx, msg=msg, msy=msy)
+
+x = xy_w[0][:2,:n_ang*2]
+g = xy_w[0][:2,n_ang*2:]
+model_walk(x, g)
+print('Walk', num_vars(model_walk))
+#+END_SRC
+
+#+RESULTS:
+: Walk 31748
+
+*** Training function
+
+#+BEGIN_SRC jupyter-python
+lr = tf.Variable(1e-3)
+opt = tf.keras.optimizers.Adam(learning_rate=lr)
+
+@tf.function
+def step_mlp_norm(model_walk, in_walk_x, in_walk_g, out_walk):
+  """Performs one optimizer step on a single mini-batch."""
+  in_walk_x = tf.cast(in_walk_x, 'float32')
+  in_walk_g = tf.cast(in_walk_g, 'float32')
+  out_walk = tf.cast(out_walk, 'float32')
+
+  N = out_walk.shape[0]
+
+  with tf.GradientTape() as tape:
+      pred_walk = model_walk(in_walk_x, in_walk_g, is_training=True)
+      error_walk = tf.square(out_walk - pred_walk) / tf.square(model_walk.msy[1])
+      loss = tf.reduce_mean(error_walk)
+
+  variables = model_walk.trainable_variables
+  grads = tape.gradient(loss, variables)
+  opt.apply_gradients(zip(grads, variables))
+  return loss
+#+END_SRC
+
+#+RESULTS:
+
+*** Running the training
+
+#+BEGIN_SRC jupyter-python
+in_walk = xy_w[0]
+in_walk_x = in_walk[:, :-3]
+in_walk_g = in_walk[:, -3:]
+out_walk = xy_w[1]
+
+t0 = time.time()
+
+for epoch_num in range(n_epochs+1):
+    ixs = np.arange(len(in_walk))
+    np.random.shuffle(ixs)
+    total = 0
+    num = 0
+    for s in range(0, len(ixs), batch_size):
+        c = ixs[s:s+batch_size]
+        in_walk_x_c = np.copy(in_walk_x[c])
+        in_walk_g_c = np.copy(in_walk_g[c])
+        out_walk_c = np.copy(out_walk[c])
+        total += step_mlp_norm(model_walk, in_walk_x_c, in_walk_g_c, out_walk_c).numpy()
+        num += 1
+    if epoch_num % 25 == 0:
+        t1 = time.time() - t0
+        print("Time: {:.2f} Epoch {}: {:.5f}".format(t1, epoch_num, total / num))
+
+print("Done!")
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+Time: 0.41 Epoch 0: 0.33599
+Time: 9.35 Epoch 25: 0.33344
+Time: 18.41 Epoch 50: 0.33125
+Time: 27.36 Epoch 75: 0.33041
+Time: 36.34 Epoch 100: 0.32825
+Time: 45.35 Epoch 125: 0.32635
+Time: 54.39 Epoch 150: 0.32515
+Time: 63.40 Epoch 175: 0.32382
+Time: 72.39 Epoch 200: 0.32371
+Done!
+#+end_example
+
+
+** Evaluating the model
+
+#+BEGIN_SRC jupyter-python
+def update_state(ang, drv, phase, out, ratio=1.0):
+    accel = out[:len(ang)]
+    drv1 = drv + accel * ratio
+    ang1 = ang + drv * ratio
+    phase1 = phase + out[-1]*ratio
+    return ang1, drv1, phase1
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+n_ang = len(angles_main)
+
+common = Counter(bnums).most_common(50)
+b, _ = common[0]
+
+n_pred = 200
+
+cc = np.where(b == bnums)[0][:n_pred]
+real_ang = xy_w[0][cc, :n_ang]
+real_drv = xy_w[0][cc, n_ang:n_ang*2]
+rcos, rsin = xy_w[0][:, [-2, -1]][cc].T
+real_phase = np.arctan2(rsin, rcos)
+real_context = xy_w[0][cc, -3:-2]
+
+ang = real_ang[0]
+drv = real_drv[0]
+context = real_context
+pcos, psin = rcos[0], rsin[0]
+phase = np.arctan2(psin, pcos)
+
+pred_ang = np.zeros((n_pred, n_ang))
+pred_drv = np.zeros((n_pred, n_ang))
+pred_phase = np.zeros(n_pred)
+
+for i in range(n_pred):
+  inp_x = np.hstack([ang, drv])
+  inp_g = np.hstack([context[i], np.cos(phase), np.sin(phase)])
+  out = model_walk(inp_x[None].astype('float32'), inp_g[None].astype('float32'))[0].numpy()
+  ang1, drv1, phase1 = update_state(ang, drv, phase, out, ratio=0.5)
+  inp_x = np.hstack([ang1, drv1])
+  inp_g = np.hstack([context[i], np.cos(phase1), np.sin(phase1)])
+  out = model_walk(inp_x[None].astype('float32'), inp_g[None].astype('float32'))[0].numpy()
+  ang, drv, phase = update_state(ang, drv, phase, out, ratio=1.0)
+  # phase = np.mod(phase, 2*np.pi)
+  phase = real_phase[i]
+  pred_ang[i] = ang
+  pred_drv[i] = drv
+  pred_phase[i] = phase
+#+END_SRC
+
+#+RESULTS:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_ang)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_ang)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+plt.ylim(20, 180)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| 20.0 | 180.0 |
+[[file:./.ob-jupyter/f17f47896861cba325fc0e4f36ef9168cff73522.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+sos = signal.butter(1, (0.02, 0.4), 'bandpass', output='sos')
+ang_f = signal.sosfiltfilt(sos, real_ang, axis=0)
+plt.plot(ang_f[:,0])
+pp = np.mod(np.angle(signal.hilbert(ang_f, axis=-0)), 2*np.pi)
+plt.plot(pp[:,0])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f8cf01d8a90> |
+[[file:./.ob-jupyter/509319a79d7a3b73b59c5a074259d3fd586dd1ec.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 9))
+plt.subplot(211)
+plt.plot(pred_drv)
+plt.title('Simulated')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+plt.subplot(212)
+plt.plot(real_drv)
+plt.legend(labels=["femur-tibia flexion", "body-coxa flexion", "coxa-femur flexion", "coxa-femur rotation"])
+plt.title('Real')
+plt.xlabel('Frame number')
+plt.ylabel('Angle (deg)')
+# plt.ylim(20, 180)
+
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: Text(0, 0.5, 'Angle (deg)')
+[[file:./.ob-jupyter/1343c1c0c4ea9933f18585388f22dd035cc743a8.png]]
+:END:
+
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(7, 4))
+plt.subplot(211)
+# plt.plot(np.cos(pred_phase))
+# plt.plot(np.sin(pred_phase))
+plt.plot(pred_phase)
+plt.subplot(212)
+plt.plot(real_phase)
+# plt.plot(np.cos(real_phase))
+# plt.plot(np.sin(real_phase))
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f8bdc0f5a60> |
+[[file:./.ob-jupyter/495d46a8742eafaad3d26fdda4639a8ccb5ed966.png]]
+:END:
+
+* Extracting phase offsets across behaviors
+
+
+#+BEGIN_SRC jupyter-python
+# good_flex = [x[-6:] == 'C_flex' for x in angle_names]
+good_names = ['L1C_flex', 'L2B_rot', 'L3C_flex', 'R1C_flex', 'R2B_rot', 'R3C_flex']
+good_flex = [x in good_names for x in angle_names]
+pp = phases[:, good_flex].copy()
+pp[:,[0, 3, 4]] += np.pi # add pi to correct for negative offset
+print(np.array(angle_names)[good_flex].tolist())
+#+END_SRC
+
+#+RESULTS:
+: ['L1C_flex', 'L2B_rot', 'L3C_flex', 'R1C_flex', 'R2B_rot', 'R3C_flex']
+
+
+#+BEGIN_SRC jupyter-python
+common = Counter(bout_numbers).most_common(100)
+b, _ = common[1]
+c = bout_numbers == b
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(angles_raw[c][:, good_flex])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/48f1136d308043ec523a0dc87dac417e89ca735f.png]]
+
+
+#+BEGIN_SRC jupyter-python
+plt.plot(pp[c][:100])
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+| <matplotlib.lines.Line2D | at | 0x7f62fc37fd60> | <matplotlib.lines.Line2D | at | 0x7f62fc37fd90> | <matplotlib.lines.Line2D | at | 0x7f62fc37feb0> | <matplotlib.lines.Line2D | at | 0x7f62fc37ffd0> | <matplotlib.lines.Line2D | at | 0x7f62fc38d130> | <matplotlib.lines.Line2D | at | 0x7f62fc370c10> |
+[[file:./.ob-jupyter/dedb5c76d8855ad96f33c4cef6bf7aa5bfe2d8b6.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6,6))
+for i in range(6):
+    for j in range(6):
+        plt.subplot(6, 6, i*6+j+1)
+        if j == 0:
+            plt.ylabel(good_names[i][:2])
+        if i == 5:
+            plt.xlabel(good_names[j][:2])
+        if i == j:
+            plt.xticks([])
+            plt.yticks([])
+            continue
+        diff = np.mod(pp[:, i] - pp[:, j], 2*np.pi)
+        _ = plt.hist(diff, bins=100)
+        # plt.axis('off')
+        plt.xticks([])
+        plt.yticks([])
+        plt.xlim(0, 2*np.pi)
+sns.despine()
+#+END_SRC
+
+
+#+RESULTS:
+[[file:./.ob-jupyter/2edd33e015af1fd15db18ce2095c4688a606c4a9.png]]
+
+
+#+BEGIN_SRC jupyter-python
+_ = plt.hist(fictrac_vals[:,2], bins=100, range=(-30, 30))
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/3ddc309f33e1bf9b0ebb9b93631c738ebeace6fc.png]]
+
+
+#+BEGIN_SRC jupyter-python
+speeds_y = [4, 8, 12, 16]
+speeds_z = [-8, -4, 0, 4, 8]
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+dout = dict()
+for sy in speeds_y:
+    cy = (fictrac_vals[:,1] >= sy-2) & (fictrac_vals[:,1] < sy+2)
+    for sz in speeds_z:
+        cz = (fictrac_vals[:,2] >= sz-2) & (fictrac_vals[:,2] < sz+2)
+        cc = cy & cz
+        for i in range(6):
+            for j in range(6):
+                diff = np.mod(pp[cc, i] - pp[cc, j], 2*np.pi)
+                mm = np.mean(np.exp(1j * diff))
+                mean = np.mod(np.angle(mm), 2*np.pi)
+                std = np.sqrt(-2*np.log(np.abs(mm)))
+                dout[(sy, sz, i, j)] = (mean, std)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap("plasma")
+plt.figure(figsize=(10,10))
+for i in range(6):
+    for j in range(6):
+        plt.subplot(6, 6, i*6+j+1)
+        if i == j:
+            plt.text(0.4, 0.4, legs[i], fontsize="xx-large")
+            plt.axis('off')
+            # if j <= i:
+            # plt.axis('off')
+            continue
+        base = dout[(4, 0, i, j)][0]
+        for sy in speeds_y:
+            means = [dout[(sy, sz, i, j)][0] for sz in speeds_z]
+            means = np.array(means)
+            plt.plot(speeds_z, means, color=cmap(sy/18))
+        if j != i+1:
+            plt.yticks([])
+            plt.xticks([])
+        # plt.ylim(-0.75, 0.75)
+        plt.ylim(0, 2*np.pi)
+sns.despine()
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/6beef32d739d48f10afa6d28579a2b1727f6c636.png]]
+
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap("plasma")
+plt.figure(figsize=(8,8))
+order = [0, 4, 2]
+for ri in range(3):
+    for rj in range(3):
+        plt.subplot(3, 3, ri*3+rj+1)
+        i = order[ri]
+        j = order[rj]
+        if i == j:
+            plt.text(0.4, 0.4, legs[i], fontsize="xx-large")
+            plt.axis('off')
+            # if j <= i:
+            # plt.axis('off')
+            continue
+        base = dout[(4, 0, i, j)][0]
+        for sy in speeds_y:
+            means = [dout[(sy, sz, i, j)][0] for sz in speeds_z]
+            means = np.array(means)
+            means = np.mod(means + np.pi, np.pi*2) - np.pi
+            plt.plot(speeds_z, means, color=cmap(sy/18))
+        # if j != i+1:
+        #     plt.yticks([])
+        #     plt.xticks([])
+        # plt.ylim(-0.75, 0.75)
+        plt.ylim(-np.pi, np.pi)
+sns.despine()
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/b8e803d9628ac600cc48e4e598591659c46c1235.png]]
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap("plasma")
+plt.figure(figsize=(8,8))
+order = [3, 1, 5]
+for ri in range(3):
+    for rj in range(3):
+        plt.subplot(3, 3, ri*3+rj+1)
+        i = order[ri]
+        j = order[rj]
+        if i == j:
+            plt.text(0.4, 0.4, legs[i], fontsize="xx-large")
+            plt.axis('off')
+            # if j <= i:
+            # plt.axis('off')
+            continue
+        base = dout[(4, 0, i, j)][0]
+        for sy in speeds_y:
+            means = [dout[(sy, sz, i, j)][0] for sz in speeds_z]
+            means = np.array(means)
+            means = np.mod(means + np.pi, np.pi*2) - np.pi
+            plt.plot(speeds_z, means, color=cmap(sy/18))
+        # if j != i+1:
+        #     plt.yticks([])
+        #     plt.xticks([])
+        # plt.ylim(-0.75, 0.75)
+        plt.ylim(-np.pi, np.pi)
+sns.despine()
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/35c51248f53c1c5cc31407985513213d3c284a8c.png]]
+
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap("plasma")
+plt.figure(figsize=(10,10))
+for i in range(6):
+    for j in range(6):
+        plt.subplot(6, 6, i*6+j+1)
+        if i == j:
+            plt.text(0.4, 0.4, legs[i], fontsize="xx-large")
+            plt.axis('off')
+            # if j <= i:
+            # plt.axis('off')
+            continue
+        for sy in speeds_y:
+            means = [dout[(sy, sz, i, j)][1] for sz in speeds_z]
+            means = np.array(means)
+            plt.plot(speeds_z, means, color=cmap(sy/18))
+        if j != i+1:
+            plt.yticks([])
+            plt.xticks([])
+        # plt.ylim(-0.75, 0.75)
+        plt.ylim(0, 2)
+sns.despine()
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/efaf9ec2aa79fb6b2877014d91e971462f19b61d.png]]
+
+
+#+BEGIN_SRC jupyter-python
+for i in range(6):
+    for j in range(6):
+        diff = np.mod(pp[:, i] - pp[:, j], 2*np.pi)
+        mm = np.mean(np.exp(1j * diff))
+        mean = np.angle(mm)
+        std = np.sqrt(-2*np.log(np.abs(mm)))
+        print("{}-{}  mean:{:.2f}  std:{:.2f}".format(legs[i], legs[j], np.mod(mean, 2*np.pi), std))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+L1-L1  mean:0.00  std:0.00
+L1-L2  mean:3.23  std:1.26
+L1-L3  mean:0.96  std:1.13
+L1-R1  mean:3.05  std:1.13
+L1-R2  mean:0.20  std:1.06
+L1-R3  mean:4.14  std:1.33
+L2-L1  mean:3.06  std:1.26
+L2-L2  mean:0.00  std:0.00
+L2-L3  mean:4.12  std:1.16
+L2-R1  mean:6.12  std:1.03
+L2-R2  mean:3.25  std:1.42
+L2-R3  mean:0.84  std:1.10
+L3-L1  mean:5.32  std:1.13
+L3-L2  mean:2.16  std:1.16
+L3-L3  mean:0.00  std:0.00
+L3-R1  mean:2.01  std:1.32
+L3-R2  mean:5.52  std:1.08
+L3-R3  mean:3.10  std:1.16
+R1-L1  mean:3.23  std:1.13
+R1-L2  mean:0.17  std:1.03
+R1-L3  mean:4.28  std:1.32
+R1-R1  mean:0.00  std:0.00
+R1-R2  mean:3.41  std:1.30
+R1-R3  mean:1.02  std:1.16
+R2-L1  mean:6.09  std:1.06
+R2-L2  mean:3.04  std:1.42
+R2-L3  mean:0.76  std:1.08
+R2-R1  mean:2.87  std:1.30
+R2-R2  mean:0.00  std:0.00
+R2-R3  mean:3.99  std:1.20
+R3-L1  mean:2.14  std:1.33
+R3-L2  mean:5.44  std:1.10
+R3-L3  mean:3.18  std:1.16
+R3-R1  mean:5.27  std:1.16
+R3-R2  mean:2.29  std:1.20
+R3-R3  mean:0.00  std:0.00
+#+end_example
+
+
+#+BEGIN_SRC jupyter-python
+ddiff = dict()
+for sy in speeds_y:
+    cy = (fictrac_vals[:,1] >= sy-2) & (fictrac_vals[:,1] < sy+2)
+    for sz in speeds_z:
+        cz = (fictrac_vals[:,2] >= sz-2) & (fictrac_vals[:,2] < sz+2)
+        cc = cy & cz
+        for i in range(6):
+            dx = np.diff(pp[cc, i])
+            dx = dx[(dx > -0.3) & (dx < 0.7)]
+            ddiff[(sy, sz, i)] = dx
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+cmap = plt.get_cmap("plasma")
+for i in range(6):
+    for sy in speeds_y:
+        vals = [np.mean(ddiff[(sy, sz, i)]) for sz in speeds_z]
+        plt.subplot(2, 3, i+1)
+        plt.plot(speeds_z, vals, color=cmap(sy/18))
+        plt.title(legs[i])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/237f5054080435a8bced7ab19094e5334fef08a4.png]]
+
+#+BEGIN_SRC jupyter-python
+vals = np.array([np.mean(ddiff[(sy, 0, i)]) for sy in speeds_y])
+plt.scatter(speeds_y, vals)
+s = stats.linregress(speeds_y, vals)
+plt.plot(speeds_y, s.slope * np.array(speeds_y) + s.intercept)
+print(s)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: LinregressResult(slope=0.00810912185008413, intercept=0.07525514822871354, rvalue=0.9991785046371114, pvalue=0.0008214953628885575, stderr=0.00023256485810215982, intercept_stderr=0.0025476203773108206)
+[[file:./.ob-jupyter/0b4d6b25b706b37ab3e0d7b6be06f1c21fc7f8f3.png]]
+:END:
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+offsets = np.zeros((6, 6))
+for i in range(6):
+    for j in range(6):
+        diff = np.mod(pp[:, i] - pp[:, j], 2*np.pi)
+        mm = np.mean(np.exp(1j * diff))
+        mean = np.angle(mm)
+        std = np.sqrt(-2*np.log(np.abs(mm)))
+        # print("{}-{}  mean:{:.2f}  std:{:.2f}".format(legs[i], legs[j], np.mod(mean, 2*np.pi), std))
+        offsets[i, j,] = mean
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(7,7))
+plt.imshow(offsets, cmap='twilight')
+ax = plt.gca()
+ax.set_xticks(range(6))
+ax.set_xticklabels(legs)
+ax.set_yticks(range(6))
+ax.set_yticklabels(legs)
+plt.colorbar()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.colorbar.Colorbar at 0x7f607c446850>
+[[file:./.ob-jupyter/549bd0aa8ddd82cc0f4a9c47eac784073645a2e0.png]]
+:END:
+
+#+BEGIN_SRC jupyter-python
+sub = [0,4,2,3,1,5]
+sublegs = [legs[s] for s in sub]
+plt.figure(figsize=(7,7))
+plt.imshow(offsets[sub][:,sub], cmap='twilight')
+ax = plt.gca()
+ax.set_xticks(range(len(sub)))
+ax.set_xticklabels(sublegs)
+ax.set_yticks(range(len(sub)))
+ax.set_yticklabels(sublegs)
+plt.colorbar()
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: <matplotlib.colorbar.Colorbar at 0x7f632c416c70>
+[[file:./.ob-jupyter/394087c680d3d41c5998512e18bd05987182f086.png]]
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+_ = plt.hist(ddiff[(16, 0, 0)], bins=100)
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/40bf8af3e5f8781f60080fc764cb435e37f54cb4.png]]
+
+
+#+BEGIN_SRC jupyter-python :display plain :results scalar
+offsets
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+array([[ 0.        , -3.05560396,  0.96192901,  3.05202358,  0.19249792,
+        -2.1399429 ],
+       [ 3.05560396,  0.        , -2.16420782, -0.16512586, -3.03648488,
+         0.84354644],
+       [-0.96192901,  2.16420782,  0.        ,  2.0077949 , -0.76840748,
+         3.10273806],
+       [-3.05202358,  0.16512586, -2.0077949 ,  0.        , -2.87256372,
+         1.01551641],
+       [-0.19249792,  3.03648488,  0.76840748,  2.87256372,  0.        ,
+        -2.29358311],
+       [ 2.1399429 , -0.84354644, -3.10273806, -1.01551641,  2.29358311,
+         0.        ]])
+#+end_example
+
+** Conclusions
+
+Slope of speeds y --> omega (in rad/frame)
+#+BEGIN_SRC jupyter-python
+vals = np.array([np.mean(ddiff[(sy, 0, i)]) for sy in speeds_y])
+s = stats.linregress(speeds_y, vals)
+print(s)
+#+END_SRC
+
+#+RESULTS:
+: LinregressResult(slope=0.00810912185008413, intercept=0.07525514822871354, rvalue=0.9991785046371114, pvalue=0.0008214953628885575, stderr=0.00023256485810215982, intercept_stderr=0.0025476203773108206)
+
+Slope of speeds y --> omega (in rad/s)
+#+BEGIN_SRC jupyter-python
+vals = np.array([np.mean(ddiff[(sy, 0, i)])*fps for sy in speeds_y])
+s = stats.linregress(speeds_y, vals)
+plt.scatter(speeds_y, vals)
+print(s)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+: LinregressResult(slope=2.4327365550252393, intercept=22.57654446861406, rvalue=0.9991785046371116, pvalue=0.0008214953628884468, stderr=0.06976945743064324, intercept_stderr=0.7642861131931946)
+[[file:./.ob-jupyter/6f8bfc035988028c4a1a36b2b3fd5c2697b2b47a.png]]
+:END:
+
+
+The mean phase offsets per leg
+#+BEGIN_SRC jupyter-python
+offsets
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+array([[ 0.        , -3.05622153,  0.96192901,  3.05202358,  0.1960119 ,
+        -2.1399429 ],
+       [ 3.05622153,  0.        , -2.16394489, -0.16563617, -3.03660191,
+         0.84328264],
+       [-0.96192901,  2.16394489,  0.        ,  2.0077949 , -0.76128234,
+         3.10273806],
+       [-3.05202358,  0.16563617, -2.0077949 ,  0.        , -2.86955919,
+         1.01551641],
+       [-0.1960119 ,  3.03660191,  0.76128234,  2.86955919,  0.        ,
+        -2.29461826],
+       [ 2.1399429 , -0.84328264, -3.10273806, -1.01551641,  2.29461826,
+         0.        ]])
+#+end_example
+
+
+* Simulating a kuramato oscillator model
+
+#+BEGIN_SRC jupyter-python
+offsets = np.array([
+    [ 0.        , -3.05560396,  0.96192901,  3.05202358,  0.19249792, -2.1399429 ],
+    [ 3.05560396,  0.        , -2.16420782, -0.16512586, -3.03648488, 0.84354644],
+    [-0.96192901,  2.16420782,  0.        ,  2.0077949 , -0.76840748, 3.10273806],
+    [-3.05202358,  0.16512586, -2.0077949 ,  0.        , -2.87256372, 1.01551641],
+    [-0.19249792,  3.03648488,  0.76840748,  2.87256372,  0.        , -2.29358311],
+    [ 2.1399429 , -0.84354644, -3.10273806, -1.01551641,  2.29358311, 0.        ]
+])
+
+w_slope = 2.4327365550252393
+w_intercept = 22.57654446861406
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+p0 = np.zeros(6)
+p0[:] = offsets[0] + np.random.randn(6)*1.0
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+speedy = 10
+w = w_slope * speedy + w_intercept
+ws = np.ones(6) * w
+alphas = np.ones((6,6))*1.0
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+def kuramato_deriv(px, alphas, offsets, ws):
+    return ws + np.array([
+        np.sum(alphas[i] * np.sin(px - px[i] - offsets[i]))
+        for i in range(len(px))
+    ])
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+dt = 1.0 / FPS
+
+px = p0.copy()
+full_px = [px]
+
+for _ in range(600):
+    # midpoint method update
+    px_half = px + 0.5*dt * kuramato_deriv(px, alphas, offsets, ws)
+    px_new = px + dt * kuramato_deriv(px_half, alphas, offsets, ws)
+    # euler update
+    # px_new = px + dt * kuramato_deriv(px, alphas, offsets, ws)
+    px = px_new
+    px = px + np.random.normal(size=px.shape)*dt*1.0
+    full_px.append(px)
+
+full_px = np.array(full_px)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(full_px - full_px[:,0:1] - offsets[0])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/42981e2c49081383b685adfd4e2f83f31846cd32.png]]
+
+#+BEGIN_SRC jupyter-python
+_ = plt.plot(np.sin(full_px)[:200])
+#+END_SRC
+
+#+RESULTS:
+[[file:./.ob-jupyter/9ed0ea679e03b3bab88fc65a52ba0f407b002bd7.png]]
