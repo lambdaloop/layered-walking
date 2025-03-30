@@ -1,0 +1,419 @@
+#+TITLE: Perturbation plots
+
+* Goal
+
+The goal of this notebook is to make plots for the delays figure of the paper. Namely:
+- Example perturbed trajectories with different delays
+- Effect of delta perturbation on other legs
+- Heatmap of magnitude of slippery perturbation vs delays
+
+The network should be set up so that running it from top to bottom makes all the figure sublayouts.
+
+* Setup
+
+#+BEGIN_SRC jupyter-python
+import numpy as np
+import statsmodels.api as sm
+from statsmodels.sandbox.regression.predstd import wls_prediction_std
+import matplotlib.pyplot as plt
+import os
+from tqdm import tqdm, trange
+import pandas as pd
+from scipy import signal
+from scipy.stats import gaussian_kde
+from glob import glob
+import pickle
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import sys
+project_path = "/home/lili/research/tuthill/layered-walking"
+data_path = '/home/lili/data/tuthill/models/sls_runs'
+sys.path.append(project_path)
+from tools.angle_functions import anglesTG as angle_names_1leg
+from tools.angle_functions import legs
+from tools.angle_functions import make_fly_video, angles_to_pose_names
+from tools.trajgen_tools import WalkingData
+from tools.dist_tools import DistType
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.decomposition import PCA
+%matplotlib inline
+
+plt.style.use('default')
+plt.rcParams['figure.figsize'] = (7.5, 2)
+#+END_SRC
+
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+xvals = np.linspace(-np.pi, np.pi)
+def get_phase(ang):
+    m = np.median(ang, axis=0)
+    s = np.std(ang, axis=0)
+    s[s == 0] = 1
+    dm = (ang - m) / s
+    phase = np.arctan2(-dm[:,1], dm[:,0])
+    return phase
+
+def phase_align_poly(ang, extra=None, order=5):
+    topredict = ang
+    if extra is not None:
+        topredict = np.hstack([ang, extra])
+    means = np.full((len(xvals), topredict.shape[1]), np.nan)
+    stds = np.full((len(xvals), topredict.shape[1]), np.nan)
+    if len(ang) < 50: # not enough data
+        return means, stds
+    phase = get_phase(ang)
+    # pcs = np.vstack([np.cos(phase), np.sin(phase)]).T
+    b = np.vstack([np.cos(i * phase + j) for i in range(order) for j in [0, np.pi/2]]).T
+    xcs = np.vstack([np.cos(i * xvals + j) for i in range(order) for j in [0, np.pi/2]]).T
+    for i in range(topredict.shape[1]):
+        cc = np.isfinite(topredict[:,i])
+        model = sm.OLS(topredict[cc,i], b[cc]).fit()
+        means[:,i] = model.predict(xcs)
+        s, upper,lower = wls_prediction_std(model, xcs)
+        stds[:,i] = s
+    return means, stds
+
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+# list(d.keys())
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v6_sense_actuation*.pkl')
+fnames = sorted(glob(fname_pat))
+
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v7_sense_actuation*.pkl')
+fnames += sorted(glob(fname_pat))
+
+conditions = []
+angles = []
+derivs = []
+accels = []
+
+for fname in tqdm(fnames, ncols=70):
+    # d = np.load(fname, allow_pickle=True)
+    with open(fname, 'rb') as f:
+        d = pickle.load(f)
+
+    try:
+        angle_names = d['angleNames'][0]
+    except:
+        print(fname)
+        continue
+
+    for i, cond in enumerate(d['conditions']):
+        ang = d['angle'][i]
+        deriv = signal.savgol_filter(ang, 5, 2, deriv=1, axis=0)
+        accel = signal.savgol_filter(deriv, 5, 2, deriv=1, axis=0)
+        if 'senseDelay' not in cond:
+            cond['senseDelay'] = 0.010 # fixed
+        if 'actDelay' not in cond:
+            cond['actDelay'] = 0.030
+        conditions.append(cond)
+        angles.append(ang)
+        derivs.append(deriv)
+        accels.append(accel)
+#+END_SRC
+
+#+RESULTS:
+:RESULTS:
+:   2%|▊                               | 21/866 [00:18<14:37,  1.04s/it]/home/lili/data/tuthill/models/sls_runs/delays_stats_subang_v6_sense_actuation_gaussian_001050.pkl
+:
+:  52%|████████████████▎              | 454/866 [34:51<07:10,  1.04s/it]/home/lili/data/tuthill/models/sls_runs/delays_stats_subang_v6_sense_actuation_poisson_001050.pkl
+:
+: 100%|█████████████████████████████| 866/866 [1:12:05<00:00,  4.99s/it]
+:
+:END:
+
+
+#+BEGIN_SRC jupyter-python
+conditions[0]
+#+END_SRC
+
+#+RESULTS:
+| context | : | (12 0 0) | offset | : | 0 | dist | : | <DistType.IMPULSE: | 7> | maxVelocity | : | 0.0 | senseDelay | : | 0.0 | actDelay | : | 0.0 |
+
+
+
+#+BEGIN_SRC jupyter-python
+perturb_ranges = {
+    'before': (0, 300),
+    'during': (300, 600),
+    'after': (600, 900)
+}
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+speeds = np.array([x['context'] for x in conditions])
+dist_types = np.array([x['dist'].value for x in conditions])
+act_delays = np.array([x['actDelay'] for x in conditions])
+sense_delays = np.array([x['senseDelay'] for x in conditions])
+max_velocities = np.array([x['maxVelocity'] for x in conditions])
+angle_names = list(angle_names)
+#+END_SRC
+
+#+RESULTS:
+
+
+#+BEGIN_SRC jupyter-python
+fname = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+wd = WalkingData(fname)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+wd.bout_context
+#+END_SRC
+
+#+RESULTS:
+: array([[ 3.4748168, 18.434208 ,  2.642376 ],
+:        [ 1.0033004, 20.97231  ,  3.094752 ],
+:        [ 1.4011644, 11.787567 ,  2.894012 ],
+:        ...,
+:        [ 9.824624 ,  3.8363965,  2.475409 ],
+:        [13.015    , -0.6182214,  1.8810371],
+:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+
+#+BEGIN_SRC jupyter-python
+fancy_angle_names = {
+    'C_flex': 'femur-tibia\nflexion',
+    'A_rot': 'coxa\nrotation',
+    'A_abduct': 'body-coxa\nflexion',
+    'B_flex': 'coxa-femur\nflexion',
+    'B_rot': 'femur\nrotation'
+}
+#+END_SRC
+
+#+RESULTS:
+
+* principal component metric
+
+#+BEGIN_SRC jupyter-python
+
+full_L = []
+bnums = wd._get_minlen_bnums(300)
+for bnum in bnums:
+    bout = wd.get_bnum(bnum)
+    angs = np.hstack([bout['angles'][leg] for leg in legs])
+    full_L.append(angs)
+full = np.vstack(full_L)
+
+full_sc = np.hstack([np.sin(np.deg2rad(full)),
+                     np.cos(np.deg2rad(full))])
+
+pca = PCA(n_components=2)
+pcs = pca.fit_transform(full_sc)
+
+subixs = np.random.choice(pcs.shape[0], size=10000, replace=False)
+kde = gaussian_kde(pcs[subixs,:2].T)
+#+END_SRC
+
+#+RESULTS:
+
+#+BEGIN_SRC jupyter-python
+
+angles_sc = np.dstack([np.sin(np.deg2rad(angles)),
+                       np.cos(np.deg2rad(angles))])
+
+angles_sc_flat = angles_sc.reshape(-1, angles_sc.shape[-1])
+
+pcs = pca.transform(angles_sc_flat)
+
+pdfs_flat = np.zeros(len(pcs))
+step = 500
+for i in trange(0, len(pcs), step, ncols=70):
+    pdfs_flat[i:i+step] = kde.logpdf(pcs[i:i+step, :2].T)
+
+pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
+#+END_SRC
+
+#+RESULTS:
+: a7fefc19-1a1c-4501-bf8a-7d13aa199070
+
+
+#+BEGIN_SRC jupyter-python
+np.savez_compressed('sense_actuation_angle_pdfs.npz', pdfs=pdfs_shaped)
+#+END_SRC
+
+#+RESULTS:
+: 46240a0b-6d86-40dc-8405-3e3b76a48299
+
+#+BEGIN_SRC jupyter-python
+x = np.load('sense_actuation_angle_pdfs.npz')
+#+END_SRC
+
+#+RESULTS:
+
+
+
+* Sensory actuation delay plots
+
+** Example time series
+
+For the figure part A, we'd like to have multiple example angles. Perhaps R1 femur-tibia flexion would be good to show, but also L2 femur rotation?
+I'd like to have multiple traces for each angle, perhaps we could show with forward, rotation, and sideslip?
+
+In this code, we could also make a supplementary figure with a more complete set of angles.
+
+
+#+BEGIN_SRC jupyter-python
+# plot_speeds = [[[[12, 0, 0]]]]
+plot_delays = [0, 0.015, 0.030, 0.045]
+# plot_velocities = [8, 14]
+plot_speed = 12
+#+END_SRC
+
+#+RESULTS:
+: 2b6deec0-f0dc-409f-8016-0608fdb0251a
+
+
+#+BEGIN_SRC jupyter-python
+angnames = ['R1C_flex', 'L2B_rot']
+dists = ['poisson', 'impulse']
+dist_values = {'poisson': DistType.POISSON_GAUSSIAN.value,
+               'impulse': DistType.IMPULSE.value}
+
+for dist in dists:
+    dist_value = dist_values[dist]
+    for angname in angnames:
+        ix_ang = angle_names.index(angname)
+
+        plt.figure(figsize=(5.5, 2))
+        for i in range(len(plot_delays)):
+            plt.subplot(4, 1, i+1)
+            ixs = np.where((speeds[:, 0] == plot_speed)
+                           & (dist_types == dist_value)
+                           & np.isclose(act_delays, plot_delays[i])
+                           & np.isclose(sense_delays, 0.01)
+                           )[0]
+            ix_bout = ixs[33]
+            print(conditions[ix_bout])
+            ang = angles[ix_bout][:, ix_ang]
+            t = np.arange(len(ang))/300.0
+            if angname == 'R1C_flex':
+                ang = np.clip(ang, 0, 180)
+            elif angname == 'L2B_rot':
+                ang = np.mod(ang, 360)
+            plt.plot(t, ang)
+            plt.axvline(t[300], color='gray', linestyle='dotted')
+            plt.axvline(t[600], color='gray', linestyle='dotted')
+            if angname == 'R1C_flex':
+                plt.ylim(0, 180)
+                plt.yticks([60, 120])
+            else:
+                plt.ylim(0, 360)
+                plt.yticks([120, 240])
+            if i != 2:
+                plt.xticks(ticks=[])
+
+        sns.despine(bottom=True)
+        plt.ylabel("Angle (deg)")
+        plt.xlabel("Time (s)")
+
+        plt.savefig('plots/act_delays_trace_{}_{}.pdf'.format(angname, dist),
+                    bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+: 787e090c-23d3-487c-b85b-51dd2cff7806
+** all the heatmap plots!
+
+#+BEGIN_SRC jupyter-python
+
+to_plot  = [("during - before perturbations", "during_diff_logpdf"),
+            # ("after - before perturbations", "after_diff_logpdf"),
+            # ("before perturbations", "before_logpdf"),
+            ("during perturbations", "during_logpdf"),
+            # ("after perturbations", "after_logpdf")
+            ]
+
+#+END_SRC
+
+#+RESULTS:
+: 959c0ca5-34b6-4bb0-b7df-b39b45ca651d
+
+
+#+BEGIN_SRC jupyter-python
+for dist_name, dist in [('continuous', DistType.POISSON_GAUSSIAN),
+                        ('impulse', DistType.IMPULSE)]:
+
+    if dist_name == 'continuous':
+        before = np.mean(pdfs_shaped[:, :300], axis=1)
+        during = np.mean(pdfs_shaped[:, 300:600], axis=1)
+        after = np.mean(pdfs_shaped[:, 600:900], axis=1)
+        max_velocity_constant = 3.75
+    elif dist_name == 'impulse':
+        before = np.mean(pdfs_shaped[:, :300], axis=1)
+        during = np.mean(pdfs_shaped[:, 305:400], axis=1)
+        after = np.mean(pdfs_shaped[:, 400:900], axis=1)
+        max_velocity_constant = 7.5
+
+    dd = pd.DataFrame({"act_delay": act_delays,
+                   "dist_type": dist_types,
+                   "sense_delay": sense_delays,
+                   "speed": speeds[:, 0],
+                   "max_velocity": max_velocities,
+                   "during_logpdf": during,
+                   "after_logpdf": after,
+                   "during_diff_logpdf": during-before,
+                   "after_diff_logpdf": after-before,
+                   "before_logpdf": before})
+
+    for xaxis in ['speed', 'max_velocity']:
+        check = dd['dist_type'] == dist.value
+        check = check & np.isclose(dd['max_velocity'], max_velocity_constant)
+        check = check & np.isclose(dd['speed'], 12)
+
+        dgroup = dd[check].groupby(['act_delay', 'sense_delay']).mean()
+
+
+        for (name, key) in to_plot:
+            dimg = dgroup.reset_index().pivot(columns='sense_delay', index='act_delay', values=key)
+            plt.figure(figsize=(6, 3), dpi=200)
+            plt.imshow(dimg)
+            if "diff" in key:
+                plt.imshow(dimg, vmin=-2, vmax=0)
+            else:
+                plt.imshow(dimg, vmin=-2, vmax=-1)
+
+            ax = plt.gca()
+            ax.set_xticks(np.arange(len(dimg.columns)), labels=np.int32(dimg.columns * 1000))
+            ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index * 1000))
+
+            ax.set_xlabel("Sensory delay (ms)")
+            ax.set_ylabel("Actuation delay (ms)")
+
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+                     rotation_mode="anchor")
+
+            plt.colorbar()
+            plt.title(name)
+
+            plt.savefig('plots/actsensedelay_logpdf_{}_{}.pdf'.format(dist_name, key),
+                        bbox_inches = "tight")
+
+#+END_SRC
+
+#+RESULTS:
+: 2388abdf-59da-4b25-af4d-610bc61e476c
