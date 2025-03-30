@@ -99,7 +99,7 @@ def phase_align_poly(ang, extra=None, order=5):
 In this notebook, we only load the actuation delays of 30ms, and sensory delays of 10ms (built-in for this dataset).
 
 #+BEGIN_SRC jupyter-python
-fname_pat = os.path.join(data_path, 'delays_stats_subang_v4_actuate_*.pkl')
+fname_pat = os.path.join(data_path, 'delays_stats_subang_v9_actuate_*.pkl')
 fnames = sorted(glob(fname_pat))
 
 conditions = []
@@ -127,7 +127,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 132/132 [01:41<00:00,  1.31it/s]
+: 100%|███████████████████████████████| 132/132 [22:52<00:00, 10.40s/it]
 :
 
 
@@ -163,36 +163,36 @@ conditions[:5]
 
 #+RESULTS:
 #+begin_example
-[{'context': [6, 0, 0],
-  'offset': 0,
-  'dist': <DistType.IMPULSE: 7>,
-  'maxVelocity': 0.0,
-  'actDelay': 0.03},
- {'context': [6, 0, 0],
-  'offset': 1,
-  'dist': <DistType.IMPULSE: 7>,
-  'maxVelocity': 0.0,
-  'actDelay': 0.03},
- {'context': [6, 0, 0],
-  'offset': 2,
-  'dist': <DistType.IMPULSE: 7>,
-  'maxVelocity': 0.0,
-  'actDelay': 0.03},
- {'context': [6, 0, 0],
-  'offset': 3,
-  'dist': <DistType.IMPULSE: 7>,
-  'maxVelocity': 0.0,
-  'actDelay': 0.03},
- {'context': [6, 0, 0],
-  'offset': 0,
-  'dist': <DistType.IMPULSE: 7>,
-  'maxVelocity': 1.25,
-  'actDelay': 0.03}]
+  [{'context': [6, 0, 0],
+    'offset': 0,
+    'dist': <DistType.IMPULSE: 7>,
+    'maxVelocity': 0.0,
+    'actDelay': 0.03},
+   {'context': [6, 0, 0],
+    'offset': 1,
+    'dist': <DistType.IMPULSE: 7>,
+    'maxVelocity': 0.0,
+    'actDelay': 0.03},
+   {'context': [6, 0, 0],
+    'offset': 2,
+    'dist': <DistType.IMPULSE: 7>,
+    'maxVelocity': 0.0,
+    'actDelay': 0.03},
+   {'context': [6, 0, 0],
+    'offset': 3,
+    'dist': <DistType.IMPULSE: 7>,
+    'maxVelocity': 0.0,
+    'actDelay': 0.03},
+   {'context': [6, 0, 0],
+    'offset': 0,
+    'dist': <DistType.IMPULSE: 7>,
+    'maxVelocity': 1.25,
+    'actDelay': 0.03}]
 #+end_example
 
 
 #+BEGIN_SRC jupyter-python
-fname = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+fname = '/home/lili/data/tuthill/models/models_sls/data_subang_5.pickle'
 wd = WalkingData(fname)
 #+END_SRC
 
@@ -203,13 +203,13 @@ wd.bout_context
 #+END_SRC
 
 #+RESULTS:
-: array([[ 3.4748168, 18.434208 ,  2.642376 ],
-:        [ 1.0033004, 20.97231  ,  3.094752 ],
-:        [ 1.4011644, 11.787567 ,  2.894012 ],
+: array([[  4.246732  ,   0.7071299 ,   0.3955671 ],
+:        [  2.5441482 ,   3.387733  ,   1.0246041 ],
+:        [  2.3452914 ,  -0.44610858,  -0.20245193],
 :        ...,
-:        [ 9.824624 ,  3.8363965,  2.475409 ],
-:        [13.015    , -0.6182214,  1.8810371],
-:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+:        [  6.904698  ,   3.0903168 ,   3.0456958 ],
+:        [  5.8905787 ,  -4.7177234 ,   1.9700806 ],
+:        [  8.232974  , -12.293827  ,  -0.86852646]], dtype=float32)
 
 #+BEGIN_SRC jupyter-python
 fancy_angle_names = {
@@ -257,7 +257,7 @@ for dist in dists:
             ixs = np.where(np.all(speeds == plot_speeds[i], axis=1)
                            & (dist_types == dist_value)
                            & np.isclose(act_delays, 0.030))[0]
-            ix_bout = ixs[29]
+            ix_bout = ixs[15]
             print(conditions[ix_bout])
             ang = angles[ix_bout][:, ix_ang]
             t = np.arange(len(ang))/300.0
@@ -278,26 +278,7 @@ for dist in dists:
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-#+begin_example
-{'context': [8, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [10, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [8, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [10, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.POISSON_GAUSSIAN: 6>, 'maxVelocity': 4.375, 'actDelay': 0.03}
-{'context': [8, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-{'context': [10, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-{'context': [8, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-{'context': [10, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-{'context': [12, 0, 0], 'offset': 1, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.03}
-#+end_example
-[[file:./.ob-jupyter/8f729333fb53537903c1f35ee5e8ed14838117a2.png]]
-[[file:./.ob-jupyter/221883287f87e6d9bb144ce0158f5284846d92b8.png]]
-[[file:./.ob-jupyter/57bf048656d83cc10384e96518ba96d442a363d9.png]]
-[[file:./.ob-jupyter/07ad84956b5ccf54630f0c575898ddcab935337b.png]]
-:END:
+: d9d10fc0-8e9d-4ee0-aa90-dc18986ff28d
 
 
 * principal component metric
@@ -324,17 +305,23 @@ kde = gaussian_kde(pcs[subixs,:2].T)
 
 #+RESULTS:
 
+#+BEGIN_SRC jupyter-python
+pcs = pca.transform(full_sc)
+#+END_SRC
+
+#+RESULTS:
+
 
 #+BEGIN_SRC jupyter-python
 plt.figure(figsize=(4, 4))
-plt.scatter(pcs[:,0], pcs[:,1], s=1, alpha=0.04)
+plt.scatter(pcs[:,0], pcs[:,1], s=1, alpha=0.01)
 plt.xlim(-1.0, 1.0)
 plt.ylim(-1.0, 1.0)
 plt.savefig('plots/demo_pca.pdf', bbox_inches='tight')
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/fe084e3ba6b47d8e51a895b732d9da441e66a59d.png]]
+[[./.ob-jupyter/a5b730f602cb87c21674a658c17849b1d4de4883.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -363,9 +350,9 @@ plt.savefig('plots/kde_plot.pdf', bbox_inches = "tight")
 
 #+RESULTS:
 :RESULTS:
-: /tmp/ipykernel_912333/1223795816.py:15: MatplotlibDeprecationWarning: Unable to determine Axes to steal space for Colorbar. Using gca(), but will raise in the future. Either provide the *cax* argument to use as the Axes for the Colorbar, provide the *ax* argument to steal space from it, or add *mappable* to an Axes.
+: /tmp/ipykernel_1155682/1223795816.py:15: MatplotlibDeprecationWarning: Unable to determine Axes to steal space for Colorbar. Using gca(), but will raise in the future. Either provide the *cax* argument to use as the Axes for the Colorbar, provide the *ax* argument to steal space from it, or add *mappable* to an Axes.
 :   plt.colorbar(mappable)
-[[file:./.ob-jupyter/04723b2f60c6daf9596083f2cd0f4ee62a7cea6e.png]]
+[[./.ob-jupyter/d1594b9e25e8ef37a91f6b7084315fdfcd01d5e9.png]]
 :END:
 
 
@@ -410,48 +397,62 @@ plt.plot(pdfs)
 
 #+RESULTS:
 :RESULTS:
-: {'context': [18, 0, 0], 'offset': 0, 'dist': <DistType.IMPULSE: 7>, 'maxVelocity': 8.75, 'actDelay': 0.015, 'senseDelay': 0.01}
-: -326.45791807506805
-: -322.2313856793893
-: -329.50577294615954
-| <matplotlib.lines.Line2D | at | 0x7fa50e217370> |
-[[file:./.ob-jupyter/e6c4d7bba181591da5a7c481c0e88dcf87d47c23.png]]
-[[file:./.ob-jupyter/5b8724d1b34c97aa4126dc2b07ec3556cebad7c1.png]]
-[[file:./.ob-jupyter/8d9ba7cf4c1d02289fef8cfe712deb6bfc9cb2e6.png]]
+# [goto error]
+: [0;31m---------------------------------------------------------------------------[0m
+: [0;31mIndexError[0m                                Traceback (most recent call last)
+: Cell [0;32mIn[91], line 2[0m
+: [1;32m      1[0m ix_bout [38;5;241m=[39m [38;5;241m1000[39m
+: [0;32m----> 2[0m [38;5;28mprint[39m([43mconditions[49m[43m[[49m[43mix_bout[49m[43m][49m)
+: [1;32m      3[0m ang [38;5;241m=[39m angles[ix_bout]
+: [1;32m      4[0m ang_sc [38;5;241m=[39m np[38;5;241m.[39mhstack([np[38;5;241m.[39msin(np[38;5;241m.[39mdeg2rad(ang)),
+: [1;32m      5[0m                     np[38;5;241m.[39mcos(np[38;5;241m.[39mdeg2rad(ang))])
+:
+: [0;31mIndexError[0m: list index out of range
 :END:
 
 
 * speed vs perturbation strength plots
+
+#+BEGIN_SRC jupyter-python
+
+#+END_SRC
+
+#+RESULTS:
+
+
 
 
 First we map out the logpdf of each bout.
 
 #+BEGIN_SRC jupyter-python
 
-angles_sc = np.dstack([np.sin(np.deg2rad(angles)),
-                       np.cos(np.deg2rad(angles))])
+  angles_sc = np.dstack([np.sin(np.deg2rad(angles)),
+                         np.cos(np.deg2rad(angles))])
 
-angles_sc_flat = angles_sc.reshape(-1, angles_sc.shape[-1])
+  angles_sc_flat = angles_sc.reshape(-1, angles_sc.shape[-1])
 
-pcs = pca.transform(angles_sc_flat)
+  pcs = np.full((angles_sc_flat.shape[0], 2), np.nan)
+  good = np.all(np.isfinite(angles_sc_flat), axis=1)
+  pcs[good] = pca.transform(angles_sc_flat[good])
+  # pcs = pca.transform(angles_sc_flat)
 
-pdfs_flat = np.zeros(len(pcs))
-step = 500
-for i in trange(0, len(pcs), step, ncols=70):
-    pdfs_flat[i:i+step] = kde.logpdf(pcs[i:i+step, :2].T)
+  pdfs_flat = np.full(len(pcs), np.nan)
+  step = 500
+  for i in trange(0, len(pcs), step, ncols=70):
+      check = np.all(np.isfinite(pcs[i:i+step]), axis=1)
+      pdfs_flat[i:i+step][check] = kde.logpdf(pcs[i:i+step, :2][check].T)
 
-pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
+  pdfs_shaped = pdfs_flat.reshape(angles_sc.shape[:2])
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 908/908 [01:49<00:00,  8.28it/s]
-:
+:  49%|███████████████▏               | 446/908 [06:36<04:50,  1.59it/s]
 
 ** plot for continuous perturbation
 #+BEGIN_SRC jupyter-python
-before = np.mean(pdfs_shaped[:, :300], axis=1)
-during = np.mean(pdfs_shaped[:, 300:600], axis=1)
-after = np.mean(pdfs_shaped[:, 600:900], axis=1)
+before = np.nanmean(pdfs_shaped[:, :300], axis=1)
+during = np.nanmean(pdfs_shaped[:, 300:600], axis=1)
+after = np.nanmean(pdfs_shaped[:, 600:900], axis=1)
 
 # plt.plot(before)
 # plt.plot(during - before)
@@ -460,8 +461,10 @@ plt.plot(after - before)
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7fcea1654820> |
-[[file:./.ob-jupyter/f007d781170ccf65784f5959b4a8bb0af710c1e5.png]]
+: /tmp/ipykernel_1138594/2901933554.py:3: RuntimeWarning: Mean of empty slice
+:   after = np.nanmean(pdfs_shaped[:, 600:900], axis=1)
+| <matplotlib.lines.Line2D | at | 0x7f792dc93ca0> |
+[[./.ob-jupyter/c0a8d8d6fbd5eea10c725694aa0e11c33e98b0fd.png]]
 :END:
 
 
@@ -483,6 +486,60 @@ dgroup = dsub.groupby(['forward_speed', 'perturbation']).mean()
 #+END_SRC
 
 #+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+  [0;31m---------------------------------------------------------------------------[0m
+  [0;31mValueError[0m                                Traceback (most recent call last)
+  Cell [0;32mIn[196], line 1[0m
+  [0;32m----> 1[0m dd [38;5;241m=[39m [43mpd[49m[38;5;241;43m.[39;49m[43mDataFrame[49m[43m([49m[43m{[49m[38;5;124;43m"[39;49m[38;5;124;43mdelay[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mact_delays[49m[43m,[49m
+  [1;32m      2[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mdist[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mdist_types[49m[43m,[49m
+  [1;32m      3[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mforward_speed[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mspeeds[49m[43m[[49m[43m:[49m[43m,[49m[43m [49m[38;5;241;43m0[39;49m[43m][49m[43m,[49m
+  [1;32m      4[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mperturbation[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mmax_velocities[49m[43m,[49m
+  [1;32m      5[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mduring_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mduring[49m[43m,[49m
+  [1;32m      6[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mafter_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mafter[49m[43m,[49m
+  [1;32m      7[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mduring_diff_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mduring[49m[38;5;241;43m-[39;49m[43mbefore[49m[43m,[49m
+  [1;32m      8[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mafter_diff_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mafter[49m[38;5;241;43m-[39;49m[43mbefore[49m[43m,[49m
+  [1;32m      9[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mbefore_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mbefore[49m[43m}[49m[43m)[49m
+  [1;32m     11[0m dsub [38;5;241m=[39m dd[dd[[38;5;124m'[39m[38;5;124mdist[39m[38;5;124m'[39m] [38;5;241m==[39m DistType[38;5;241m.[39mPOISSON_GAUSSIAN[38;5;241m.[39mvalue]
+  [1;32m     12[0m dgroup [38;5;241m=[39m dsub[38;5;241m.[39mgroupby([[38;5;124m'[39m[38;5;124mforward_speed[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mperturbation[39m[38;5;124m'[39m])[38;5;241m.[39mmean()
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/frame.py:664[0m, in [0;36mDataFrame.__init__[0;34m(self, data, index, columns, dtype, copy)[0m
+  [1;32m    658[0m     mgr [38;5;241m=[39m [38;5;28mself[39m[38;5;241m.[39m_init_mgr(
+  [1;32m    659[0m         data, axes[38;5;241m=[39m{[38;5;124m"[39m[38;5;124mindex[39m[38;5;124m"[39m: index, [38;5;124m"[39m[38;5;124mcolumns[39m[38;5;124m"[39m: columns}, dtype[38;5;241m=[39mdtype, copy[38;5;241m=[39mcopy
+  [1;32m    660[0m     )
+  [1;32m    662[0m [38;5;28;01melif[39;00m [38;5;28misinstance[39m(data, [38;5;28mdict[39m):
+  [1;32m    663[0m     [38;5;66;03m# GH#38939 de facto copy defaults to False only in non-dict cases[39;00m
+  [0;32m--> 664[0m     mgr [38;5;241m=[39m [43mdict_to_mgr[49m[43m([49m[43mdata[49m[43m,[49m[43m [49m[43mindex[49m[43m,[49m[43m [49m[43mcolumns[49m[43m,[49m[43m [49m[43mdtype[49m[38;5;241;43m=[39;49m[43mdtype[49m[43m,[49m[43m [49m[43mcopy[49m[38;5;241;43m=[39;49m[43mcopy[49m[43m,[49m[43m [49m[43mtyp[49m[38;5;241;43m=[39;49m[43mmanager[49m[43m)[49m
+  [1;32m    665[0m [38;5;28;01melif[39;00m [38;5;28misinstance[39m(data, ma[38;5;241m.[39mMaskedArray):
+  [1;32m    666[0m     [38;5;28;01mimport[39;00m [38;5;21;01mnumpy[39;00m[38;5;21;01m.[39;00m[38;5;21;01mma[39;00m[38;5;21;01m.[39;00m[38;5;21;01mmrecords[39;00m [38;5;28;01mas[39;00m [38;5;21;01mmrecords[39;00m
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:493[0m, in [0;36mdict_to_mgr[0;34m(data, index, columns, dtype, typ, copy)[0m
+  [1;32m    489[0m     [38;5;28;01melse[39;00m:
+  [1;32m    490[0m         [38;5;66;03m# dtype check to exclude e.g. range objects, scalars[39;00m
+  [1;32m    491[0m         arrays [38;5;241m=[39m [x[38;5;241m.[39mcopy() [38;5;28;01mif[39;00m [38;5;28mhasattr[39m(x, [38;5;124m"[39m[38;5;124mdtype[39m[38;5;124m"[39m) [38;5;28;01melse[39;00m x [38;5;28;01mfor[39;00m x [38;5;129;01min[39;00m arrays]
+  [0;32m--> 493[0m [38;5;28;01mreturn[39;00m [43marrays_to_mgr[49m[43m([49m[43marrays[49m[43m,[49m[43m [49m[43mcolumns[49m[43m,[49m[43m [49m[43mindex[49m[43m,[49m[43m [49m[43mdtype[49m[38;5;241;43m=[39;49m[43mdtype[49m[43m,[49m[43m [49m[43mtyp[49m[38;5;241;43m=[39;49m[43mtyp[49m[43m,[49m[43m [49m[43mconsolidate[49m[38;5;241;43m=[39;49m[43mcopy[49m[43m)[49m
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:118[0m, in [0;36marrays_to_mgr[0;34m(arrays, columns, index, dtype, verify_integrity, typ, consolidate)[0m
+  [1;32m    115[0m [38;5;28;01mif[39;00m verify_integrity:
+  [1;32m    116[0m     [38;5;66;03m# figure out the index, if necessary[39;00m
+  [1;32m    117[0m     [38;5;28;01mif[39;00m index [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
+  [0;32m--> 118[0m         index [38;5;241m=[39m [43m_extract_index[49m[43m([49m[43marrays[49m[43m)[49m
+  [1;32m    119[0m     [38;5;28;01melse[39;00m:
+  [1;32m    120[0m         index [38;5;241m=[39m ensure_index(index)
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:666[0m, in [0;36m_extract_index[0;34m(data)[0m
+  [1;32m    664[0m lengths [38;5;241m=[39m [38;5;28mlist[39m([38;5;28mset[39m(raw_lengths))
+  [1;32m    665[0m [38;5;28;01mif[39;00m [38;5;28mlen[39m(lengths) [38;5;241m>[39m [38;5;241m1[39m:
+  [0;32m--> 666[0m     [38;5;28;01mraise[39;00m [38;5;167;01mValueError[39;00m([38;5;124m"[39m[38;5;124mAll arrays must be of the same length[39m[38;5;124m"[39m)
+  [1;32m    668[0m [38;5;28;01mif[39;00m have_dicts:
+  [1;32m    669[0m     [38;5;28;01mraise[39;00m [38;5;167;01mValueError[39;00m(
+  [1;32m    670[0m         [38;5;124m"[39m[38;5;124mMixing dicts with non-Series may lead to ambiguous ordering.[39m[38;5;124m"[39m
+  [1;32m    671[0m     )
+
+  [0;31mValueError[0m: All arrays must be of the same length
+#+end_example
+:END:
 
 
 #+BEGIN_SRC jupyter-python
@@ -496,16 +553,18 @@ to_plot  = [("during - before perturbations", "during_diff_logpdf"),
 
 for (name, key) in to_plot:
     dimg = dgroup.reset_index().pivot(columns='perturbation', index='forward_speed', values=key)
+    plt.close('all')
     plt.figure(figsize=(6, 3), dpi=200)
-    plt.imshow(dimg)
     if "diff" in key:
         plt.imshow(dimg, vmin=-2, vmax=0)
     else:
-        plt.imshow(dimg, vmin=-2, vmax=-1)
+        plt.imshow(dimg, vmin=-2, vmax=-1.2)
 
     ax = plt.gca()
     ax.set_xticks(np.arange(len(dimg.columns)), labels=dimg.columns)
     ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index))
+
+    ax.invert_yaxis()
 
     ax.set_xlabel("Perturbation strength")
     ax.set_ylabel("Speed (mm/s)")
@@ -521,32 +580,16 @@ for (name, key) in to_plot:
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-[[file:./.ob-jupyter/d410db14e6b4adb4343b6c071099b00e4a61820d.png]]
-[[file:./.ob-jupyter/f72f6668d0bf343599bb74b3bd4da8c20c6a21fd.png]]
-[[file:./.ob-jupyter/fcbc56c42068369c3829a00b5ad2a4d7ede55b50.png]]
-[[file:./.ob-jupyter/60d34ea12a1b2e18d49e52268bffc8ee00c11417.png]]
-[[file:./.ob-jupyter/b820e320e89225acbf7b2a13ed2289b23c5f1fab.png]]
-:END:
+[[./.ob-jupyter/7ac6251f60dffbbe374db822c674a8d014ad8e90.png]]
 
 
-#+BEGIN_SRC jupyter-python
-plt.scatter(pcs[:,0], pcs[:,1], s=1, alpha=0.1)
-
-#+END_SRC
-
-#+RESULTS:
-:RESULTS:
-: <matplotlib.collections.PathCollection at 0x7fcea57f1250>
-[[file:./.ob-jupyter/42ef517f88ab815fd7a4b0548dca4cd1fc3e46d9.png]]
-:END:
 
 
 ** plot for impulse perturbation
 #+BEGIN_SRC jupyter-python
-before = np.mean(pdfs_shaped[:, :300], axis=1)
-during = np.mean(pdfs_shaped[:, 305:400], axis=1)
-after = np.mean(pdfs_shaped[:, 400:900], axis=1)
+before = np.nanmean(pdfs_shaped[:, :300], axis=1)
+during = np.nanmean(pdfs_shaped[:, 305:400], axis=1)
+after = np.nanmean(pdfs_shaped[:, 400:900], axis=1)
 
 # plt.plot(before)
 # plt.plot(during - before)
@@ -555,8 +598,10 @@ plt.plot(during)
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7fcea0ba3820> |
-[[file:./.ob-jupyter/a2e82c8c5c39b20c148feed23c75df29abd35844.png]]
+: /tmp/ipykernel_1138594/3091638959.py:3: RuntimeWarning: Mean of empty slice
+:   after = np.nanmean(pdfs_shaped[:, 400:900], axis=1)
+| <matplotlib.lines.Line2D | at | 0x7f792d8452b0> |
+[[./.ob-jupyter/a6db71614b5465c554dc0d4a26e53b668ed0a2fc.png]]
 :END:
 
 
@@ -578,6 +623,60 @@ dgroup = dsub.groupby(['forward_speed', 'perturbation']).mean()
 #+END_SRC
 
 #+RESULTS:
+:RESULTS:
+# [goto error]
+#+begin_example
+  [0;31m---------------------------------------------------------------------------[0m
+  [0;31mValueError[0m                                Traceback (most recent call last)
+  Cell [0;32mIn[199], line 1[0m
+  [0;32m----> 1[0m dd [38;5;241m=[39m [43mpd[49m[38;5;241;43m.[39;49m[43mDataFrame[49m[43m([49m[43m{[49m[38;5;124;43m"[39;49m[38;5;124;43mdelay[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mact_delays[49m[43m,[49m
+  [1;32m      2[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mdist[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mdist_types[49m[43m,[49m
+  [1;32m      3[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mforward_speed[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mspeeds[49m[43m[[49m[43m:[49m[43m,[49m[43m [49m[38;5;241;43m0[39;49m[43m][49m[43m,[49m
+  [1;32m      4[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mperturbation[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mmax_velocities[49m[43m,[49m
+  [1;32m      5[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mduring_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mduring[49m[43m,[49m
+  [1;32m      6[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mafter_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mafter[49m[43m,[49m
+  [1;32m      7[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mduring_diff_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mduring[49m[38;5;241;43m-[39;49m[43mbefore[49m[43m,[49m
+  [1;32m      8[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mafter_diff_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mafter[49m[38;5;241;43m-[39;49m[43mbefore[49m[43m,[49m
+  [1;32m      9[0m [43m                   [49m[38;5;124;43m"[39;49m[38;5;124;43mbefore_logpdf[39;49m[38;5;124;43m"[39;49m[43m:[49m[43m [49m[43mbefore[49m[43m}[49m[43m)[49m
+  [1;32m     11[0m dsub [38;5;241m=[39m dd[dd[[38;5;124m'[39m[38;5;124mdist[39m[38;5;124m'[39m] [38;5;241m==[39m DistType[38;5;241m.[39mIMPULSE[38;5;241m.[39mvalue]
+  [1;32m     12[0m dgroup [38;5;241m=[39m dsub[38;5;241m.[39mgroupby([[38;5;124m'[39m[38;5;124mforward_speed[39m[38;5;124m'[39m, [38;5;124m'[39m[38;5;124mperturbation[39m[38;5;124m'[39m])[38;5;241m.[39mmean()
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/frame.py:664[0m, in [0;36mDataFrame.__init__[0;34m(self, data, index, columns, dtype, copy)[0m
+  [1;32m    658[0m     mgr [38;5;241m=[39m [38;5;28mself[39m[38;5;241m.[39m_init_mgr(
+  [1;32m    659[0m         data, axes[38;5;241m=[39m{[38;5;124m"[39m[38;5;124mindex[39m[38;5;124m"[39m: index, [38;5;124m"[39m[38;5;124mcolumns[39m[38;5;124m"[39m: columns}, dtype[38;5;241m=[39mdtype, copy[38;5;241m=[39mcopy
+  [1;32m    660[0m     )
+  [1;32m    662[0m [38;5;28;01melif[39;00m [38;5;28misinstance[39m(data, [38;5;28mdict[39m):
+  [1;32m    663[0m     [38;5;66;03m# GH#38939 de facto copy defaults to False only in non-dict cases[39;00m
+  [0;32m--> 664[0m     mgr [38;5;241m=[39m [43mdict_to_mgr[49m[43m([49m[43mdata[49m[43m,[49m[43m [49m[43mindex[49m[43m,[49m[43m [49m[43mcolumns[49m[43m,[49m[43m [49m[43mdtype[49m[38;5;241;43m=[39;49m[43mdtype[49m[43m,[49m[43m [49m[43mcopy[49m[38;5;241;43m=[39;49m[43mcopy[49m[43m,[49m[43m [49m[43mtyp[49m[38;5;241;43m=[39;49m[43mmanager[49m[43m)[49m
+  [1;32m    665[0m [38;5;28;01melif[39;00m [38;5;28misinstance[39m(data, ma[38;5;241m.[39mMaskedArray):
+  [1;32m    666[0m     [38;5;28;01mimport[39;00m [38;5;21;01mnumpy[39;00m[38;5;21;01m.[39;00m[38;5;21;01mma[39;00m[38;5;21;01m.[39;00m[38;5;21;01mmrecords[39;00m [38;5;28;01mas[39;00m [38;5;21;01mmrecords[39;00m
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:493[0m, in [0;36mdict_to_mgr[0;34m(data, index, columns, dtype, typ, copy)[0m
+  [1;32m    489[0m     [38;5;28;01melse[39;00m:
+  [1;32m    490[0m         [38;5;66;03m# dtype check to exclude e.g. range objects, scalars[39;00m
+  [1;32m    491[0m         arrays [38;5;241m=[39m [x[38;5;241m.[39mcopy() [38;5;28;01mif[39;00m [38;5;28mhasattr[39m(x, [38;5;124m"[39m[38;5;124mdtype[39m[38;5;124m"[39m) [38;5;28;01melse[39;00m x [38;5;28;01mfor[39;00m x [38;5;129;01min[39;00m arrays]
+  [0;32m--> 493[0m [38;5;28;01mreturn[39;00m [43marrays_to_mgr[49m[43m([49m[43marrays[49m[43m,[49m[43m [49m[43mcolumns[49m[43m,[49m[43m [49m[43mindex[49m[43m,[49m[43m [49m[43mdtype[49m[38;5;241;43m=[39;49m[43mdtype[49m[43m,[49m[43m [49m[43mtyp[49m[38;5;241;43m=[39;49m[43mtyp[49m[43m,[49m[43m [49m[43mconsolidate[49m[38;5;241;43m=[39;49m[43mcopy[49m[43m)[49m
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:118[0m, in [0;36marrays_to_mgr[0;34m(arrays, columns, index, dtype, verify_integrity, typ, consolidate)[0m
+  [1;32m    115[0m [38;5;28;01mif[39;00m verify_integrity:
+  [1;32m    116[0m     [38;5;66;03m# figure out the index, if necessary[39;00m
+  [1;32m    117[0m     [38;5;28;01mif[39;00m index [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
+  [0;32m--> 118[0m         index [38;5;241m=[39m [43m_extract_index[49m[43m([49m[43marrays[49m[43m)[49m
+  [1;32m    119[0m     [38;5;28;01melse[39;00m:
+  [1;32m    120[0m         index [38;5;241m=[39m ensure_index(index)
+
+  File [0;32m/home/pierre/miniconda3/envs/layered/lib/python3.9/site-packages/pandas/core/internals/construction.py:666[0m, in [0;36m_extract_index[0;34m(data)[0m
+  [1;32m    664[0m lengths [38;5;241m=[39m [38;5;28mlist[39m([38;5;28mset[39m(raw_lengths))
+  [1;32m    665[0m [38;5;28;01mif[39;00m [38;5;28mlen[39m(lengths) [38;5;241m>[39m [38;5;241m1[39m:
+  [0;32m--> 666[0m     [38;5;28;01mraise[39;00m [38;5;167;01mValueError[39;00m([38;5;124m"[39m[38;5;124mAll arrays must be of the same length[39m[38;5;124m"[39m)
+  [1;32m    668[0m [38;5;28;01mif[39;00m have_dicts:
+  [1;32m    669[0m     [38;5;28;01mraise[39;00m [38;5;167;01mValueError[39;00m(
+  [1;32m    670[0m         [38;5;124m"[39m[38;5;124mMixing dicts with non-Series may lead to ambiguous ordering.[39m[38;5;124m"[39m
+  [1;32m    671[0m     )
+
+  [0;31mValueError[0m: All arrays must be of the same length
+#+end_example
+:END:
 
 
 #+BEGIN_SRC jupyter-python
@@ -602,6 +701,8 @@ for (name, key) in to_plot:
     ax.set_xticks(np.arange(len(dimg.columns)), labels=dimg.columns)
     ax.set_yticks(np.arange(len(dimg.index)), labels=np.int32(dimg.index))
 
+    ax.invert_yaxis()
+
     ax.set_xlabel("Perturbation strength")
     ax.set_ylabel("Speed (mm/s)")
 
@@ -617,11 +718,11 @@ for (name, key) in to_plot:
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/a0a64a97c7dd3706ac69655b7699bd85203097eb.png]]
-[[file:./.ob-jupyter/46786a6214c9e611b63bf3ab8a8aba968d9e7363.png]]
-[[file:./.ob-jupyter/74b53e1a3116f78af2982014db1b272eb643085b.png]]
-[[file:./.ob-jupyter/66f8fa39b1a348f0fced775d770fbac8d14ed619.png]]
-[[file:./.ob-jupyter/1f4b4027d1e2f91d7e514dae7d5c93ecf890516f.png]]
+[[./.ob-jupyter/2fc9520a52a7ecba9ef132ba136a872d560b1c1e.png]]
+[[./.ob-jupyter/751d81530edc6253108008007c423c2551d73f2b.png]]
+[[./.ob-jupyter/88d0799a771cbd4c0067441debfd0e89e043ef6e.png]]
+[[./.ob-jupyter/73dfe076b388a5e03baa602c0f021ca7378b5c67.png]]
+[[./.ob-jupyter/282d338653bfb82206c2627635f4657ba274e5b8.png]]
 :END:
 
 
@@ -632,8 +733,6 @@ plt.scatter(pcs[:,0], pcs[:,1], s=1, alpha=0.1)
 
 #+RESULTS:
 :RESULTS:
-: <matplotlib.collections.PathCollection at 0x7fcea57167f0>
-[[file:./.ob-jupyter/42ef517f88ab815fd7a4b0548dca4cd1fc3e46d9.png]]
-: <matplotlib.collections.PathCollection at 0x7fcea074e250>
-[[file:./.ob-jupyter/42ef517f88ab815fd7a4b0548dca4cd1fc3e46d9.png]]
+: <matplotlib.collections.PathCollection at 0x7f792d804070>
+[[./.ob-jupyter/cceef9a9177af4cc8038c1843dfe76bf5462621a.png]]
 :END:

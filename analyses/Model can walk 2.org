@@ -98,7 +98,7 @@ def phase_align_poly(ang, extra=None, order=5):
 
 #+BEGIN_SRC jupyter-python
 # fname_pat = os.path.join(data_path, 'delays_stats_subang_v2_actuate_gaussian_*.npz')
-fname_pat = os.path.join(data_path, 'stats_subang_v5_nodist_*.pkl')
+fname_pat = os.path.join(data_path, 'stats_subang_v9_nodist_*.pkl')
 fnames = sorted(glob(fname_pat))
 
 conditions = []
@@ -126,7 +126,7 @@ for fname in tqdm(fnames, ncols=70):
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████████| 52/52 [00:12<00:00,  4.01it/s]
+: 100%|█████████████████████████████████| 52/52 [01:27<00:00,  1.69s/it]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -135,19 +135,19 @@ accels[0]
 
 #+RESULTS:
 #+begin_example
-array([[ 0.02237683, -1.04705735, -0.0334956 , ..., -0.25130772,
-        -0.48072441,  0.17590914],
-       [ 0.05304825, -0.94203876, -0.07709571, ..., -0.20930985,
-        -0.43367159,  0.1362899 ],
-       [ 0.08371966, -0.83702018, -0.12069583, ..., -0.16731198,
-        -0.38661878,  0.09667067],
-       ...,
-       [ 0.01745667, -0.01273886,  0.0122177 , ..., -0.1306441 ,
-         0.08310148, -0.1763693 ],
-       [ 0.03543241, -0.00465501,  0.04434183, ..., -0.14527406,
-         0.0882531 , -0.21103469],
-       [ 0.05340814,  0.00342884,  0.07646596, ..., -0.15990401,
-         0.09340473, -0.24570008]])
+  array([[ 0.11276215,  1.4998475 ,  2.4084078 , ..., -0.01207362,
+           0.00592604, -0.12670231],
+         [ 0.04416785,  1.27679536,  2.20302964, ..., -0.01255835,
+           0.00919893, -0.12215865],
+         [-0.02442644,  1.05374322,  1.99765148, ..., -0.01304308,
+           0.01247181, -0.11761499],
+         ...,
+         [ 0.03699307,  0.0439054 , -0.08968198, ..., -0.13412065,
+           0.06870487, -0.10270925],
+         [ 0.0598091 ,  0.07240991, -0.05634409, ..., -0.15680284,
+           0.07513222, -0.14503007],
+         [ 0.08262512,  0.10091441, -0.02300619, ..., -0.17948503,
+           0.08155956, -0.18735089]])
 #+end_example
 
 
@@ -160,7 +160,7 @@ angle_names = list(angle_names)
 
 
 #+BEGIN_SRC jupyter-python
-fname = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+fname = '/home/lili/data/tuthill/models/models_sls/data_subang_5.pickle'
 wd = WalkingData(fname)
 #+END_SRC
 
@@ -171,13 +171,13 @@ wd.bout_context
 #+END_SRC
 
 #+RESULTS:
-: array([[ 3.4748168, 18.434208 ,  2.642376 ],
-:        [ 1.0033004, 20.97231  ,  3.094752 ],
-:        [ 1.4011644, 11.787567 ,  2.894012 ],
+: array([[  4.246732  ,   0.7071299 ,   0.3955671 ],
+:        [  2.5441482 ,   3.387733  ,   1.0246041 ],
+:        [  2.3452914 ,  -0.44610858,  -0.20245193],
 :        ...,
-:        [ 9.824624 ,  3.8363965,  2.475409 ],
-:        [13.015    , -0.6182214,  1.8810371],
-:        [ 6.7187276, -3.0979152,  2.84063  ]], dtype=float32)
+:        [  6.904698  ,   3.0903168 ,   3.0456958 ],
+:        [  5.8905787 ,  -4.7177234 ,   1.9700806 ],
+:        [  8.232974  , -12.293827  ,  -0.86852646]], dtype=float32)
 
 #+BEGIN_SRC jupyter-python
 fancy_angle_names = {
@@ -210,33 +210,33 @@ plot_speeds = [[8, 0, 0], [10, 0, 0], [12, 0, 0]]
 
 
 #+BEGIN_SRC jupyter-python
-angname = 'C_flex'
-leg = 'R1'
-# ix_ang = angle_names_1leg.index(angname)
-ix_ang = wd._angle_names[leg].index(leg + angname)
-ix_leg = legs.index(leg)
+  angname = 'C_flex'
+  leg = 'R1'
+  # ix_ang = angle_names_1leg.index(angname)
+  ix_ang = wd._angle_names[leg].index(leg + angname)
+  ix_leg = legs.index(leg)
 
-plt.figure(figsize=(9, 2.5))
-for i in range(len(plot_speeds)):
-    plt.subplot(3, 1, i+1)
-    ww = wd.get_bout(plot_speeds[i], offset=0)
-    ang = ww['angles'][leg][:, ix_ang]
-    t = np.arange(len(ang))/300.0
-    plt.plot(t, ang, color="#FF7F0E")
-    plt.ylim(30, 160)
-    plt.yticks([60, 120])
-    if i != 2:
-        plt.xticks(ticks=[])
+  plt.figure(figsize=(9, 2.5))
+  for i in range(len(plot_speeds)):
+      plt.subplot(3, 1, i+1)
+      ww = wd.get_bout(plot_speeds[i], offset=40)
+      ang = ww['angles'][leg][:600, ix_ang]
+      t = np.arange(len(ang))/300.0
+      plt.plot(t, ang, color="#FF7F0E")
+      plt.ylim(30, 160)
+      plt.yticks([60, 120])
+      if i != 2:
+          plt.xticks(ticks=[])
 
-sns.despine(bottom=True)
+  sns.despine(bottom=True)
 
-plt.ylabel("Angle (deg)")
-plt.xlabel("Time (s)")
-plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
+  plt.ylabel("Angle (deg)")
+  plt.xlabel("Time (s)")
+  plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/a3c7032a59efb8544cab50ea8b897577eadcad33.png]]
+[[./.ob-jupyter/0b25349fee73815448b821e36750d42dee2abbf5.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -249,8 +249,8 @@ ix_leg = legs.index(leg)
 plt.figure(figsize=(9, 2.5))
 for i in range(len(plot_speeds)):
     plt.subplot(3, 1, i+1)
-    ww = wd.get_bout(plot_speeds[i], offset=2)
-    ang = ww['angles'][leg][:, ix_ang].copy()
+    ww = wd.get_bout(plot_speeds[i], offset=4)
+    ang = ww['angles'][leg][:600, ix_ang].copy()
     t = np.arange(len(ang))/300.0
     ang[ang > 50] -= 360
     ang += 360
@@ -268,7 +268,7 @@ plt.savefig('plots/fig2A_trace_real_{}{}.pdf'.format(leg, angname), bbox_inches 
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/9c902d6d31d1e3bfdcb62631b2fe885898395b99.png]]
+[[./.ob-jupyter/c2c50314c6f7a0e52401da0753dd9b57bee31705.png]]
 
 
 *** Simulated plots
@@ -292,7 +292,6 @@ for i in range(len(plot_speeds)):
         plt.xticks(ticks=[])
 
 sns.despine(bottom=True)
-
 plt.ylabel("Angle (deg)")
 plt.xlabel("Time (s)")
 
@@ -300,7 +299,7 @@ plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_in
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/9f7b1d9150639946cd7a70c3b7df60fc594272a6.png]]
+[[./.ob-jupyter/87190c291f3512cc1f68b19cd02be07258e8eb88.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -330,7 +329,7 @@ plt.savefig('plots/fig2A_trace_simulated_{}{}.pdf'.format(leg, angname), bbox_in
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/482e7c07d8624d9a1381b795c78f24e23003bdd3.png]]
+[[./.ob-jupyter/767cc310afd7ada23185f58b3273090b76cfd2c2.png]]
 
 
 ** Videos for example series
@@ -360,7 +359,7 @@ Simulated videos
 for i, speed in enumerate(video_speeds):
     print(speed)
     ixs = np.where(np.all(speeds == speed, axis=1))[0]
-    ix_bout = ixs[0]
+    ix_bout = ixs[3]
     pose = angles_to_pose_names(angles[ix_bout], angle_names)
     make_fly_video(pose, 'vids/simulated_fly_{}.mp4'.format(format_speed(speed)))
 plt.close('all')
@@ -369,24 +368,24 @@ plt.close('all')
 #+RESULTS:
 :RESULTS:
 #+begin_example
-[8, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 43.89it/s]
+  [8, 0, 0]
+  100%|███████████████████████████████| 900/900 [02:31<00:00,  5.95it/s]
 
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.56it/s]
+  100%|███████████████████████████████| 900/900 [02:26<00:00,  6.14it/s]
 
-[12, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.53it/s]
+  [12, 0, 0]
+  100%|███████████████████████████████| 900/900 [02:17<00:00,  6.56it/s]
 
-[14, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:20<00:00, 44.56it/s]
-[12, -8, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.70it/s]
-[12, 8, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 45.62it/s]
-[12, 0, -4]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.83it/s]
-[12, 0, 4]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 900/900 [00:19<00:00, 46.41it/s]
+  [14, 0, 0]
+100%|███████████████████████████████| 900/900 [02:22<00:00,  6.29it/s]
+  [12, -8, 0]
+100%|███████████████████████████████| 900/900 [02:07<00:00,  7.09it/s]
+  [12, 8, 0]
+100%|███████████████████████████████| 900/900 [01:56<00:00,  7.75it/s]
+  [12, 0, -4]
+100%|███████████████████████████████| 900/900 [02:13<00:00,  6.72it/s]
+  [12, 0, 4]
+100%|███████████████████████████████| 900/900 [02:21<00:00,  6.36it/s]
 #+end_example
 :END:
 
@@ -411,24 +410,24 @@ plt.close('all')
 #+RESULTS:
 :RESULTS:
 #+begin_example
-[8, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:12<00:00, 46.81it/s]
+  [8, 0, 0]
+  100%|█████████████████████████████| 1416/1416 [03:58<00:00,  5.95it/s]
 
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:12<00:00, 46.54it/s]
+  100%|███████████████████████████████| 600/600 [01:33<00:00,  6.45it/s]
 
-[12, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:13<00:00, 44.58it/s]
+  [12, 0, 0]
+  100%|█████████████████████████████| 2160/2160 [06:00<00:00,  5.99it/s]
 
-[14, 0, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:13<00:00, 46.14it/s]
-[12, -8, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 540/540 [00:12<00:00, 44.31it/s]
-[12, 8, 0]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:12<00:00, 46.28it/s]
-[12, 0, -4]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:13<00:00, 45.12it/s]
-[12, 0, 4]
-100%|█████████████████████████████████████████████████████████████████████████████████████████| 600/600 [00:13<00:00, 43.49it/s]
+  [14, 0, 0]
+100%|███████████████████████████████| 600/600 [01:43<00:00,  5.79it/s]
+  [12, -8, 0]
+100%|█████████████████████████████| 1920/1920 [04:50<00:00,  6.61it/s]
+  [12, 8, 0]
+100%|███████████████████████████████| 528/528 [01:27<00:00,  6.05it/s]
+  [12, 0, -4]
+100%|███████████████████████████████| 660/660 [01:45<00:00,  6.24it/s]
+  [12, 0, 4]
+100%|███████████████████████████████| 960/960 [02:33<00:00,  6.24it/s]
 #+end_example
 :END:
 
@@ -463,7 +462,7 @@ allangf = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████| 1540/1540 [01:48<00:00, 14.16it/s]
+: 100%|█████████████████████████████| 1540/1540 [12:00<00:00,  2.14it/s]
 :
 
 
@@ -508,7 +507,7 @@ realangf['speed_side'] = realangf['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 173/173 [00:12<00:00, 13.52it/s]
+: 100%|█████████████████████████████| 1254/1254 [10:14<00:00,  2.04it/s]
 :
 
 #+BEGIN_SRC jupyter-python
@@ -525,6 +524,7 @@ fullangf['accel_units'] = fullangf['accel'] * 300.0 * 300.0
 #+END_SRC
 
 #+RESULTS:
+: 8c2a6edb-3902-4a6a-b035-8cbcac138a5f
 
 
 
@@ -565,9 +565,9 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/ffe63a2d8c2b96cdd25c5fdf8678937a159f7d62.png]]
-[[file:./.ob-jupyter/62b080ea5d55de4d1aa23d4088d70a1580eddd22.png]]
-[[file:./.ob-jupyter/0235c94faf73ce7c490653e246c1fd791446ae6c.png]]
+[[./.ob-jupyter/35861217a2278345417b0c3964014cd3fb1ac13e.png]]
+[[./.ob-jupyter/a6a8e30528d74a133e1718f507c104d9c9b4ca83.png]]
+[[./.ob-jupyter/0e023e6139ea10773fe1cbce5e84b924430661fc.png]]
 :END:
 
 
@@ -606,14 +606,14 @@ plt.savefig('plots/fig2B_phase_accel_{}{}.pdf'.format(leg, angname), bbox_inches
 
 #+RESULTS:
 :RESULTS:
-[[file:./.ob-jupyter/86334ac91cecd64e2b1eae60f287f2d7786204cd.png]]
-[[file:./.ob-jupyter/2326bd059951cea6e2af3deccaf89b014be5c575.png]]
-[[file:./.ob-jupyter/e35708320ccf5991ef5cfc91a29cd435c667d4c7.png]]
+[[./.ob-jupyter/81d6928e40880fbf28408e68777d5e79f76510bd.png]]
+[[./.ob-jupyter/2bb1cfa95db27d0e0c52729a7306fafb3b023a89.png]]
+[[./.ob-jupyter/2d5797295d44a6d2981e2cdb2cc8d567e2b39019.png]]
 :END:
 
 
 
-*** Supplementary plots - all the phase angle plots
+** Supplementary plots - all the phase angle plots
 
 
 not sure if it's worth including these to be honest? There are wayyy to many to show
@@ -648,11 +648,12 @@ def circular_mean_low(x):
 
 
 #+BEGIN_SRC jupyter-python
-def circular_ci(x):
+def circular_ci(x, mean_fn=circular_mean):
     stderr = np.degrees(stats.circstd(np.radians(x), nan_policy='omit')) / np.sqrt(len(x))
-    mean = circular_mean(x)
+    mean = mean_fn(x)
     interval = stderr * 1.96
     return (mean - interval, mean + interval)
+
 #+END_SRC
 
 
@@ -669,22 +670,33 @@ fullangf['leg_angle'] = fullangf['leg'] + fullangf['angle_name']
 
 #+BEGIN_SRC jupyter-python
 dd = fullangf
-leg_angle = 'R2B_rot'
 for leg_angle in tqdm(dd['leg_angle'].unique(), ncols=70):
+# for leg_angle in ['R2B_rot']:
     plt.close('all')
 
     c = (dd['speed_side'].abs() <= 3) & (dd['speed_rotation'].abs() <= 3) \
         & (dd['speed_forward'] > 5) & (dd['speed_forward'] < 15) \
         & (dd['leg_angle'] == leg_angle)
     fancy_name = leg_angle[:2] + '\n' + fancy_angle_names[leg_angle[2:]]
-    g = sns.relplot(data=dd[c], x="phase", y="angle", hue="type",
-                    estimator=circular_mean, err_style='band', errorbar=circular_ci,
+
+    ddd = dd[c].copy()
+    the_mean = circular_mean
+    errorbar = circular_ci
+    if leg_angle in ['L1A_abduct', 'R3B_rot', 'R2B_rot']:
+        the_mean = circular_mean_high
+        errorbar = lambda x: circular_ci(x, circular_mean_high)
+    elif leg_angle in ['L3B_rot']:
+        the_mean = circular_mean_low
+        errorbar = lambda x: circular_ci(x, circular_mean_low)
+
+    g = sns.relplot(data=ddd, x="phase", y="angle", hue="type",
+                    estimator=the_mean, err_style='band', errorbar=errorbar,
                     col="speed_forward", kind="line", height=1.5, aspect=0.8)
     g.set(ylabel=fancy_name + "\nangle (deg)", title="", xlabel="")
     g.set(xticks=[-np.pi/2, 0, np.pi/2], xticklabels=[])
     plt.savefig('plots/suppfig2_phase_angle_{}.pdf'.format(leg_angle), bbox_inches = "tight")
 
-    g = sns.relplot(data=dd[c], x="phase", y="deriv_units", hue="type",
+    g = sns.relplot(data=ddd, x="phase", y="deriv_units", hue="type",
                     estimator=np.mean, err_style='band', errorbar=('ci', 95),
                     col="speed_forward", kind="line", height=1.5, aspect=0.8)
     g.set(ylabel=fancy_name + "\nderivative (deg/s)", title="", xlabel="")
@@ -703,10 +715,10 @@ for leg_angle in tqdm(dd['leg_angle'].unique(), ncols=70):
 
 #+RESULTS:
 :RESULTS:
-: 100%|█████████████████████████████████| 20/20 [03:47<00:00, 11.37s/it]
+: 100%|█████████████████████████████████| 20/20 [12:38<00:00, 37.93s/it]
 :
-[[file:./.ob-jupyter/2a9d544cae0e94dd6fe602883e35248c54969c7e.png]]
-[[file:./.ob-jupyter/4343e73e7cca54289d82d1a45d37f90f14598f2f.png]]
+[[./.ob-jupyter/534882bda1d4a5368ce9028b62050f05268d6856.png]]
+[[./.ob-jupyter/5680f1724a67504afbdf4a38dc2db49c27d454f0.png]]
 :END:
 
 
@@ -774,13 +786,13 @@ angle_errors['accel_units'] = angle_errors['accel'] * 300.0 * 300.0
 
 #+RESULTS:
 : angle
-: /tmp/ipykernel_1250823/3407061830.py:3: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1138594/3407061830.py:3: RuntimeWarning: Mean of empty slice
 :   return np.degrees(np.angle(np.nanmean(np.exp(1j * np.radians(x)))))
 : deriv
-: /tmp/ipykernel_1250823/2397220802.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1138594/2397220802.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 : accel
-: /tmp/ipykernel_1250823/2397220802.py:14: RuntimeWarning: Mean of empty slice
+: /tmp/ipykernel_1138594/2397220802.py:14: RuntimeWarning: Mean of empty slice
 :   .agg(lambda x: np.abs(mean_fun(np.abs(x))))
 
 
@@ -809,7 +821,7 @@ plt.savefig('plots/fig2C_error_raw_horizontal.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/8ea2b767a899578ed33ccb0948ed4bd0b5c164e2.png]]
+[[./.ob-jupyter/dd3277a72420cc1642414ac1e5437971c613e219.png]]
 
 #+BEGIN_SRC jupyter-python
 plt.figure(figsize=(6, 4))
@@ -830,7 +842,7 @@ plt.savefig('plots/fig2C_error_raw_vertical.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/3fe1d77241fade3a76578cbb3627c648b92d2f50.png]]
+[[./.ob-jupyter/d706f888f3a78e91cb0d242b8ee60b02a7ba4b2e.png]]
 
 
 #+BEGIN_SRC jupyter-python :display plain
@@ -839,28 +851,28 @@ angle_errors.groupby(['leg', 'angle_name'])['angle'].mean()
 
 #+RESULTS:
 #+begin_example
-leg  angle_name
-L1   A_abduct       6.733312
-     A_rot          7.463104
-     B_flex         7.863317
-     C_flex        10.876282
-L2   B_flex         8.429925
-     B_rot          4.416498
-     C_flex         9.970893
-L3   B_flex         9.664860
-     B_rot          8.025939
-     C_flex        10.223924
-R1   A_abduct       7.177471
-     A_rot          7.374859
-     B_flex         8.506984
-     C_flex        11.357676
-R2   B_flex         5.466603
-     B_rot          7.753377
-     C_flex         7.594448
-R3   B_flex         8.958846
-     B_rot          6.436791
-     C_flex         8.731250
-Name: angle, dtype: float64
+  leg  angle_name
+  L1   A_abduct       8.563785
+       A_rot         14.274670
+       B_flex         9.057955
+       C_flex        14.502322
+  L2   B_flex         3.213709
+       B_rot          3.530591
+       C_flex         8.656140
+  L3   B_flex         5.151575
+       B_rot         12.557957
+       C_flex         5.272138
+  R1   A_abduct       8.448281
+       A_rot          7.799010
+       B_flex         8.642130
+       C_flex         9.913403
+  R2   B_flex         4.649580
+       B_rot          6.020207
+       C_flex         7.470407
+  R3   B_flex         6.607214
+       B_rot          7.911936
+       C_flex         7.988106
+  Name: angle, dtype: float64
 #+end_example
 
 
@@ -888,8 +900,34 @@ plt.savefig('plots/fig2C_error_percent.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/b75fc13f7949a9eb2574219a9ebda74ed7be3d69.png]]
+[[./.ob-jupyter/c60df1f84905973f5d54b18400317215e55c3b58.png]]
 
+
+#+BEGIN_SRC jupyter-python
+plt.figure(figsize=(6, 4))
+ax = plt.subplot(3, 1, 1)
+g = sns.violinplot(x='fancy_angle_name', y='angle_percent', data=angle_errors, color='lightgray', cut=0, order=angle_order)
+g.set(xlabel='', ylabel='Angle\npercent error')
+# plt.axhline(5.9, linestyle='dotted', color='gray')
+ax.set_xticklabels([])
+g.legend_ = None
+
+ax = plt.subplot(3, 1, 2)
+g = sns.violinplot(x='fancy_angle_name', y='deriv_percent', data=angle_errors, color='lightgray', cut=0, order=angle_order)
+g.set(xlabel='',ylabel='Derivative\npercent error')
+ax.set_xticklabels([])
+g.legend_ = None
+
+plt.subplot(3, 1, 3)
+g = sns.violinplot(x='fancy_angle_name', y='accel_percent', data=angle_errors, color='lightgray', cut=0, order=angle_order)
+g.set(xlabel='Angle', ylabel='Acceleration\npercent error')
+g.legend_ = None
+
+plt.savefig('plots/fig2C_error_percent_vertical.pdf', bbox_inches = "tight")
+#+END_SRC
+
+#+RESULTS:
+[[./.ob-jupyter/0aee6caa079e9f8b36f83edc1b1ed41eedc243c5.png]]
 
 
 ** supplementary errors
@@ -928,7 +966,7 @@ plt.savefig('plots/suppfig2_error_raw_byleg.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/e4330d6615a96d490a487529d1b20f64a009fe53.png]]
+[[./.ob-jupyter/15c370404af2da8f2c4bac05cc753ff85999897d.png]]
 
 
 
@@ -952,7 +990,7 @@ plt.savefig('plots/suppfig2_error_raw_speed_forward.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/df852c60a1fea9c71a1c99d01e932676958d0514.png]]
+[[./.ob-jupyter/0bd0f8c71cd7f2ec953d79e671d39639ad178fee.png]]
 
 #+BEGIN_SRC jupyter-python
 plt.figure(figsize=(11, 4))
@@ -973,7 +1011,7 @@ plt.savefig('plots/suppfig2_error_raw_speed_side.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/414a1b980c22089c5ee5b352e77ca71419ee533e.png]]
+[[./.ob-jupyter/50d5fd423691c3b119ff2e323feabf3ab17ae7b4.png]]
 
 
 #+BEGIN_SRC jupyter-python
@@ -996,7 +1034,7 @@ plt.savefig('plots/suppfig2_error_raw_speed_rotation.pdf', bbox_inches = "tight"
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/ea9e54eb24df86005b8d25d0d03e3edce465c94c.png]]
+[[./.ob-jupyter/ad4d5342f72e170748bbbb427a2c0d8761526af6.png]]
 
 
 
@@ -1021,7 +1059,7 @@ plt.savefig('plots/suppfig2_velocities_hist.pdf')
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/5b38a30cd6296fa5b39a23266759109f28a360a9.png]]
+[[./.ob-jupyter/06f1b24f1113e6faac9b028d8c7e6dd724312915.png]]
 
 #+BEGIN_SRC jupyter-python
 for i in range(3):
@@ -1035,21 +1073,22 @@ plt.savefig('plots/suppfig2_velocities_cdf.pdf')
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/a7f306f54f75ad296449c650a68e7d11c33106ce.png]]
+[[./.ob-jupyter/511b1a96d3a24341c44081be2dac5d74b083b8e4.png]]
 
 
 #+BEGIN_SRC jupyter-python
-plt.figure(figsize=(3, 2))
+plt.figure(figsize=(4, 3))
 plt.scatter(wd.context[:, 1], wd.context[:, 2], s=1, alpha=0.03)
 plt.xlabel('Average rotation speed (mm/s)')
 plt.ylabel('Average side speed\n(mm/s)')
 sns.despine()
+plt.tight_layout()
 plt.savefig('plots/suppfig2_velocities_rotside_scatter.pdf')
 plt.savefig('plots/suppfig2_velocities_rotside_scatter.png')
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/c7626b9af7426bdc7489d37d531e18cfef585428.png]]
+[[./.ob-jupyter/bc6df4cbca2dab3506df4a34179c87cf58e09511.png]]
 
 
 * Figure 3
@@ -1077,30 +1116,8 @@ phases_byleg_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-:   5%|█▍                             | 73/1540 [00:02<00:45, 32.52it/s]
+: 100%|█████████████████████████████| 1540/1540 [01:24<00:00, 18.15it/s]
 :
-# [goto error]
-#+begin_example
-[0;31m---------------------------------------------------------------------------[0m
-[0;31mKeyboardInterrupt[0m                         Traceback (most recent call last)
-Cell [0;32mIn[43], line 9[0m
-[1;32m      6[0m leg [38;5;241m=[39m angname[:[38;5;241m2[39m]
-[1;32m      7[0m x [38;5;241m=[39m np[38;5;241m.[39mvstack([angles[i][:, ix_ang],
-[1;32m      8[0m                derivs[i][:, ix_ang]])[38;5;241m.[39mT
-[0;32m----> 9[0m phase [38;5;241m=[39m [43mget_phase[49m[43m([49m[43mx[49m[43m)[49m
-[1;32m     10[0m key [38;5;241m=[39m angname
-[1;32m     11[0m d[key] [38;5;241m=[39m phase
-
-Cell [0;32mIn[42], line 7[0m, in [0;36mget_phase[0;34m(ang)[0m
-[1;32m      5[0m s[s [38;5;241m==[39m [38;5;241m0[39m] [38;5;241m=[39m [38;5;241m1[39m
-[1;32m      6[0m dm [38;5;241m=[39m (ang [38;5;241m-[39m m) [38;5;241m/[39m s
-[0;32m----> 7[0m phase [38;5;241m=[39m [43mnp[49m[38;5;241;43m.[39;49m[43marctan2[49m[43m([49m[38;5;241;43m-[39;49m[43mdm[49m[43m[[49m[43m:[49m[43m,[49m[38;5;241;43m1[39;49m[43m][49m[43m,[49m[43m [49m[43mdm[49m[43m[[49m[43m:[49m[43m,[49m[38;5;241;43m0[39;49m[43m][49m[43m)[49m
-[1;32m      8[0m [38;5;28;01mreturn[39;00m phase
-
-[0;31mKeyboardInterrupt[0m:
-#+end_example
-:END:
 
 
 #+BEGIN_SRC jupyter-python
@@ -1122,28 +1139,15 @@ for i in trange(len(bnums), ncols=70):
     contexts = ww['contexts']
     d['speed_forward'] = contexts[:, 0]
     d['speed_rotation'] = contexts[:, 1]
-    d['speed_side'] = contetxs[:, 2]
+    d['speed_side'] = contexts[:, 2]
     d['type'] = 'real'
     ds.append(d)
 phases_byleg_real = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-:RESULTS:
-:   0%|                                         | 0/173 [00:00<?, ?it/s]
+: 100%|█████████████████████████████| 1254/1254 [00:59<00:00, 21.02it/s]
 :
-# [goto error]
-: [0;31m---------------------------------------------------------------------------[0m
-: [0;31mNameError[0m                                 Traceback (most recent call last)
-: Cell [0;32mIn[44], line 19[0m
-: [1;32m     17[0m d[[38;5;124m'[39m[38;5;124mspeed_forward[39m[38;5;124m'[39m] [38;5;241m=[39m contexts[:, [38;5;241m0[39m]
-: [1;32m     18[0m d[[38;5;124m'[39m[38;5;124mspeed_rotation[39m[38;5;124m'[39m] [38;5;241m=[39m contexts[:, [38;5;241m1[39m]
-: [0;32m---> 19[0m d[[38;5;124m'[39m[38;5;124mspeed_side[39m[38;5;124m'[39m] [38;5;241m=[39m [43mcontetxs[49m[:, [38;5;241m2[39m]
-: [1;32m     20[0m d[[38;5;124m'[39m[38;5;124mtype[39m[38;5;124m'[39m] [38;5;241m=[39m [38;5;124m'[39m[38;5;124mreal[39m[38;5;124m'[39m
-: [1;32m     21[0m ds[38;5;241m.[39mappend(d)
-:
-: [0;31mNameError[0m: name 'contetxs' is not defined
-:END:
 
 #+BEGIN_SRC jupyter-python
 phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
@@ -1156,6 +1160,7 @@ phases_byleg = pd.concat([phases_byleg_sim, phases_byleg_real])
 d = phases_byleg
 fig, subplots = plt.subplots(6, 5, figsize=(9, 1.5*6))
 for ix_leg, leg in enumerate(legs):
+    print(leg)
     if leg in ['L2', 'R2']:
         refname = 'B_rot'
     else:
@@ -1172,12 +1177,22 @@ for ix_leg, leg in enumerate(legs):
             ax.set_axis_off()
         else:
             d = phases_byleg[phases_byleg['type'] == 'simulated']
-            sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
-                        cut=0, fill=True, ax=ax)
+            if leg == 'R2' or leg+angname in ['R1A_rot', 'R3B_rot']:
+                # femur rotation is arbitrary reference, center so that peak is at 0
+                vals = np.mod(d[leg + angname] - d[leg + refname], 2*np.pi) - np.pi
+            else:
+                vals = np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi
+            sns.kdeplot(vals, cut=0, fill=True, ax=ax)
             d = phases_byleg[phases_byleg['type'] == 'real']
-            sns.kdeplot(np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi,
-                        cut=0, fill=True, ax=ax)
+            if leg == 'R2' or leg+angname in ['R1A_rot', 'R3B_rot']:
+                # femur rotation is arbitrary reference, center so that peak is at 0
+                vals = np.mod(d[leg + angname] - d[leg + refname], 2*np.pi) - np.pi
+            else:
+                vals = np.mod(d[leg + angname] - d[leg + refname] + np.pi, 2*np.pi)-np.pi
+            sns.kdeplot(vals, cut=0, fill=True, ax=ax)
             ax.set_ylim(0, 1.5)
+
+        ax.set_xticks([-np.pi, 0, np.pi])
 
         if ix_leg == 0:
             ax.set_title(fancy_angle_names[angname])
@@ -1186,25 +1201,24 @@ for ix_leg, leg in enumerate(legs):
         else:
             ax.set_yticklabels([])
             ax.set_ylabel("")
-        if ix_leg != 5:
+        if ix_leg == 5:
+            ax.set_xticklabels(["-$\pi$", "0", "$\pi$"])
+        else:
             ax.set_xticklabels([])
 
 plt.savefig("plots/fig3A_phases_withinleg.pdf", bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-#+begin_example
-
-KeyboardInterrupt
-
-Error in callback <function _draw_all_if_interactive at 0x7fd0babbb9d0> (for post_execute):
-
-KeyboardInterrupt
-
-Error in callback <function flush_figures at 0x7fd08bb36f70> (for post_execute):
-
-KeyboardInterrupt
-#+end_example
+:RESULTS:
+: L1
+: L2
+: L3
+: R1
+: R2
+: R3
+[[./.ob-jupyter/dea584a9c2cb97aaaef312337f02868d6ccf068c.png]]
+:END:
 
 ** Phase coupling across legs
 
@@ -1249,7 +1263,7 @@ phased_sim = pd.concat(ds).reset_index(drop=True)
 #+END_SRC
 
 #+RESULTS:
-: 100%|█████████████████████████████| 1540/1540 [00:19<00:00, 80.41it/s]
+: 100%|█████████████████████████████| 1540/1540 [00:33<00:00, 46.16it/s]
 :
 
 
@@ -1289,7 +1303,7 @@ phased_real['speed_side'] = phased_real['speed_side'].astype('int')
 #+END_SRC
 
 #+RESULTS:
-: 100%|███████████████████████████████| 173/173 [00:02<00:00, 73.81it/s]
+: 100%|█████████████████████████████| 1254/1254 [00:32<00:00, 38.92it/s]
 :
 
 
@@ -1335,7 +1349,7 @@ fig.savefig('plots/fig3B_phases_legs.pdf', bbox_inches = "tight")
 #+END_SRC
 
 #+RESULTS:
-: 3af04e64-b432-4ae0-b488-2d41264a7442
+[[./.ob-jupyter/50305c582301af2c555bfdc00ecc26ab0d5b9685.png]]
 
 
 
@@ -1347,10 +1361,8 @@ plt.plot(np.mod(pp[1] - pp[5], 2*np.pi))
 
 #+RESULTS:
 :RESULTS:
-| <matplotlib.lines.Line2D | at | 0x7fdcbd3ac580> |
-[[file:./.ob-jupyter/c5695e2cccdd4c914d26f1c804c73d694f38cd14.png]]
-| <matplotlib.lines.Line2D | at | 0x7fdc3d8429d0> |
-[[file:./.ob-jupyter/c5695e2cccdd4c914d26f1c804c73d694f38cd14.png]]
+| <matplotlib.lines.Line2D | at | 0x7f78f2dcb970> |
+[[./.ob-jupyter/c56b6965005dde5a5edeb98c5ddfb2073f06c8b0.png]]
 :END:
 
 
@@ -1422,7 +1434,12 @@ for i in range(6):
         for s_f in speeds_forward:
             check = (mean_offsets['speed_forward'] == s_f)
             means = np.array(mean_offsets.loc[check, key])
-            means[means > np.pi * 1.55] -= 2*np.pi
+            # fix wrap around
+            means[means > np.pi * 1.5] -= 2*np.pi
+            if (legs[i], legs[j]) in [('L1', 'R3'), ('R2', 'R3')]:
+                means[means < np.pi/2] += 2 * np.pi
+            if (legs[i], legs[j]) in [('R3', 'R1'), ('R3', 'L2')]:
+                means[means > np.pi] -= 2 * np.pi
             s_r = mean_offsets.loc[check, 'speed_rotation'].values
             ix = np.argsort(s_r)
             plt.plot(s_r[ix], means[ix], color=cmap(norm(s_f)))
@@ -1437,4 +1454,7 @@ plt.savefig('plots/suppfig3_phase_offsets_speeds.pdf')
 #+END_SRC
 
 #+RESULTS:
-[[file:./.ob-jupyter/69a10f239d6506c2698672efdbf398d5fb3e0a4b.png]]
+:RESULTS:
+[[./.ob-jupyter/6b2c4bd838061ffd2fd03629633121c4694f3b95.png]]
+[[./.ob-jupyter/6b2c4bd838061ffd2fd03629633121c4694f3b95.png]]
+:END:

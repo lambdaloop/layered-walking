@@ -37,7 +37,7 @@ writer = skvideo.io.FFmpegWriter(output_path, inputdict={
 font_path = '/usr/share/fonts/truetype/msttcorefonts/Arial.ttf'
 
 # Font size and color
-font_size = 45
+font_size = 40
 font_color = (0, 0, 0)
 
 # texts = ['8 mm/s forward\ntest', '10 mm/s forward',

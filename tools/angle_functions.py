@@ -304,7 +304,7 @@ def angles_to_pose_names(angs, angnames,
         new_angs[:, ix_dest] = angs[:, ix_source]
     return angles_to_pose_multirow(new_angs, lengths, offsets, progress)
 
-def make_fly_video(pose_3d, outname):
+def make_fly_video(pose_3d, outname, progress=True):
     writer = skvideo.io.FFmpegWriter(outname, inputdict={
         '-framerate': str(30.0),
     }, outputdict={
@@ -323,7 +323,10 @@ def make_fly_video(pose_3d, outname):
 
     fig = plt.figure(figsize=(4, 4), dpi=200)
     ax = fig.add_subplot(1, 1, 1, projection='3d')
-    for i in trange(pose_3d.shape[0]):
+    it = range(pose_3d.shape[0])
+    if progress:
+        it = tqdm(it, ncols=70)
+    for i in it:
         ax.cla()
         X_p = pose_3d[i]
         for il, xyz in enumerate(X_p):

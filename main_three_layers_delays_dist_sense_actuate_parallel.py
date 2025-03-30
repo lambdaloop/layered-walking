@@ -58,9 +58,14 @@ start_index = int(sys.argv[3]) * num_batch
 ################################################################################
 # filename = '/home/lisa/Downloads/walk_sls_legs_11.pickle'
 # filename = '/home/pierre/data/tuthill/models/models_sls/walk_sls_legs_13.pickle'
-filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
+# filename = '/home/lili/data/tuthill/models/models_sls/walk_sls_legs_subang_6.pickle'
 # filename = '/home/pierre/models_sls/walk_sls_legs_subang_6.pickle'
 
+# tg_filename = '/home/lili/data/tuthill/models/models_sls_sweep_moreiters/model_hd064_dr000_pn010_np000_ep1000.pkl'
+# data_filename = '/home/lili/data/tuthill/models/models_sls/data_subang_2.pickle'
+
+tg_filename = '/home/lili/data/tuthill/models/models_sls_sweep_v3/model_hd064_dr000_pn000_np000_ep900.pkl'
+data_filename = '/home/lili/data/tuthill/models/models_sls/data_subang_5.pickle'
 
 numTGSteps     = 900   # How many timesteps to run TG for
 Ts             = 1/300 # How fast TG runs
@@ -93,7 +98,7 @@ else:
 numSimSteps = numTGSteps*ctrlSpeedRatio
 
 
-wd       = WalkingData(filename)
+wd       = WalkingData(data_filename)
 
 nLegs   = len(legs)
 dofTG   = 5
@@ -172,7 +177,7 @@ if os.path.exists(outpath):
 TG      = [None for i in range(nLegs)]
 namesTG = [None for i in range(nLegs)]
 for ln, leg in enumerate(legs):
-    TG[ln] = TrajectoryGenerator(filename, leg, numTGSteps)
+    TG[ln] = TrajectoryGenerator(tg_filename, leg, numTGSteps)
     namesTG[ln] = [x[2:] for x in TG[ln]._angle_names]
 
 conditions = full_conditions[start_index:start_index+num_batch]
