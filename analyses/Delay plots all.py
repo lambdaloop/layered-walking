@@ -574,7 +574,8 @@ for dist in dists:
         sub = slice(300, 600) if dist == 'poisson' else slice(305, 400)
         pdf = np.mean(pdfs_shaped[ix_bout, sub])
         print('{}, {} ms sensory, {:.3f}'.format(dist, delay_ms, pdf))
-        make_fly_video(pose, '../vids/simulated_fly_sensedelay_{}_{}ms.mp4'.format(dist, delay_ms))
+        # make_fly_video(pose, '../vids/simulated_fly_sensedelay_{}_{}ms.mp4'.format(dist, delay_ms))
+        np.savez_compressed('../vids-npz/simulated_fly_sensedelay_{}_{}ms.npz'.format(dist, delay_ms), pose=pose)
 
 
 # ### all the heatmap plots!
